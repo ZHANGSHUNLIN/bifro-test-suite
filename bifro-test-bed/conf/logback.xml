@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (C) 2021 Baidu, Inc. All Rights Reserved.
+  -->
+<configuration>
+    <property name="projectName" value="test-suite-standalone"/>
+    <property name="logPattern"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${PID:- } [%t] --- %-40.40logger{39}[%F:%L] %m%n"/>
+
+
+    <property name="logDir" value="${LOG_DIR:-${user.dir}/logs}"/>
+
+    <appender name="tagLogFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${logDir}/tag.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${logDir}/tag.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${logPattern}</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="connLogFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${logDir}/conn.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${logDir}/conn.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${logPattern}</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="pubLogFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${logDir}/pub.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${logDir}/pub.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${logPattern}</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="subLogFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${logDir}/sub.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${logDir}/sub.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${logPattern}</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="stdout" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <pattern>${logPattern}</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter"><!-- 控制台只打印INFO及以上日志 -->
+            <level>INFO</level>
+        </filter>
+    </appender>
+
+    <appender name="traceLogFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${logDir}/trace.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${logDir}/trace.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${logPattern}</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>TRACE</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+    </appender>
+
+    <appender name="debugLogFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${logDir}/debug.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${logDir}/debug.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${logPattern}</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>DEBUG</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+    </appender>
+
+    <appender name="infoLogFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${logDir}/info.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${logDir}/info.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${logPattern}</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>INFO</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+    </appender>
+
+    <appender name="warnLogFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${logDir}/warn.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${logDir}/warn.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${logPattern}</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>WARN</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+    </appender>
+
+    <appender name="errorLogFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${logDir}/error.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${logDir}/error.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${logPattern}</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>ERROR</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+    </appender>
+
+
+    <logger name="io.vertx.mqtt.impl.MqttClientImpl" level="WARN"/>
+    <logger name="com.baidu.duhome.agent.TransportMonitor" level="TRACE"/>
+
+    <logger name="com.baidu" level="TRACE">
+        <appender-ref ref="traceLogFile"/>
+        <appender-ref ref="debugLogFile"/>
+        <appender-ref ref="infoLogFile"/>
+        <appender-ref ref="warnLogFile"/>
+        <appender-ref ref="errorLogFile"/>
+    </logger>
+
+    <!--    todo  info level to 『info』-->
+
+    <logger name="tagLogger" level="TRACE" additivity="false">
+        <appender-ref ref="tagLogFile"/>
+    </logger>
+
+    <logger name="pubLogger" level="TRACE" additivity="false">
+        <appender-ref ref="pubLogFile"/>
+    </logger>
+
+    <logger name="subLogger" level="TRACE" additivity="false">
+        <appender-ref ref="subLogFile"/>
+    </logger>
+
+    <logger name="connLogger" level="TRACE" additivity="false">
+        <appender-ref ref="connLogFile"/>
+    </logger>
+
+
+    <root level="INFO">
+        <appender-ref ref="stdout"/>
+    </root>
+
+</configuration>

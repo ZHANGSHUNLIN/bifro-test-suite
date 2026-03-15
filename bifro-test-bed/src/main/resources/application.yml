@@ -1,0 +1,46 @@
+vertx:
+  env:  dev
+  host: "127.0.0.1"
+  multicast: false
+  members: "127.0.0.1"
+server:
+  port: 8081
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+
+
+bifro:
+  mqtt:
+    default:
+        clusterMembers:
+          - host: "10.99.48.7"
+            port: 8883
+            broker-id: "Default Broker1"
+            enabled: true
+            name: "Default Broker1"
+          - host: "10.99.48.11"
+            port: 8883
+            broker-id: "Default Broker2"
+            enabled: true
+            name: "Default Broker2"
+          - host: "10.99.48.19"
+            port: 8883
+            broker-id: "Default Broker3"
+            enabled: true
+            name: "Default Broker3"
+logging:
+  config: classpath:logback.xml
+spring:
+  data:
+    mongodb:
+      username: "bifro-test0"
+      password: "duhome@2026"
+#      host: "10.99.48.17"
+#      port: 8017
+      host: "127.0.0.1"
+      port: 27017
+      database: "bifro-test-suite"
