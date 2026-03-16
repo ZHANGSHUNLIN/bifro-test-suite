@@ -32,7 +32,7 @@ public class MqttBroker implements Serializable {
 
     private Boolean enabled;
 
-    private Integer maxConnections = 100;
+    private Integer maxConnections;
 
     private Instant createdAt;
 

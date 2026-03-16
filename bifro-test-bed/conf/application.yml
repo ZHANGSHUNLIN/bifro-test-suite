@@ -4,13 +4,14 @@ vertx:
   multicast: false
   members: "127.0.0.1"
 server:
-  port: 8080
+  port: 8081
 
 management:
   endpoints:
     web:
       exposure:
         include: health,prometheus
+
 
 bifro:
   mqtt:
@@ -33,3 +34,11 @@ bifro:
           name: "Default Broker3"
 logging:
   config: classpath:logback.xml
+spring:
+  data:
+    mongodb:
+      username: "bifro-test0"
+      password: "duhome@2026"
+      host: "10.99.48.17"
+      port: 8017
+      database: "bifro-test-suite"

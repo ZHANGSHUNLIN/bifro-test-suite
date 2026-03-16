@@ -34,13 +34,23 @@ bifro:
             name: "Default Broker3"
 logging:
   config: classpath:logback.xml
+#spring:
+#  data:
+#    mongodb:
+#      username: "bifro-test0"
+#      password: "duhome@2026"
+##      host: "10.99.48.17"
+##      port: 8017
+#      host: "127.0.0.1"
+#      port: 27017
+#      database: "bifro-test-suite"
+
+
 spring:
   data:
     mongodb:
       username: "bifro-test0"
       password: "duhome@2026"
-#      host: "10.99.48.17"
-#      port: 8017
-      host: "127.0.0.1"
-      port: 27017
+      host: "10.99.48.17"
+      port: 8017
       database: "bifro-test-suite"

@@ -95,12 +95,22 @@ export const useTaskMutation = (onSuccessCallback?: () => void, options?: UseTas
     );
   }, [handleOperationVoid]);
 
+  // 停止任务
+  const handleStop = useCallback(async (taskId: string) => {
+    await handleOperationVoid(
+      () => taskApi.stopTask(taskId),
+      '任务停止已提交',
+      '停止任务失败'
+    );
+  }, [handleOperationVoid]);
+
   return {
     handleAdd,
     handleUpdate,
     handleDelete,
     handleConfirm,
     handleAssign,
+    handleStop,
   };
 };
 

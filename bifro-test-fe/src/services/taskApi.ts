@@ -64,6 +64,13 @@ export const taskApi = {
     });
   },
 
+  // 停止任务
+  stopTask: (id: string) => {
+    return api.post<string>('/task/stop/:id', undefined, {
+      params: { id }
+    });
+  },
+
   // 获取所有节点信息
   getAllNodes: () => {
     return api.get<Record<string, any>>('/task/allNodes');

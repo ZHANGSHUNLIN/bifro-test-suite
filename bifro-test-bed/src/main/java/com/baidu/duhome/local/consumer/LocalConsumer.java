@@ -1,9 +1,11 @@
 package com.baidu.duhome.local.consumer;
 
 import com.baidu.duhome.cluster.ClusterDataManager;
+import com.baidu.duhome.database.repository.TaskInfoMetadataRepository;
 import com.baidu.iot.test.suite.Constants;
 import com.baidu.iot.test.suite.ShareDataAddr;
 import com.baidu.iot.test.suite.ShareDataManager;
+import com.baidu.iot.test.suite.worker.TaskConfig;
 import com.baidu.iot.test.suite.worker.TaskStage;
 import com.baidu.iot.test.suite.worker.TaskWorker;
 import io.vertx.core.Vertx;
@@ -30,6 +32,9 @@ public class LocalConsumer {
     @Resource
     private ShareDataManager shareDataManager;
 
+    @Resource
+    private TaskInfoMetadataRepository taskInfoMetadataRepository;
+
 
     public Map<String, TaskStage> runningTask(Map<String, TaskWorker> runningTaskMap) {
         return runningTaskMap.entrySet().stream()
@@ -45,6 +50,11 @@ public class LocalConsumer {
                 log.info("cluster task STOP , {}", taskId);
                 taskWorker.stopTask().thenAccept(r -> {
                     log.info("taskId stopped: {}", taskId);
+                    taskInfoMetadataRepository.findById(taskId).ifPresent(t -> {
+                        TaskConfig taskConfig = t.getTaskConfig();
+                        taskConfig.setTaskWorkStage(TaskStage.STOPPED);
+                        taskInfoMetadataRepository.updateTaskConfigById(taskId, taskConfig);
+                    });
                     runningTaskMap.remove(taskId);
                     clusterDataManager.upgradeClusterNodeTaskStage(runningTask(runningTaskMap));
                 });

@@ -5,6 +5,7 @@ import com.baidu.duhome.bean.ApiResponse;
 import com.baidu.duhome.bean.TaskDetailResponse;
 import com.baidu.duhome.bean.dto.NodeTaskAllocationRequest;
 import com.baidu.duhome.bean.vo.NodeTaskAllocationVO;
+import com.baidu.duhome.config.Constants;
 import com.baidu.duhome.database.pojo.NodeTask;
 import com.baidu.duhome.database.pojo.TaskInfoMetadata;
 import com.baidu.duhome.database.pojo.MqttBroker;
@@ -152,8 +153,7 @@ public class TaskManager {
         if (taskInfoMetadata.isPresent()) {
             TaskConfig taskConfig = taskInfoMetadata.map(TaskInfoMetadata::getTaskConfig).orElseThrow();
             TaskStage taskWorkStage = taskConfig.getTaskWorkStage();
-            if (!Objects.equals(taskWorkStage, TaskStage.INIT) && !Objects.equals(taskWorkStage, TaskStage.SHUTDOWN)
-                    && !Objects.equals(taskWorkStage, TaskStage.ASSIGNED)) {
+            if (!Constants.CAN_NOT_DEL_STATE.contains(taskWorkStage)) {
                 return ApiResponse.error("任务已开始无法删除");
             }
             taskInfoMetadataRepository.deleteById(taskId);

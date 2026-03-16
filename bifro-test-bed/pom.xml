@@ -245,6 +245,7 @@
                 <executions>
                     <execution>
                         <id>install pnpm</id>
+                        <phase>package</phase>
                         <goals>
                             <goal>install-node-and-pnpm</goal>
                         </goals>
@@ -256,6 +257,7 @@
                     </execution>
                     <execution>
                         <id>pnpm install</id>
+                        <phase>package</phase>
                         <goals>
                             <goal>pnpm</goal>
                         </goals>
@@ -265,6 +267,7 @@
                     </execution>
                     <execution>
                         <id>pnpm build:prod</id>
+                        <phase>package</phase>
                         <goals>
                             <goal>pnpm</goal>
                         </goals>

@@ -22,7 +22,7 @@ const TaskManagement: React.FC = () => {
 
     // 数据获取hooks
     const {data: tasks, isLoading, refetch: loadTasks} = useTaskData();
-    const {handleAdd, handleUpdate, handleDelete, handleConfirm} = useTaskMutation(loadTasks);
+    const {handleAdd, handleUpdate, handleDelete, handleConfirm, handleAssign, handleStop} = useTaskMutation(loadTasks);
 
     // 初始化加载
     useEffect(() => {
@@ -107,6 +107,7 @@ const TaskManagement: React.FC = () => {
                         onDelete={handleDelete}
                         onConfirm={handleConfirm}
                         onAssign={handleAssignClick}
+                        onStop={handleStop}
                     />
                 </Spin>
             </Card>

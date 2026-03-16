@@ -5,7 +5,8 @@ import {
     EditOutlined,
     DeleteOutlined,
     CheckCircleOutlined,
-    DeploymentUnitOutlined
+    DeploymentUnitOutlined,
+    StopOutlined
 } from '@ant-design/icons';
 import {TaskStatusValues, TaskTypeValues} from '../../types/task';
 import type {TaskListItem} from '../../types/task';
@@ -17,6 +18,7 @@ interface TaskListProps {
     onDelete: (id: string) => Promise<void>;
     onConfirm: (id: string) => Promise<void>;
     onAssign: (task: TaskListItem) => void;
+    onStop: (id: string) => Promise<void>;
 }
 
 const TaskList: React.FC<TaskListProps> = ({
@@ -25,7 +27,8 @@ const TaskList: React.FC<TaskListProps> = ({
                                                onEdit,
                                                onDelete,
                                                onConfirm,
-                                               onAssign
+                                               onAssign,
+                                               onStop
                                            }) => {
     // 状态映射
     const statusMap: Record<string, { text: string; color: string }> = {
@@ -158,6 +161,16 @@ const TaskList: React.FC<TaskListProps> = ({
                         title={record.status !== TaskStatusValues.INIT ? '只能在"已创建"状态分配' : '分配任务到集群节点'}
                     >
                         分配
+                    </Button>
+                    <Button
+                        type="link"
+                        icon={<StopOutlined/>}
+                        onClick={() => onStop(record.id)}
+                        hidden={record.status !== TaskStatusValues.ONGOING}
+                        disabled={record.status !== TaskStatusValues.ONGOING}
+                        title={record.status !== TaskStatusValues.ONGOING ? '只能在"运行中"状态停止' : '停止任务'}
+                    >
+                        停止
                     </Button>
                     <Popconfirm
                         title="确定要删除这个任务吗？"
