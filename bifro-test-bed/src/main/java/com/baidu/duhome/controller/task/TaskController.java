@@ -35,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -69,10 +70,17 @@ public class TaskController implements ApiController {
     @GetMapping("/list")
     public ApiResponse<PageInfo<TaskListVO>> getAllTasks(
             @RequestParam(name = "pageNum", defaultValue = "1") Integer pageNum,
-            @RequestParam(name = "pageSize", defaultValue = "20") Integer pageSize
+            @RequestParam(name = "pageSize", defaultValue = "20") Integer pageSize,
+            @RequestParam(name = "taskName", required = false) String taskName,
+            @RequestParam(name = "taskType", required = false) String taskType
     ) {
         Pageable pageable = PageRequest.of(pageNum - 1, pageSize, Sort.by(Sort.Direction.DESC, "createTime"));
-        Page<TaskInfoMetadata> allTask = taskManager.getAllTask(pageable);
+        Page<TaskInfoMetadata> allTask;
+        if (taskName != null && !taskName.isEmpty() || taskType != null && !taskType.isEmpty()) {
+            allTask = taskManager.getAllTask(taskName, taskType, pageable);
+        } else {
+            allTask = taskManager.getAllTask(pageable);
+        }
         return ApiResponse.pageSuccess(allTask, TaskListVO::fromTaskConfig);
     }
 
@@ -108,6 +116,11 @@ public class TaskController implements ApiController {
     public ApiResponse<TaskDetailResponse> del(@PathVariable(value = "id") String id) {
 
         return taskManager.delTask(id);
+    }
+
+    @DeleteMapping("/batch")
+    public ApiResponse<String> batchDel(@RequestBody List<String> taskIds) {
+        return taskManager.batchDelTask(taskIds);
     }
 
     @PostMapping("/assign/{id}")
@@ -152,7 +165,6 @@ public class TaskController implements ApiController {
     public Boolean stop(@RequestParam(name = "id") Long id) {
         return vertx.cancelTimer(id);
     }
-
 
     @GetMapping("/taskReport")
     public ApiResponse<PageInfo<Report>> taskReport(

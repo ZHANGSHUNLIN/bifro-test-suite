@@ -157,7 +157,7 @@ public class VertxMQTTClientWrapper implements MQTTClientWrapper {
                 });
             }
         } else {
-            log.info("mqtt client is null");
+//            log.info("mqtt client is null");
             closeFuture.complete(null);
         }
         return closeFuture;

@@ -99,7 +99,11 @@ export const api = {
     }),
 
     // DELETE 请求
-    delete: <T>(url: string, options?: RequestOptions) => request<T>(url, {...options, method: 'DELETE'}),
+    delete: <T>(url: string, data?: any, options?: RequestOptions) => request<T>(url, {
+        ...options,
+        method: 'DELETE',
+        body: data ? JSON.stringify(data) : undefined
+    }),
 
     // PATCH 请求
     patch: <T>(url: string, data?: any, options?: RequestOptions) => request<T>(url, {

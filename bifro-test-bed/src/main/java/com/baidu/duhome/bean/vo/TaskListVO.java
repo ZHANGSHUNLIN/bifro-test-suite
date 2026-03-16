@@ -92,7 +92,7 @@ public class TaskListVO implements Serializable {
         TaskListVO vo = new TaskListVO();
         BeanUtils.copyProperties(taskInfoMetadata.getTaskConfig(), vo);
         vo.setBrokers(taskInfoMetadata.getBrokers());
-        vo.setId(taskInfoMetadata.getId());
+        vo.setId(taskInfoMetadata.getTaskId());
         vo.setTaskName(taskInfoMetadata.getTaskName());
         vo.setCreateTime(taskInfoMetadata.getCreateTime());
         return vo;

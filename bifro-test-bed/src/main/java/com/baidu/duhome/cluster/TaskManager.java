@@ -27,10 +27,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -77,6 +77,7 @@ public class TaskManager {
                 .taskName(taskRequest.getTaskName())
                 .taskConfig(mainTaskConfig)
                 .createTime(LocalDateTime.now())
+                .taskId(nextTaskId)
                 .brokers(brokers)
                 .build();
         log.info("add task taskInfoMetadata: {}", taskInfoMetadata);
@@ -92,7 +93,7 @@ public class TaskManager {
         if (metadata.isPresent()) {
             TaskInfoMetadata taskInfoMetadata = metadata.get();
             TaskConfig taskConfig = taskInfoMetadata.getTaskConfig();
-            clusterDataManager.assignCheck(taskConfig,nodeTaskAllocationRequest);
+            clusterDataManager.assignCheck(id,taskConfig,nodeTaskAllocationRequest);
             taskConfig.setTaskWorkStage(TaskStage.ASSIGNED);
             taskInfoMetadataRepository.updateTaskConfigById(id, taskConfig);
             return ApiResponse.success(taskConfig);
@@ -178,11 +179,48 @@ public class TaskManager {
 //                });
     }
 
+    public ApiResponse<String> batchDelTask(List<String> taskIds) {
+        if (taskIds == null || taskIds.isEmpty()) {
+            return ApiResponse.error("任务ID列表不能为空");
+        }
+        List<String> deletedIds = new ArrayList<>();
+        List<String> failedIds = new ArrayList<>();
+        // todo AI生成需改为批量查询和删除
+        for (String taskId : taskIds) {
+            Optional<TaskInfoMetadata> taskInfoMetadata = taskInfoMetadataRepository.findById(taskId);
+            if (taskInfoMetadata.isPresent()) {
+                TaskConfig taskConfig = taskInfoMetadata.map(TaskInfoMetadata::getTaskConfig).orElseThrow();
+                TaskStage taskWorkStage = taskConfig.getTaskWorkStage();
+                if (!Constants.CAN_NOT_DEL_STATE.contains(taskWorkStage)) {
+                    failedIds.add(taskId + "(任务已开始无法删除)");
+                    continue;
+                }
+                taskInfoMetadataRepository.deleteById(taskId);
+                nodeTaskRepository.deleteByTaskId(taskId);
+                deletedIds.add(taskId);
+            } else {
+                failedIds.add(taskId + "(任务不存在)");
+            }
+        }
+        if (failedIds.isEmpty()) {
+            return ApiResponse.success("成功删除" + deletedIds.size() + "个任务");
+        } else {
+            return ApiResponse.success("成功删除" + deletedIds.size() + "个任务，失败" + failedIds.size() + "个: " + String.join(", ", failedIds));
+        }
+    }
+
 
     public Page<TaskInfoMetadata> getAllTask(Pageable pageable) {
         return taskInfoMetadataService.findAll(pageable);
         // todo 不要删除，需要根据配置切换，使用内存和mongo可选。
 //        return clusterDataManager.getAllTask();
+    }
+
+    /**
+     * 根据任务名称和任务类型分页查询
+     */
+    public Page<TaskInfoMetadata> getAllTask(String taskName, String taskType, Pageable pageable) {
+        return taskInfoMetadataService.findByFilters(taskName, taskType, pageable);
     }
 
     public ApiResponse<TaskDetailResponse> getTaskDetails(String taskId) {
@@ -198,12 +236,12 @@ public class TaskManager {
             // todo 当前 hard code
             String topic = mainTask.getTopic();
             if (!StringUtil.isNullOrEmpty(topic)) {
-                mainTask.setTopic(String.format("%s/%s/%s/{num}", topic, taskInfoMetadata.getId(), "xxxx"));
+                mainTask.setTopic(String.format("%s/%s/%s/{num}", topic, taskInfoMetadata.getTaskId(), "xxxx"));
             }
             response.setMainTask(mainTask);
             response.setBrokers(taskInfoMetadata.getBrokers());
             response.setTaskName(taskInfoMetadata.getTaskName());
-            List<NodeTask> nodeTasks = nodeTaskRepository.searchAllByTaskId(mainTask.getTaskId());
+            List<NodeTask> nodeTasks = nodeTaskRepository.searchAllByTaskId(taskInfoMetadata.getTaskId());
             Map<String, TaskConfig> subTasks = nodeTasks.stream()
                     .collect(Collectors.toMap(
                             NodeTask::getNodeId,    // 用来提取 map 的 key

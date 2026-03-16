@@ -22,5 +22,7 @@ public class NodeTask {
 
     private String nodeId;
 
+    private String nodeName;
+
     private TaskConfig taskConfig;
 }

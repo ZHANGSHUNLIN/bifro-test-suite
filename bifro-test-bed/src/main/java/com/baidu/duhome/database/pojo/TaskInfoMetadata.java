@@ -20,9 +20,11 @@ import java.util.List;
 public class TaskInfoMetadata implements Serializable {
 
     @Id
-    private String id;
+    private String taskId;
 
     private String taskName;
+
+    private String taskType;
 
     private TaskConfig taskConfig;
 

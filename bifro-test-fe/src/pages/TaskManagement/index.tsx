@@ -1,6 +1,6 @@
 import React, {useState, useEffect} from 'react';
-import {Card, Spin, Button, Space, Typography} from 'antd';
-import {PlusOutlined, ReloadOutlined} from '@ant-design/icons';
+import {Card, Spin, Button, Space, Typography, Popconfirm} from 'antd';
+import {PlusOutlined, ReloadOutlined, DeleteOutlined} from '@ant-design/icons';
 import TaskList from './TaskList';
 import TaskEditor from './TaskEditor';
 import TaskDetailModal from './TaskDetailModal';
@@ -19,10 +19,11 @@ const TaskManagement: React.FC = () => {
     const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [allocatingTask, setAllocatingTask] = useState<TaskListItem | null>(null);
+    const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
     // 数据获取hooks
     const {data: tasks, isLoading, refetch: loadTasks} = useTaskData();
-    const {handleAdd, handleUpdate, handleDelete, handleConfirm, handleAssign, handleStop} = useTaskMutation(loadTasks);
+    const {handleAdd, handleUpdate, handleDelete, handleConfirm, handleStop, handleBatchDelete} = useTaskMutation(loadTasks);
 
     // 初始化加载
     useEffect(() => {
@@ -53,10 +54,30 @@ const TaskManagement: React.FC = () => {
         loadTasks();
     };
 
+    // 处理搜索
+    const handleSearch = (taskName: string, taskType: string | null) => {
+        loadTasks(taskName || undefined, taskType || undefined);
+    };
+
     // 处理分配任务（打开分配弹窗）
     const handleAssignClick = (task: TaskListItem) => {
         setAllocatingTask(task);
         setIsAllocationModalVisible(true);
+    };
+
+    // 处理批量删除
+    const handleBatchDeleteClick = () => {
+        if (selectedRowKeys.length === 0) {
+            return;
+        }
+        handleBatchDelete(selectedRowKeys as string[]).then(() => {
+            setSelectedRowKeys([]);
+        });
+    };
+
+    // 处理选中变化
+    const handleSelectChange = (keys: React.Key[]) => {
+        setSelectedRowKeys(keys);
     };
 
     // 统一的onOk处理函数
@@ -89,6 +110,18 @@ const TaskManagement: React.FC = () => {
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24}}>
                 <Title level={2}>任务管理</Title>
                 <Space>
+                    {selectedRowKeys.length > 0 && (
+                        <Popconfirm
+                            title={`确定要删除选中的 ${selectedRowKeys.length} 个任务吗？`}
+                            onConfirm={handleBatchDeleteClick}
+                            okText="确定"
+                            cancelText="取消"
+                        >
+                            <Button danger icon={<DeleteOutlined/>}>
+                                批量删除 ({selectedRowKeys.length})
+                            </Button>
+                        </Popconfirm>
+                    )}
                     <Button icon={<ReloadOutlined/>} onClick={handleManualRefresh}>
                         刷新
                     </Button>
@@ -108,6 +141,10 @@ const TaskManagement: React.FC = () => {
                         onConfirm={handleConfirm}
                         onAssign={handleAssignClick}
                         onStop={handleStop}
+                        onBatchDelete={handleBatchDelete}
+                        selectedRowKeys={selectedRowKeys}
+                        onSelectChange={handleSelectChange}
+                        onSearch={handleSearch}
                     />
                 </Spin>
             </Card>
@@ -146,6 +183,7 @@ const TaskManagement: React.FC = () => {
                 onSuccess={() => {
                     setIsAllocationModalVisible(false);
                     setAllocatingTask(null);
+                    loadTasks();
                 }}
             />
         </div>

@@ -202,7 +202,7 @@ public class TaskConnWorker extends BaseTaskWork {
         String clientId = taskEvent.getClientId();
         if (Objects.requireNonNull(taskEvent.getEventType()) == ClientTaskEvent.EventType.CONNECT_RESULT) {
             connClientIds.remove(clientId);
-            log.info("Remove client: {}, left clients: {}", clientId, connClientIds.size());
+//            log.info("Remove client: {}, left clients: {}", clientId, connClientIds.size());
             if (connClientIds.isEmpty()) {
                 log.debug("Task collectTaskResults");
                 collectTaskResults();

@@ -22,6 +22,7 @@ import io.vertx.core.Vertx;
 import jakarta.annotation.Resource;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -60,6 +61,9 @@ public class ClusterDataManager implements DataManager {
 
     @Resource
     private NodeTaskRepository nodeTaskRepository;
+
+    @Value("${bifro.nodeName}")
+    private String nodeName;
 
     private final AtomicReference<String> currentNodeIdCache = new AtomicReference<>();
 
@@ -256,18 +260,18 @@ public class ClusterDataManager implements DataManager {
                 .thenApply(r -> CommonResp.success());
     }
 
-    public CompletableFuture<TaskConfig> assignTask(String taskId) {
-        return shareDataManager.<String, TaskInfoMetadata>map(ShareDataAddr.CLUSTER_TASK_CONFIGS)
-                .key(taskId)
-                .thenAccept(taskInfoMetadata -> {
-                    TaskConfig taskConfig = taskInfoMetadata.getTaskConfig();
-                    distributeTasksToNodes(taskConfig);
-                }).future().thenApply(TaskInfoMetadata::getTaskConfig);
-    }
+//    public CompletableFuture<TaskConfig> assignTask(String taskId) {
+//        return shareDataManager.<String, TaskInfoMetadata>map(ShareDataAddr.CLUSTER_TASK_CONFIGS)
+//                .key(taskId)
+//                .thenAccept(taskInfoMetadata -> {
+//                    TaskConfig taskConfig = taskInfoMetadata.getTaskConfig();
+//                    distributeTasksToNodes(taskConfig);
+//                }).future().thenApply(TaskInfoMetadata::getTaskConfig);
+//    }
 
-    public void assignTask(TaskConfig taskConfig) {
-        distributeTasksToNodes(taskConfig);
-    }
+//    public void assignTask(TaskConfig taskConfig) {
+//        distributeTasksToNodes(taskConfig);
+//    }
 
     public CompletableFuture<TaskInfoMetadata> replaceTask(String taskId, TaskInfoMetadata taskInfoMetadata) {
         return shareDataManager.<String, TaskInfoMetadata>map(ShareDataAddr.CLUSTER_TASK_CONFIGS)
@@ -281,42 +285,40 @@ public class ClusterDataManager implements DataManager {
     }
 
 
-    private void distributeTasksToNodes(TaskConfig mainTaskConfig) {
-        String taskId = mainTaskConfig.getTaskId();
-        shareDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO)
-                .entries()
-                .thenAccept(entries -> {
-                    Map<String, NodeInfo> newHash = new HashMap<>();
-                    entries.forEach((k, v) -> {
-                        // 过滤掉已下线或心跳包超时的节点
-                        if (v.isAlive()) {
-                            newHash.put(k, v);
-                        }
-                    });
-                    Map<String, TaskConfig> nodeTaskConfigs = calculateNodeTasks(mainTaskConfig, newHash, 1, 1);
-                    List<NodeTask> nodeTasks = new ArrayList<>();
-                    nodeTaskConfigs.forEach((k, v) -> {
-                        NodeTask nodeTask = new NodeTask();
-                        nodeTask.setTaskId(taskId);
-                        nodeTask.setNodeId(k);
-                        nodeTask.setTaskConfig(v);
-                        nodeTasks.add(nodeTask);
-                    });
-                    nodeTaskRepository.saveAll(nodeTasks);
+//    private void distributeTasksToNodes(TaskConfig mainTaskConfig) {
+//        String taskId = mainTaskConfig.getTaskId();
+//        shareDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO)
+//                .entries()
+//                .thenAccept(entries -> {
+//                    Map<String, NodeInfo> newHash = new HashMap<>();
+//                    entries.forEach((k, v) -> {
+//                        // 过滤掉已下线或心跳包超时的节点
+//                        if (v.isAlive()) {
+//                            newHash.put(k, v);
+//                        }
+//                    });
+//                    Map<String, TaskConfig> nodeTaskConfigs = calculateNodeTasks(mainTaskConfig, newHash, 1, 1);
+//                    List<NodeTask> nodeTasks = new ArrayList<>();
+//                    nodeTaskConfigs.forEach((k, v) -> {
+//                        NodeTask nodeTask = new NodeTask();
+//                        nodeTask.setTaskId(taskId);
+//                        nodeTask.setNodeId(k);
+//                        nodeTask.setTaskConfig(v);
+//                        nodeTasks.add(nodeTask);
+//                    });
+//                    nodeTaskRepository.saveAll(nodeTasks);
+//
 
-//                    shareDataManager.getMap(ShareDataAddr.NODE_TASK_CONFIGS).putIfAbsent(taskId, nodeTaskConfigs);
-//                    log.info("Distributed task {} to {} nodes", taskId, nodeTaskConfigs.size());
-//                }).whenComplete((r, e) -> {
-//                    if (e != null) {
-//                        log.error("Error when distribute task {} to nodes", taskId, e);
-//                    }
+    /// /                    shareDataManager.getMap(ShareDataAddr.NODE_TASK_CONFIGS).putIfAbsent(taskId, nodeTaskConfigs);
+    /// /                    log.info("Distributed task {} to {} nodes", taskId, nodeTaskConfigs.size());
+    /// /                }).whenComplete((r, e) -> {
+    /// /                    if (e != null) {
+    /// /                        log.error("Error when distribute task {} to nodes", taskId, e);
+    /// /                    }
+    /// /                });
 //                });
-                });
-    }
-
-
-    private void distributeTasksToNodes2(TaskConfig mainTaskConfig, NodeTaskAllocationRequest nodeTaskAllocationRequest) {
-        String taskId = mainTaskConfig.getTaskId();
+//    }
+    private void distributeTasksToNodes2(String id, TaskConfig mainTaskConfig, NodeTaskAllocationRequest nodeTaskAllocationRequest) {
         try {
             Map<String, NodeInfo> nodeInfoMap = shareDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO)
                     .entries().get(3, TimeUnit.SECONDS);
@@ -355,9 +357,10 @@ public class ClusterDataManager implements DataManager {
             List<NodeTask> nodeTasks = new ArrayList<>();
             nodeTaskConfigs.forEach((k, v) -> {
                 NodeTask nodeTask = new NodeTask();
-                nodeTask.setTaskId(taskId);
+                nodeTask.setTaskId(id);
                 nodeTask.setNodeId(k);
                 nodeTask.setTaskConfig(v);
+                nodeTask.setNodeName(nodeName);
                 nodeTasks.add(nodeTask);
             });
             nodeTaskRepository.saveAll(nodeTasks);
@@ -374,9 +377,9 @@ public class ClusterDataManager implements DataManager {
         }
     }
 
-    public void assignCheck(TaskConfig taskConfig, NodeTaskAllocationRequest nodeTaskAllocationRequest) {
+    public void assignCheck(String id, TaskConfig taskConfig, NodeTaskAllocationRequest nodeTaskAllocationRequest) {
         checkClientCount(nodeTaskAllocationRequest);
-        distributeTasksToNodes2(taskConfig, nodeTaskAllocationRequest);
+        distributeTasksToNodes2(id,taskConfig, nodeTaskAllocationRequest);
     }
 
     private static void checkClientCount(NodeTaskAllocationRequest nodeTaskAllocationRequest) {
@@ -416,14 +419,14 @@ public class ClusterDataManager implements DataManager {
                 });
     }
 
-    public void regClusterNodeInfo() {
-
+    public void regClusterNodeInfo(String nodeName) {
         shareDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO)
                 .key(getCurrentNodeIdCache())
                 .putIfAbsent(() -> {
                     ClusterNodeInfo systemInfo = getSystemInfo();
                     log.debug("add cluster node info: {}", systemInfo);
                     return NodeInfo.builder()
+                            .nodeName(nodeName)
                             .nextPing(System.currentTimeMillis())
                             .clusterNodeInfo(systemInfo).build();
                 });
@@ -467,6 +470,12 @@ public class ClusterDataManager implements DataManager {
     public CompletableFuture<Map<String, NodeInfo>> allNodes() {
         return shareDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO)
                 .entries();
+    }
+
+    public CompletableFuture<NodeInfo> currentNode() {
+        return shareDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO)
+                .key(getCurrentNodeIdCache())
+                .future();
     }
 
     public CompletableFuture<Map<Object, Object>> something(String key) {

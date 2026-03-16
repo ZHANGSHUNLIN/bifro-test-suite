@@ -204,7 +204,7 @@ export interface TaskListItem {
 }
 
 // 任务状态枚举
-export type TaskStatus = 'INIT' | 'ASSIGNED' | 'ONGOING' | 'COLLECTING' | 'SHUTDOWN_ING' | 'SHUTDOWN';
+export type TaskStatus = 'INIT' | 'ASSIGNED' | 'ONGOING' | 'COLLECTING' | 'SHUTDOWN_ING' | 'SHUTDOWN' | 'STOPPED';
 
 // 运行时常量（用于代码中引用，例如 TaskStatusValues.ONGOING）
 export const TaskStatusValues = {
@@ -214,6 +214,7 @@ export const TaskStatusValues = {
     COLLECTING: 'COLLECTING',
     SHUTDOWN_ING: 'SHUTDOWN_ING',
     SHUTDOWN: 'SHUTDOWN',
+    STOPPED: 'STOPPED',
 } as const;
 
 // 任务状态文本映射
@@ -223,7 +224,8 @@ export const TaskStatusText = {
     [TaskStatusValues.ONGOING]: '进行中',
     [TaskStatusValues.COLLECTING]: '收集中',
     [TaskStatusValues.SHUTDOWN_ING]: '关闭中',
-    [TaskStatusValues.SHUTDOWN]: '已关闭'
+    [TaskStatusValues.SHUTDOWN]: '已关闭',
+    [TaskStatusValues.STOPPED]: '已停止'
 }
 
 // 基础统计结果

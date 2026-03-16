@@ -1,12 +1,14 @@
-import React from 'react';
-import {Table, Button, Space, Popconfirm, Tag} from 'antd';
+import React, {useState} from 'react';
+import {Table, Button, Space, Popconfirm, Tag, Input, Select} from 'antd';
+import type { TableRowSelection } from 'antd/es/table/interface';
 import {
     EyeOutlined,
     EditOutlined,
     DeleteOutlined,
     CheckCircleOutlined,
     DeploymentUnitOutlined,
-    StopOutlined
+    StopOutlined,
+    SearchOutlined
 } from '@ant-design/icons';
 import {TaskStatusValues, TaskTypeValues} from '../../types/task';
 import type {TaskListItem} from '../../types/task';
@@ -19,6 +21,10 @@ interface TaskListProps {
     onConfirm: (id: string) => Promise<void>;
     onAssign: (task: TaskListItem) => void;
     onStop: (id: string) => Promise<void>;
+    onBatchDelete: (ids: string[]) => Promise<void>;
+    selectedRowKeys?: React.Key[];
+    onSelectChange?: (selectedRowKeys: React.Key[]) => void;
+    onSearch?: (taskName: string, taskType: string | null) => void;
 }
 
 const TaskList: React.FC<TaskListProps> = ({
@@ -28,8 +34,49 @@ const TaskList: React.FC<TaskListProps> = ({
                                                onDelete,
                                                onConfirm,
                                                onAssign,
-                                               onStop
+                                               onStop,
+                                               onBatchDelete: _onBatchDelete,
+                                               selectedRowKeys = [],
+                                               onSelectChange,
+                                               onSearch
                                            }) => {
+    // 过滤状态
+    const [taskNameFilter, setTaskNameFilter] = useState<string>('');
+    const [taskTypeFilter, setTaskTypeFilter] = useState<string | null>(null);
+
+    // 处理搜索
+    const handleSearch = () => {
+        if (onSearch) {
+            onSearch(taskNameFilter, taskTypeFilter);
+        }
+    };
+
+    // 处理输入变化（按回车搜索）
+    const handleTaskNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setTaskNameFilter(e.target.value);
+    };
+
+    const handleTaskNamePressEnter = () => {
+        handleSearch();
+    };
+
+    const handleTaskTypeChange = (value: string | null) => {
+        setTaskTypeFilter(value);
+        // 任务类型变化时自动搜索
+        if (onSearch) {
+            onSearch(taskNameFilter, value);
+        }
+    };
+
+    // 清除过滤
+    const handleClearFilters = () => {
+        setTaskNameFilter('');
+        setTaskTypeFilter(null);
+        if (onSearch) {
+            onSearch('', null);
+        }
+    };
+
     // 状态映射
     const statusMap: Record<string, { text: string; color: string }> = {
         [TaskStatusValues.INIT]: {text: '已创建', color: 'default'},
@@ -191,18 +238,65 @@ const TaskList: React.FC<TaskListProps> = ({
         },
     ];
 
+    // 表格行选择配置
+    // 允许选择的状态：INIT, ASSIGNED, STOPPED, SHUTDOWN
+    const canSelectStatuses = [
+        TaskStatusValues.INIT,
+        TaskStatusValues.ASSIGNED,
+        TaskStatusValues.STOPPED,
+        TaskStatusValues.SHUTDOWN
+    ];
+
+    const rowSelection: TableRowSelection<TaskListItem> = {
+        selectedRowKeys,
+        onChange: onSelectChange,
+        getCheckboxProps: (record: TaskListItem) => ({
+            disabled: !canSelectStatuses.includes(record.status as any),
+            title: !canSelectStatuses.includes(record.status as any) ? '该状态不允许删除' : undefined,
+        }),
+    };
+
     return (
-        <Table
-            columns={columns}
-            dataSource={tasks}
-            rowKey="taskId"
-            pagination={{
-                pageSize: 10,
-                showSizeChanger: true,
-                showQuickJumper: true,
-                showTotal: (total) => `共 ${total} 条记录`,
-            }}
-        />
+        <div>
+            <div style={{marginBottom: 16, display: 'flex', gap: 12}}>
+                <Input
+                    placeholder="搜索任务名称"
+                    value={taskNameFilter}
+                    onChange={handleTaskNameChange}
+                    onPressEnter={handleTaskNamePressEnter}
+                    style={{width: 200}}
+                    allowClear
+                    prefix={<SearchOutlined style={{color: '#bfbfbf'}}/>}
+                />
+                <Select
+                    placeholder="选择任务类型"
+                    value={taskTypeFilter}
+                    onChange={handleTaskTypeChange}
+                    style={{width: 150}}
+                    allowClear
+                    options={[
+                        {label: '连接', value: TaskTypeValues.CONN},
+                        {label: '发布/订阅', value: TaskTypeValues.PUBSUB}
+                    ]}
+                />
+                <Button type="primary" icon={<SearchOutlined/>} onClick={handleSearch}>搜索</Button>
+                {(taskNameFilter || taskTypeFilter) && (
+                    <Button onClick={handleClearFilters}>清除过滤</Button>
+                )}
+            </div>
+            <Table
+                columns={columns}
+                dataSource={tasks}
+                rowKey="id"
+                rowSelection={rowSelection}
+                pagination={{
+                    pageSize: 10,
+                    showSizeChanger: true,
+                    showQuickJumper: true,
+                    showTotal: (total) => `共 ${total} 条记录`,
+                }}
+            />
+        </div>
     );
 };
 

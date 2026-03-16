@@ -10,12 +10,12 @@ export const useTaskData = () => {
   const [error, setError] = useState<Error | null>(null);
 
   // 加载任务列表
-  const loadTasks = useCallback(async () => {
+  const loadTasks = useCallback(async (taskName?: string, taskType?: string) => {
     setIsLoading(true);
     setError(null);
     try {
       // 后端返回 ApiResponse<PageInfo<TaskListVO>>，request.ts 已提取 data 部分
-      const pageInfo = await taskApi.getAllTasks();
+      const pageInfo = await taskApi.getAllTasks(taskName, taskType);
       const taskListItems: TaskListItem[] = pageInfo.content.map((config: any) => ({
         id: config.id || '',
         taskId: config.taskId || '',

@@ -5,8 +5,15 @@ import type { TaskListItem, TaskDetailResponse, TaskReport, TaskConfig, PageInfo
 // 任务管理 API
 export const taskApi = {
   // 获取所有任务列表
-  getAllTasks: () => {
-    return api.get<PageInfo<TaskListItem>>('/task/list');
+  getAllTasks: (taskName?: string, taskType?: string, pageNum: number = 1, pageSize: number = 20) => {
+    const params: Record<string, string | number | boolean> = { pageNum, pageSize };
+    if (taskName) {
+      params.taskName = taskName;
+    }
+    if (taskType) {
+      params.taskType = taskType;
+    }
+    return api.get<PageInfo<TaskListItem>>('/task/list', { params });
   },
 
   // 获取任务详情
@@ -59,9 +66,14 @@ export const taskApi = {
 
   // 删除任务
   deleteTask: (id: string) => {
-    return api.delete<TaskDetailResponse>('/task/:id', {
+    return api.delete<TaskDetailResponse>('/task/:id', undefined, {
       params: { id }
     });
+  },
+
+  // 批量删除任务
+  batchDeleteTask: (ids: string[]) => {
+    return api.delete<string>('/task/batch', ids);
   },
 
   // 停止任务

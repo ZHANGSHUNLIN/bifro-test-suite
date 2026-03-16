@@ -104,6 +104,19 @@ export const useTaskMutation = (onSuccessCallback?: () => void, options?: UseTas
     );
   }, [handleOperationVoid]);
 
+  // 批量删除任务
+  const handleBatchDelete = useCallback(async (taskIds: string[]) => {
+    if (!taskIds || taskIds.length === 0) {
+      message.warning('请选择要删除的任务');
+      return;
+    }
+    await handleOperationVoid(
+      () => taskApi.batchDeleteTask(taskIds),
+      '批量删除任务已提交',
+      '批量删除失败'
+    );
+  }, [handleOperationVoid]);
+
   return {
     handleAdd,
     handleUpdate,
@@ -111,6 +124,7 @@ export const useTaskMutation = (onSuccessCallback?: () => void, options?: UseTas
     handleConfirm,
     handleAssign,
     handleStop,
+    handleBatchDelete,
   };
 };
 

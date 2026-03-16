@@ -15,6 +15,8 @@ import java.util.Map;
 @Builder
 public class NodeInfo  implements Serializable {
 
+    private String nodeName;
+
     private ClusterNodeInfo clusterNodeInfo;
 
     private Long nextPing;

@@ -37,6 +37,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -88,6 +89,9 @@ public class LocalTaskCoordinator {
 
     @Resource
     private NodeTaskRepository nodeTaskRepository;
+
+    @Value("${bifro.nodeName}")
+    private String nodeName;
 
     public void unRegTask(String taskId) {
     }
@@ -190,7 +194,7 @@ public class LocalTaskCoordinator {
 
 //        clusterDataManager.upgradeMainTaskStage(taskConfig.getTaskId(), TaskStage.ONGOING);
 
-        List<NodeTask> nodeTasks = nodeTaskRepository.searchAllByTaskId(taskConfig.getTaskId());
+        List<NodeTask> nodeTasks = nodeTaskRepository.searchAllByTaskId(id);
         for (NodeTask task : nodeTasks) {
             task.getTaskConfig().setTaskWorkStage(TaskStage.ONGOING);
             nodeTaskRepository.save(task);
@@ -235,7 +239,7 @@ public class LocalTaskCoordinator {
                                         clusterDataManager.upgradeClusterNodeTaskStage(runningTask());
 //                                        clusterDataManager.upgradeSubTaskStage(taskConfig, TaskStage.SHUTDOWN);
 
-                                        List<NodeTask> nodeTasks = nodeTaskRepository.searchAllByTaskId(taskConfig.getTaskId());
+                                        List<NodeTask> nodeTasks = nodeTaskRepository.searchAllByTaskId(id);
                                         for (NodeTask task : nodeTasks) {
                                             task.getTaskConfig().setTaskWorkStage(TaskStage.SHUTDOWN);
                                             nodeTaskRepository.save(task);
@@ -292,7 +296,7 @@ public class LocalTaskCoordinator {
                                 runningTaskMap.remove(id);
                                 clusterDataManager.upgradeClusterNodeTaskStage(runningTask());
 
-                                List<NodeTask> nodeTasks = nodeTaskRepository.searchAllByTaskId(taskConfig.getTaskId());
+                                List<NodeTask> nodeTasks = nodeTaskRepository.searchAllByTaskId(id);
                                 for (NodeTask task : nodeTasks) {
                                     task.getTaskConfig().setTaskWorkStage(TaskStage.SHUTDOWN);
                                     nodeTaskRepository.save(task);
@@ -332,7 +336,6 @@ public class LocalTaskCoordinator {
             TaskSchedule.Op op = taskSchedule.getOp();
             String id = taskSchedule.getId();
             String nodeId = clusterDataManager.getCurrentNodeIdCache();
-
 
             switch (op) {
                 // 任务确认，任务待执行
@@ -378,7 +381,7 @@ public class LocalTaskCoordinator {
 
 
         // 将本机的基础信息同步到集群中
-        clusterDataManager.regClusterNodeInfo();
+        clusterDataManager.regClusterNodeInfo(nodeName);
 
         localConsumer.stopTaskConsumer(runningTaskMap);
 

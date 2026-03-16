@@ -9,12 +9,15 @@ import org.springframework.data.mongodb.repository.Update;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface NodeTaskRepository extends MongoRepository<NodeTask, String> {
 
 
     List<NodeTask> searchAllByTaskId(String taskId);
+
+    Optional<NodeTask> searchFirstByTaskId(String taskId);
 
     NodeTask searchByTaskIdAndNodeId(String taskId, String nodeId);
 
