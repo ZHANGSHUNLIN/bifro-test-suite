@@ -1,13 +1,10 @@
 package com.baidu.iot.test.suite.worker;
 
-import com.baidu.iot.test.suite.client.MQTTClientWrapper;
-import com.baidu.iot.test.suite.models.ClientTaskEvent;
 import com.baidu.iot.test.suite.stats.pojo.StatsBasicResult;
 import com.baidu.iot.test.suite.stats.pojo.StatsConnResult;
 import com.baidu.iot.test.suite.stats.pojo.StatsPubResult;
 import com.baidu.iot.test.suite.stats.pojo.StatsSubResult;
 import com.baidu.iot.test.suite.worker.pojo.EventReport;
-import io.reactivex.subjects.BehaviorSubject;
 import io.reactivex.subjects.PublishSubject;
 import io.reactivex.subjects.Subject;
 import io.vertx.core.Vertx;
@@ -18,7 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
-public abstract class BaseTaskWork implements TaskWorker {
+public abstract class BaseTaskWorker implements TaskWorker {
 
     private final AtomicBoolean interrupt = new AtomicBoolean(false);
     protected final Vertx vertx;
@@ -27,7 +24,7 @@ public abstract class BaseTaskWork implements TaskWorker {
     private final Subject<EventReport> reportEventSubject = PublishSubject.<EventReport>create()
             .toSerialized();
 
-    protected BaseTaskWork(Vertx vertx, TaskConfig taskConfig) {
+    protected BaseTaskWorker(Vertx vertx, TaskConfig taskConfig) {
         this.vertx = vertx;
         this.taskConfig = taskConfig;
     }
@@ -39,7 +36,7 @@ public abstract class BaseTaskWork implements TaskWorker {
 
     protected boolean canceled() {
         if (interrupt.get()) {
-            taskStage.set(TaskStage.BREADING);
+            taskStage.set(TaskStage.BREAKING);
             reportResult();
             log.info("interrupt task");
             return true;

@@ -18,7 +18,7 @@ public enum TaskStage {
     ONGOING,
     COLLECTING,
     SHUTDOWN_ING,
-    BREADING,
+    BREAKING,
     SHUTDOWN,
     STOPPED,
 }

@@ -42,7 +42,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @Slf4j
-public class TaskConnWorker extends BaseTaskWork {
+public class TaskConnWorker extends BaseTaskWorker {
 
     Logger tagLogger = LoggerFactory.getLogger("tagLogger");
 
@@ -77,7 +77,7 @@ public class TaskConnWorker extends BaseTaskWork {
 
     public CompletableFuture<Void> stopTask() {
         log.info("stop task, taskId: {}", taskConfig.getTaskId());
-        if (Objects.equals(taskStage, TaskStage.SHUTDOWN_ING)) {
+        if (Objects.equals(taskStage.get(), TaskStage.SHUTDOWN_ING)) {
             log.info("shutting down task");
             return CompletableFuture.completedFuture(null);
         }

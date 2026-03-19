@@ -58,7 +58,7 @@ import org.slf4j.LoggerFactory;
  * Created by mafei01 in 3/15/21 11:27 AM
  */
 @Slf4j
-public class TaskPubSubWorker extends BaseTaskWork {
+public class TaskPubSubWorker extends BaseTaskWorker {
 
     /**
      * 打印周期性tag的专用日志打印
