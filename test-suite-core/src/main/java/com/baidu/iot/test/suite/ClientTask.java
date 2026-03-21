@@ -15,6 +15,7 @@ import com.baidu.iot.test.suite.models.ClientTaskEvent;
 import com.baidu.iot.test.suite.utils.TaskUtils;
 import io.netty.channel.EventLoop;
 import io.vertx.core.Vertx;
+import io.vertx.core.internal.VertxInternal;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
@@ -43,7 +44,8 @@ public abstract class ClientTask {
         this.taskConfig = taskConfig;
         this.clientConfig = mqttClientConfig;
         this.eventAddr = TaskUtils.getClientTaskAddr(taskConfig.getTaskId());
-        this.eventLoop = vertx.nettyEventLoopGroup().next();
+        // Vert.x 5: 使用 VertxInternal 获取 EventLoopGroup
+        this.eventLoop = ((VertxInternal) vertx).nettyEventLoopGroup().next();
         this.taskStage = taskStage;
 
         mqttClientWrapper = taskConfig.isMqtt5() ?

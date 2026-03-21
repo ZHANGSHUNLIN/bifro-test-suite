@@ -133,7 +133,7 @@ public class VertxMQTTClientWrapper extends BaseMQTTClientWrapper {
             if (mqttClient.isConnected()) {
                 MetricsHelper.counter(BifroTaskMetric.CLIENT_CLOSE_COUNT,
                         Tags.of("taskId", taskConfig.getTaskId()));
-                this.mqttClient.disconnect(event -> {
+                this.mqttClient.disconnect().onComplete(event -> {
                     closeFuture.complete(null);
                     if (event.failed()) {
                         log.error("Failed to close mqtt client, clientId={}, ",
@@ -175,16 +175,15 @@ public class VertxMQTTClientWrapper extends BaseMQTTClientWrapper {
         }
         CompletableFuture<List<Integer>> future = new CompletableFuture<>();
         mqttClient.subscribe(
-                topicFilters.stream().collect(Collectors.toMap(TopicFilter::getName, tf -> tf.getQos().value())),
-                subPacket -> {
-                    if (subPacket.failed()) {
-                        future.completeExceptionally(subPacket.cause());
-                    } else {
-                        inflightSubs.put(subPacket.result(), future);
-                        subscribedTopicFilter.addAll(topicFilters);
-                    }
-                }
-        );
+                topicFilters.stream().collect(Collectors.toMap(TopicFilter::getName, tf -> tf.getQos().value()))
+        ).onComplete(subPacket -> {
+            if (subPacket.failed()) {
+                future.completeExceptionally(subPacket.cause());
+            } else {
+                inflightSubs.put(subPacket.result(), future);
+                subscribedTopicFilter.addAll(topicFilters);
+            }
+        });
         return future;
     }
 
@@ -198,15 +197,16 @@ public class VertxMQTTClientWrapper extends BaseMQTTClientWrapper {
             return unsubFuture;
         }
         AtomicInteger futureCount = new AtomicInteger();
-        subscribedTopicFilter.forEach(topicFilter -> mqttClient.unsubscribe(topicFilter.getName(), event -> {
-            log.info("unsub the topicFilter: {}, ok: {}", topicFilter.getName(), event.succeeded());
-            subscribedTopicFilter.remove(topicFilter);
+        List<String> topics = subscribedTopicFilter.stream()
+                .map(TopicFilter::getName)
+                .collect(Collectors.toList());
+        mqttClient.unsubscribe(topics).onComplete(event -> {
+            log.info("unsub the topics: {}, ok: {}", topics, event.succeeded());
+            subscribedTopicFilter.clear();
             MetricsHelper.counter(BifroTaskMetric.UNSUBSCRIBE_COMPLETION_COUNT,
                     Tags.of("taskId", taskConfig.getTaskId()));
-            if (futureCount.incrementAndGet() == subscribedTopicFilter.size()) {
-                unsubFuture.complete(null);
-            }
-        }));
+            unsubFuture.complete(null);
+        });
         return unsubFuture;
     }
 
@@ -215,28 +215,25 @@ public class VertxMQTTClientWrapper extends BaseMQTTClientWrapper {
         CompletableFuture<Void> result = new CompletableFuture<>();
         if (status == ConnectionStatus.CONNECTED && isConnected()) {
             mqttClient.publish(topic, Buffer.buffer(payload), MqttQoS.valueOf(qos),
-                    isDup, isRetain,
-                    pubResult -> {
-                        if (pubResult.succeeded()) {
-                            // qos0 immediately record succeed
-                            if (MqttQoS.AT_MOST_ONCE.equals(MqttQoS.valueOf(qos))) {
-                                result.complete(null);
-                            } else {
-                                // if pub ack return earlier than tcp ack
-                                boolean exist = pubAckCache.remove(pubResult.result());
-                                if (exist) {
-                                    log.info("handle ack earlier than tcp ack!");
-                                    result.complete(null);
-                                } else {
-                                    inflightPubs.put(pubResult.result(), result);
-                                }
-                            }
+                    isDup, isRetain
+            ).onComplete(pubResult -> {
+                if (pubResult.succeeded()) {
+                    // qos0 immediately record succeed
+                    if (MqttQoS.AT_MOST_ONCE.equals(MqttQoS.valueOf(qos))) {
+                        result.complete(null);
+                    } else {
+                        // if pub ack return earlier than tcp ack
+                        boolean exist = pubAckCache.remove(pubResult.result());
+                        if (exist) {
+                            log.info("handle ack earlier than tcp ack!");
+                            result.complete(null);
                         } else {
-                            result.completeExceptionally(new RuntimeException(pubResult.cause()));
+                            inflightPubs.put(pubResult.result(), result);
                         }
-                    }).exceptionHandler(e -> {
-                log.error("Failed to publish message", e);
-                result.completeExceptionally(e);
+                    }
+                } else {
+                    result.completeExceptionally(new RuntimeException(pubResult.cause()));
+                }
             });
         } else {
             result.completeExceptionally(new RuntimeException("Client not connected!"));
@@ -319,7 +316,7 @@ public class VertxMQTTClientWrapper extends BaseMQTTClientWrapper {
                     MetricsHelper.counter(BifroTaskMetric.PUBLISH_COMPLETION_UNKNOWN_PACKET_ID_COUNT, Tags.of("taskId", taskConfig.getTaskId()));
                     log.warn("Publish completion unknown, pubPacketId={}", pubPacketId);
                 });
-                mqttClient.connect(clientConfig.getPort(), clientConfig.getHost(), connAck -> {
+                mqttClient.connect(clientConfig.getPort(), clientConfig.getHost()).onComplete(connAck -> {
                     reconnectFlag.set(false);
                     if (connAck.failed()) {
                         connLogger.warn(

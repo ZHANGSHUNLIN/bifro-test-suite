@@ -109,7 +109,7 @@ public class TaskPubSubWorker extends BaseTaskWorker {
 //        统计报告
         this.vertx.eventBus()
                 .localConsumer(TaskUtils.getClientTaskAddr(taskConfig.getTaskId()), this::handleClientTaskEvent);
-        vertx.executeBlocking(promise -> {
+        vertx.executeBlocking(() -> {
 
             // 计算 pub 和 sub的client 数量；
             if (taskConfig.isPubOnly()) {
@@ -140,11 +140,10 @@ public class TaskPubSubWorker extends BaseTaskWorker {
             initPubClients();
             initSubClients();
             if (canceled()) {
-                promise.complete();
-                return;
+                return null;
             }
             stageTimer = vertx.setTimer(taskConfig.getStageTimeoutInSec() * 1000L, t -> startClientTask());
-            promise.complete();
+            return null;
         });
     }
 
@@ -156,7 +155,7 @@ public class TaskPubSubWorker extends BaseTaskWorker {
         vertx.cancelTimer(startClientTimer);
         vertx.cancelTimer(periodCollectTimer);
         CompletableFuture<Void> result = new CompletableFuture<>();
-        vertx.executeBlocking(promise -> {
+        vertx.executeBlocking(() -> {
             RateLimiter rateLimiter = taskConfig.getDisConnectRateLimiter();
             for (Map.Entry<String, ClientTask> clientWrapperEntry : pubClients.entrySet()) {
                 rateLimiter.acquire();
@@ -172,7 +171,7 @@ public class TaskPubSubWorker extends BaseTaskWorker {
                     .build();
             vertx.eventBus().send(workerEventAddr, taskEvent, ShareDataManager.getLocalDeliveryOptions());
             result.complete(null);
-            promise.complete();
+            return null;
         });
         statsExecutor.shutdown();
         vertx.eventBus().publish(Constants.CLUSTER_TASK_MESSAGE, TaskSchedule.builder()
@@ -241,7 +240,7 @@ public class TaskPubSubWorker extends BaseTaskWorker {
 
             MqttClientConfig mqttClientConfig = taskConfig.getMqttClientConfig(clientIndex++, subscribeCount);
             String clientId = mqttClientConfig.getClientId();
-            log.trace("mqtt sub client : clientid:{} , username: {}, pwd: {}", clientId, mqttClientConfig.getUsername(),
+            log.trace("mqtt sub client : clientId:{} , username: {}, pwd: {}", clientId, mqttClientConfig.getUsername(),
                     mqttClientConfig.getPassword());
 
             ClientTaskConfig subTaskConfig = new ClientTaskConfig();

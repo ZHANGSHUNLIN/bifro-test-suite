@@ -119,7 +119,7 @@ public class PubClientTask extends ClientTask {
 
 
     private void recordPublishSuccess(Long startTime, long latency) {
-        workerExecutor.executeBlocking(p -> {
+        workerExecutor.executeBlocking(() -> {
             statsManager.recordSuccess(latency, TimeUnit.NANOSECONDS);
             if (taskConfig.isSendLatencyEvent()) {
                 ClientTaskEvent clientTaskEvent = ClientTaskEvent.builder()
@@ -133,7 +133,7 @@ public class PubClientTask extends ClientTask {
                 clientTaskEvent.putDetail(TIMESTAMP, startTime);
                 reportResult(clientTaskEvent, true);
             }
-            p.complete();
+            return null;
         });
     }
 

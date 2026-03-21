@@ -17,10 +17,10 @@
 
     <dependencies>
 
-        <dependency>
-            <groupId>io.projectreactor.addons</groupId>
-            <artifactId>reactor-adapter</artifactId>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>io.projectreactor.addons</groupId>-->
+<!--            <artifactId>reactor-adapter</artifactId>-->
+<!--        </dependency>-->
 
         <!-- Spring Boot Starter Data MongoDB -->
         <dependency>
@@ -31,6 +31,12 @@
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.google.errorprone</groupId>
+                    <artifactId>error_prone_annotations</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>

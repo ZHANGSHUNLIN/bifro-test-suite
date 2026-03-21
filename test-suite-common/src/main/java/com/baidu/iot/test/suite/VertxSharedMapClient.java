@@ -12,7 +12,13 @@ import java.util.concurrent.CompletableFuture;
  * Vert.x实现的共享Map客户端
  */
 @Slf4j
-public record VertxSharedMapClient(Vertx vertx) implements SharedMapClient {
+public class VertxSharedMapClient implements SharedMapClient {
+
+    private final Vertx vertx;
+
+    public VertxSharedMapClient(Vertx vertx) {
+        this.vertx = vertx;
+    }
 
     @Override
     public <K, V> CompletableFuture<Void> put(String mapName, K key, V value) {
@@ -95,13 +101,7 @@ public record VertxSharedMapClient(Vertx vertx) implements SharedMapClient {
      * 内部方法：获取AsyncMap，使用Vert.x的Future简化回调
      */
     private <K, V> Future<AsyncMap<K, V>> getMapInternal(String mapName) {
-        return Future.future(promise ->
-                vertx.sharedData().<K, V>getAsyncMap(mapName, result -> {
-                    if (result.failed()) {
-                        promise.fail(result.cause());
-                    } else {
-                        promise.complete(result.result());
-                    }
-                }));
+        // Vert.x 5 API: getAsyncMap 只接受一个参数，返回 Future
+        return vertx.sharedData().getAsyncMap(mapName);
     }
 }

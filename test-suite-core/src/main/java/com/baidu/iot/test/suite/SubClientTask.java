@@ -129,7 +129,7 @@ public class SubClientTask extends ClientTask {
         long latency = System.nanoTime() - startTime;
         // TODO Use index to check message, if repeated
         // long index = PayloadUtils.extractIndex(message.payload().getBytes());
-        workerExecutor.executeBlocking(p -> {
+        workerExecutor.executeBlocking(() -> {
             if (isDup) {
                 statsManager.recordSubDuplicate();
             } else {
@@ -147,7 +147,7 @@ public class SubClientTask extends ClientTask {
                     reportResult(clientTaskEvent, true);
                 }
             }
-            p.complete();
+            return null;
         });
     }
 }

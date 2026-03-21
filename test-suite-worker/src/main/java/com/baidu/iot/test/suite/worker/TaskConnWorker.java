@@ -154,7 +154,7 @@ public class TaskConnWorker extends BaseTaskWorker {
             event.putDetail(CONN_LATENCY_STATS_RESULT, Json.encode(periodConnLatencyStats));
             vertx.eventBus().send(workerEventAddr, event, ShareDataManager.getLocalDeliveryOptions());
         });
-        vertx.executeBlocking(promise -> {
+        vertx.executeBlocking(() -> {
             RateLimiter rateLimiter = taskConfig.getConnectRateLimiter();
             log.info("Start to connect: {}", connClients.size());
             for (ConnClientTask clientWrapper : connClients.values()) {
@@ -165,7 +165,7 @@ public class TaskConnWorker extends BaseTaskWorker {
                 log.debug("Start to connect to {}", clientWrapper.getCId());
                 clientWrapper.startTask(onTaskInitObservable::onNext);
             }
-            promise.complete();
+            return null;
         });
     }
 
