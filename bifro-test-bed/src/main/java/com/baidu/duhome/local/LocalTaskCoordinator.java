@@ -13,13 +13,13 @@ import com.baidu.iot.test.suite.Constants;
 import com.baidu.iot.test.suite.ShareDataAddr;
 import com.baidu.iot.test.suite.TaskSchedule;
 import com.baidu.iot.test.suite.ShareDataManager;
+import com.baidu.iot.test.suite.TaskStage;
 import com.baidu.iot.test.suite.client.MQTTClientWrapper;
 import com.baidu.iot.test.suite.stats.pojo.StatsBasicResult;
 import com.baidu.iot.test.suite.utils.TaskUtils;
 import com.baidu.iot.test.suite.worker.TaskConfig;
 import com.baidu.iot.test.suite.worker.TaskConnWorker;
 import com.baidu.iot.test.suite.worker.TaskPubSubWorker;
-import com.baidu.iot.test.suite.worker.TaskStage;
 import com.baidu.iot.test.suite.worker.TaskWorker;
 import com.baidu.iot.test.suite.worker.models.WorkerTaskEvent;
 import com.baidu.iot.test.suite.worker.pojo.EventReport;
@@ -36,7 +36,6 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -46,7 +45,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -398,7 +396,7 @@ public class LocalTaskCoordinator {
      */
     private void taskFinish(String taskId, String nodeId) {
 
-        ShareDataManager.ShareMap<String, Set<String>> map = shareDataManager.<String, Set<String>>map(ShareDataAddr.FINISH_NODE_TASKS);
+        ShareDataManager.ShareMap<String, Set<String>> map = shareDataManager.map(ShareDataAddr.FINISH_NODE_TASKS);
         map.key(taskId)
                 .thenAccept((result) -> {
                     if (result == null) {

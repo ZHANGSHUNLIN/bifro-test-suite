@@ -21,6 +21,7 @@ import io.vertx.core.WorkerExecutor;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import lombok.Builder;
@@ -45,8 +46,9 @@ public class PubClientTask extends ClientTask {
     public PubClientTask(@NonNull Vertx vertx,
                          @NonNull ClientTaskConfig taskConfig,
                          @NonNull MqttClientConfig mqttClientConfig,
-                         @NonNull TaskPubStatsManager statsManager) {
-        super(vertx, taskConfig, mqttClientConfig);
+                         @NonNull TaskPubStatsManager statsManager,
+                         AtomicReference<TaskStage> taskStage) {
+        super(vertx, taskConfig, mqttClientConfig, taskStage);
         this.statsManager = statsManager;
         this.payload = new byte[Math.max(taskConfig.getMessageSize(), (2 * Long.BYTES))];
         ThreadLocalRandom.current().nextBytes(payload);

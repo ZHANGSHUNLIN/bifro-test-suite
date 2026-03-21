@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.time.Instant;
 
@@ -16,7 +17,8 @@ import java.time.Instant;
 @NoArgsConstructor
 @Document(collection = "mqtt_broker")
 public class MqttBroker implements Serializable {
-
+    @Serial
+    private static final long serialVersionUID = 1L;
     @Id
     private String id;
 

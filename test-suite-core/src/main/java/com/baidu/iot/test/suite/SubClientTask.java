@@ -23,6 +23,7 @@ import io.vertx.core.json.Json;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import lombok.Builder;
@@ -43,8 +44,9 @@ public class SubClientTask extends ClientTask {
     public SubClientTask(@NonNull Vertx vertx,
                          @NonNull ClientTaskConfig taskConfig,
                          @NonNull MqttClientConfig mqttClientConfig,
-                         @NonNull TaskSubStatsManager statsManager) {
-        super(vertx, taskConfig, mqttClientConfig);
+                         @NonNull TaskSubStatsManager statsManager,
+                         AtomicReference<TaskStage> taskStage) {
+        super(vertx, taskConfig, mqttClientConfig, taskStage);
         this.statsManager = statsManager;
         this.workerExecutor = vertx.createSharedWorkerExecutor("client-worker", 10);
     }

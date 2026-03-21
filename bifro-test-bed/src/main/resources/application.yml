@@ -14,7 +14,7 @@ management:
 
 
 bifro:
-  nodeName: "Default Broker1"
+  nodeName: "Default Broker2"
   mqtt:
     default:
         clusterMembers:

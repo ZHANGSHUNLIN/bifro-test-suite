@@ -6,14 +6,15 @@ package com.baidu.iot.test.suite.worker;
 
 import static com.baidu.iot.test.suite.client.MqttCloudHelper.generateUsername;
 
+import com.baidu.iot.test.suite.TaskStage;
 import com.baidu.iot.test.suite.WillConfig;
 import com.baidu.iot.test.suite.client.MqttCloudHelper;
 import com.baidu.iot.test.suite.configs.MqttClientConfig;
-import com.baidu.iot.test.suite.constants.ClientTaskType;
 import com.baidu.iot.test.suite.worker.utils.ConfigHelper;
 import com.google.common.util.concurrent.RateLimiter;
 import io.netty.handler.codec.mqtt.MqttQoS;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
@@ -44,6 +45,10 @@ import java.util.List;
 @NoArgsConstructor
 @Builder
 public class TaskConfig implements Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
     @Builder.Default
     private TaskStage taskWorkStage = TaskStage.INIT;
     private String taskId;

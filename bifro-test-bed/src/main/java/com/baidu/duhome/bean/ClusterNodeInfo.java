@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.io.Serial;
 import java.io.Serializable;
 
 @Data
@@ -12,6 +13,9 @@ import java.io.Serializable;
 @NoArgsConstructor
 @Builder
 public class ClusterNodeInfo implements Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
     private String nodeId;
     private String host;
     private long timestamp;
@@ -24,6 +28,9 @@ public class ClusterNodeInfo implements Serializable {
     @NoArgsConstructor
     @Builder
     public static class MemoryInfo implements Serializable{
+
+        @Serial
+        private static final long serialVersionUID = 1L;
         private long max;
         private long total;
         private long used;
@@ -36,6 +43,10 @@ public class ClusterNodeInfo implements Serializable {
     @NoArgsConstructor
     @Builder
     public static class CpuInfo implements Serializable{
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+
         private int processors;
         private double loadAverage;
         

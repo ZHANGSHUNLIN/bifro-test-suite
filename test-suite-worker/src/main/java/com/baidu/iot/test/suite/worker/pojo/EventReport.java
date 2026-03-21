@@ -1,10 +1,10 @@
 package com.baidu.iot.test.suite.worker.pojo;
 
+import com.baidu.iot.test.suite.TaskStage;
 import com.baidu.iot.test.suite.stats.pojo.StatsBasicResult;
 import com.baidu.iot.test.suite.stats.pojo.StatsConnResult;
 import com.baidu.iot.test.suite.stats.pojo.StatsPubResult;
 import com.baidu.iot.test.suite.stats.pojo.StatsSubResult;
-import com.baidu.iot.test.suite.worker.TaskStage;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,7 +18,7 @@ import lombok.ToString;
 @ToString
 public class EventReport {
 
-    private TaskStage  taskStage;
+    private TaskStage taskStage;
 
     private StatsBasicResult  statsBasicResult;
     private StatsSubResult  statsSubResult;

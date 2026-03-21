@@ -1,14 +1,16 @@
 package com.baidu.duhome.config;
 
-import com.baidu.iot.test.suite.worker.TaskStage;
+
+import com.baidu.iot.test.suite.TaskStage;
 
 import java.util.Arrays;
 import java.util.List;
 
-import static com.baidu.iot.test.suite.worker.TaskStage.ASSIGNED;
-import static com.baidu.iot.test.suite.worker.TaskStage.INIT;
-import static com.baidu.iot.test.suite.worker.TaskStage.SHUTDOWN;
-import static com.baidu.iot.test.suite.worker.TaskStage.STOPPED;
+import static com.baidu.iot.test.suite.TaskStage.ASSIGNED;
+import static com.baidu.iot.test.suite.TaskStage.INIT;
+import static com.baidu.iot.test.suite.TaskStage.SHUTDOWN;
+import static com.baidu.iot.test.suite.TaskStage.STOPPED;
+
 
 public class Constants {
 

@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -18,6 +19,8 @@ import java.util.List;
 @NoArgsConstructor
 @Document(collection = "task_info_metadata")
 public class TaskInfoMetadata implements Serializable {
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     @Id
     private String taskId;

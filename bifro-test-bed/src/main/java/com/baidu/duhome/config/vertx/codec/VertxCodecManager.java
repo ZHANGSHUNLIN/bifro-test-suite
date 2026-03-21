@@ -1,19 +1,18 @@
 package com.baidu.duhome.config.vertx.codec;
 
-import com.baidu.duhome.bean.ClusterNodeInfo;
-import com.sun.source.util.TaskEvent;
+import com.hazelcast.config.Config;
+import com.hazelcast.config.SerializationConfig;
+import com.hazelcast.config.SerializerConfig;
 import io.vertx.core.Vertx;
-import io.vertx.core.eventbus.MessageCodec;
+import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
-
-import java.util.function.Supplier;
 
 @Slf4j
 public class VertxCodecManager {
 
 
     // 注册方法
-    public static void registerAll(Vertx vertx) {
+    public static void registerCodecAll(Vertx vertx) {
         for (CodecType codecType : CodecType.values()) {
             registerCodec(vertx, codecType);
         }
@@ -50,4 +49,19 @@ public class VertxCodecManager {
         }
         return null;
     }
+
+    public static void registerStreamSerializerAll(@NonNull Config hazelcastConfig){
+        SerializationConfig serializationConfig = hazelcastConfig.getSerializationConfig();
+
+        for (CodecType codecType : CodecType.values()) {
+            SerializerConfig serializerConfig = new SerializerConfig();
+            serializerConfig.setTypeClass(codecType.getMessageClass());
+            serializerConfig.setTypeClassName(codecType.getMessageClass().getName());
+            serializerConfig.setImplementation(codecType.getSerializer());
+            serializationConfig.addSerializerConfig(serializerConfig);
+        }
+
+
+    }
+
 }

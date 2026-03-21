@@ -8,6 +8,7 @@ import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -24,6 +25,8 @@ import java.util.function.Function;
 @ToString
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ApiResponse<T> implements Serializable {
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     private int code;
     private String message;

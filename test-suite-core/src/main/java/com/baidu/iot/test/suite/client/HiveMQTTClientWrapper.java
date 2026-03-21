@@ -6,14 +6,14 @@ package com.baidu.iot.test.suite.client;
 
 import static com.baidu.iot.test.suite.constants.ConnectionStatus.CLOSED;
 import static com.baidu.iot.test.suite.constants.ConnectionStatus.CONNECTED;
-import static com.baidu.iot.test.suite.constants.ConnectionStatus.CONNECTED_FAILED;
-import static com.baidu.iot.test.suite.constants.ConnectionStatus.CONNECTING;
 import static com.baidu.iot.test.suite.constants.ConnectionStatus.DISCONNECTED;
 
-import com.baidu.iot.test.suite.IPubMsgListener;
+import com.baidu.iot.test.suite.TaskStage;
 import com.baidu.iot.test.suite.configs.ClientTaskConfig;
 import com.baidu.iot.test.suite.configs.MqttClientConfig;
 import com.baidu.iot.test.suite.constants.ConnectionStatus;
+import com.baidu.iot.test.suite.metric.BifroTaskMetric;
+import com.baidu.iot.test.suite.metric.MetricsHelper;
 import com.baidu.iot.test.suite.models.TopicFilter;
 import com.hivemq.client.internal.mqtt.lifecycle.MqttClientDisconnectedContextImpl;
 import com.hivemq.client.mqtt.MqttClientTransportConfig;
@@ -32,6 +32,7 @@ import com.hivemq.client.mqtt.mqtt5.message.subscribe.Mqtt5Subscribe;
 import com.hivemq.client.mqtt.mqtt5.message.subscribe.Mqtt5Subscription;
 import com.hivemq.client.mqtt.mqtt5.message.subscribe.suback.Mqtt5SubAckReasonCode;
 import com.hivemq.client.mqtt.mqtt5.message.unsubscribe.Mqtt5Unsubscribe;
+import io.micrometer.core.instrument.Tags;
 import io.netty.channel.EventLoop;
 import io.vertx.core.Vertx;
 
@@ -40,11 +41,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import lombok.NonNull;
@@ -53,32 +53,30 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @Slf4j
-public class HiveMQTTClientWrapper implements MQTTClientWrapper {
+public class HiveMQTTClientWrapper extends BaseMQTTClientWrapper {
 
     Logger connLogger = LoggerFactory.getLogger("connLogger");
 
-    private final Vertx vertx;
     private final MqttClientConfig clientConfig;
-    private final ClientTaskConfig taskConfig;
     private final AtomicInteger reconnectAttempts = new AtomicInteger(0);
     private final AtomicBoolean reconnecting = new AtomicBoolean();
     private final EventLoop eventLoop;
 
     private Mqtt5AsyncClient mqttClient;
     private ConnectionStatus status = ConnectionStatus.INIT;
-    private Consumer<ConnectionStatus> connectCallback;
-    private IPubMsgListener pubMsgListener;
     protected long reconnectTimer;
     private final Set<TopicFilter> subscribedTopicFilter = new HashSet<>();
+    private final AtomicReference<TaskStage> taskStage;
+
 
     public HiveMQTTClientWrapper(@NonNull Vertx vertx,
                                  @NonNull ClientTaskConfig taskConfig,
                                  @NonNull MqttClientConfig mqttClientConfig,
-                                 @NonNull EventLoop eventLoop) {
-        this.vertx = vertx;
-        this.taskConfig = taskConfig;
+                                 @NonNull EventLoop eventLoop, AtomicReference<TaskStage> taskStage) {
+        super(vertx, mqttClientConfig, taskConfig);
         this.clientConfig = mqttClientConfig;
         this.eventLoop = eventLoop;
+        this.taskStage = taskStage;
     }
 
     @Override
@@ -101,6 +99,8 @@ public class HiveMQTTClientWrapper implements MQTTClientWrapper {
         vertx.cancelTimer(reconnectTimer);
         CompletableFuture<Void> closeFuture = new CompletableFuture<>();
         if (isConnected()) {
+            MetricsHelper.counter(BifroTaskMetric.CLIENT_CLOSE_COUNT,
+                    Tags.of("taskId", taskConfig.getTaskId()));
             this.mqttClient.disconnect()
                     .whenComplete((r, e) -> {
                         if (e != null) {
@@ -109,6 +109,9 @@ public class HiveMQTTClientWrapper implements MQTTClientWrapper {
                         closeFuture.complete(null);
                     });
         } else {
+            MetricsHelper.counter(BifroTaskMetric.CLIENT_CLOSE_EXCEPTION_COUNT,
+                    Tags.of("taskId", taskConfig.getTaskId()));
+
             log.info("mqtt client is null , status: {}", status);
             closeFuture.complete(null);
         }
@@ -119,31 +122,25 @@ public class HiveMQTTClientWrapper implements MQTTClientWrapper {
     @Override
     public CompletableFuture<Void> disconnect() {
         if (mqttClient != null) {
-            return mqttClient.disconnect();
+            return mqttClient.disconnect()
+                    .exceptionally(e -> {
+                        log.error("Failed to disconnect mqtt client, clientId={}, ", clientConfig.getClientId(), e);
+                        MetricsHelper.counter(BifroTaskMetric.DISCONNECT_COMPLETION_EXPIRATION_COUNT,
+                                Tags.of("taskId", taskConfig.getTaskId()));
+                        return null;
+                    });
         }
         return CompletableFuture.completedFuture(null);
     }
 
-    @Override
-    public void  connect(Consumer<ConnectionStatus> connectCallback, IPubMsgListener pubMsgListener) {
-        if (status == CONNECTED || status == CONNECTING || isConnected()) {
-            log.warn("mqttClient is already connected, clientId={}", clientConfig.getClientId());
-            return;
-        }
-        this.connectCallback = connectCallback;
-        this.pubMsgListener = pubMsgListener;
-        status = ConnectionStatus.CONNECTING;
-        internalConnect();
-    }
 
     @Override
     public CompletableFuture<List<Integer>> subscribe(Set<TopicFilter> topicFilters) {
-        CompletableFuture<List<Integer>> subFuture = new CompletableFuture<>();
-        if (!(status == CONNECTED && isConnected())) {
-            log.warn("Subscribe cancelled for mqttClient is not connected, clientId={}", clientConfig.getClientId());
-            subFuture.completeExceptionally(new RuntimeException("mqttClient is not connected"));
+        CompletableFuture<List<Integer>> subFuture = super.subscribe(topicFilters);
+        if (subFuture != null) {
             return subFuture;
         }
+        CompletableFuture<List<Integer>> future = new CompletableFuture<>();
         mqttClient.subscribe(Mqtt5Subscribe.builder()
                 .addSubscriptions(
                         topicFilters.stream().map(tf -> Mqtt5Subscription.builder().topicFilter(tf.getName())
@@ -152,14 +149,19 @@ public class HiveMQTTClientWrapper implements MQTTClientWrapper {
                 ).build()
         ).whenComplete((ack, e) -> {
             if (e != null) {
-                subFuture.completeExceptionally(e);
+                future.completeExceptionally(e);
+                MetricsHelper.counter(BifroTaskMetric.SUBSCRIBE_COMPLETION_EXPIRATION_COUNT,
+                        Tags.of("taskId", taskConfig.getTaskId()));
+
             } else {
+                MetricsHelper.counter(BifroTaskMetric.SUBSCRIBE_COMPLETION_COUNT,
+                        Tags.of("taskId", taskConfig.getTaskId()));
                 subscribedTopicFilter.addAll(topicFilters);
-                subFuture.complete(ack.getReasonCodes().stream()
+                future.complete(ack.getReasonCodes().stream()
                         .map(Mqtt5SubAckReasonCode::getCode).collect(Collectors.toList()));
             }
         });
-        return subFuture;
+        return future;
     }
 
     public CompletableFuture<Void> unsubscribeAll() {
@@ -167,6 +169,8 @@ public class HiveMQTTClientWrapper implements MQTTClientWrapper {
         if (!(status == CONNECTED && isConnected())) {
             log.warn("Unsubscribe cancelled for mqttClient is not connected, clientId={}", clientConfig.getClientId());
             unsubFuture.completeExceptionally(new RuntimeException("mqttClient is not connected"));
+            MetricsHelper.counter(BifroTaskMetric.UNSUBSCRIBE_COMPLETION_EXPIRATION_COUNT,
+                    Tags.of("taskId", taskConfig.getTaskId()));
             return unsubFuture;
         }
         List<MqttTopicFilter> mqttTopicFilters = subscribedTopicFilter.stream()
@@ -176,6 +180,8 @@ public class HiveMQTTClientWrapper implements MQTTClientWrapper {
                         .whenComplete((ack, e) -> {
                             log.info("unsub the topicFilter: {}, ok: {}", topicFilter.getName(), e == null);
                             subscribedTopicFilter.clear();
+                            MetricsHelper.counter(BifroTaskMetric.UNSUBSCRIBE_COMPLETION_COUNT,
+                                    Tags.of("taskId", taskConfig.getTaskId()));
                             unsubFuture.complete(null);
                         })
         );
@@ -203,17 +209,31 @@ public class HiveMQTTClientWrapper implements MQTTClientWrapper {
                             result.complete(null);
                         }
                     });
+            MetricsHelper.counter(BifroTaskMetric.PUBLISH_COMPLETION_COUNT,
+                    Tags.of("taskId", taskConfig.getTaskId()));
         } else {
             result.completeExceptionally(new RuntimeException("Client not connected!"));
+            MetricsHelper.counter(BifroTaskMetric.PUBLISH_COMPLETION_EXPIRATION_COUNT,
+                    Tags.of("taskId", taskConfig.getTaskId(), "state", status.name()));
         }
         return result;
     }
 
-    private void internalConnect() {
+    @Override
+    public void internalConnect() {
+        TaskStage stage = taskStage.get();
+        if (stage != TaskStage.ONGOING) {
+            MetricsHelper.counter(BifroTaskMetric.ILLEGAL_TASK_STATE,
+                    Tags.of("stage", stage.name(), "taskId", taskConfig.getTaskId()));
+            log.warn("MqttClient reconnect cancelled, clientId={}, taskStage={}", clientConfig.getClientId(), stage);
+            return;
+        }
         long start = System.currentTimeMillis();
         if (status == CLOSED) {
-            connLogger.info("mqttClient is already closed, clientId={}", clientConfig.getClientId());
-            return ;
+            MetricsHelper.counter(BifroTaskMetric.ILLEGAL_STATE_CLIENT_CLOSED,
+                    Tags.of("taskId", taskConfig.getTaskId()));
+            log.warn("MqttClient is closed, clientId={}", clientConfig.getClientId());
+            return;
         }
         if (reconnecting.compareAndSet(false, true)) {
             this.eventLoop.execute(() -> {
@@ -223,6 +243,7 @@ public class HiveMQTTClientWrapper implements MQTTClientWrapper {
                     connLogger.debug("MqttClient connect success, clientId={}, costs={}ms, hashcode: {}",
                             context.getClientConfig().getClientIdentifier(), System.currentTimeMillis() - start,
                             this.hashCode());
+                    MetricsHelper.counter(BifroTaskMetric.CONNECT_SUCCESS_COUNT, Tags.of("taskId", taskConfig.getTaskId()));
                     status = CONNECTED;
                     connectCallback.accept(CONNECTED);
                 }, context -> {
@@ -239,31 +260,17 @@ public class HiveMQTTClientWrapper implements MQTTClientWrapper {
                             disconnectedContext.getCause().getMessage(), System.currentTimeMillis() - start,
                             disconnectedContext.getCause());
                     status = DISCONNECTED;
+                    MetricsHelper.counter(BifroTaskMetric.CONNECT_EXCEPTION_COUNT,
+                            Tags.of("taskId", taskConfig.getTaskId()));
                     connectCallback.accept(DISCONNECTED);
                     tryRecoverConnect();
                 });
-                mqttClient.publishes(MqttGlobalPublishFilter.ALL, pub -> {
-                    this.pubMsgListener.onPublishMessage(pub.getPayloadAsBytes(), false);
-                });
+                mqttClient.publishes(MqttGlobalPublishFilter.ALL, pub -> this.pubMsgListener.onPublishMessage(pub.getPayloadAsBytes(), false));
                 mqttClient.connect(buildConnect());
             });
         }
     }
 
-    private void tryRecoverConnect() {
-        if (reconnectAttempts.getAndIncrement() < clientConfig.getReconnectMaxAttempts()) {
-            reconnectTimer =
-                    vertx.setTimer(ThreadLocalRandom.current().nextLong(clientConfig.getReconnectIntervalInMs(),
-                                    clientConfig.getReconnectIntervalInMs() * 2L),
-                            t -> internalConnect());
-        } else {
-            status = CONNECTED_FAILED;
-            connLogger.error("MqttClient connect failed after {} retries, clientId={}, localAddr={}",
-                    clientConfig.getReconnectMaxAttempts(),
-                    clientConfig.getClientId(), clientConfig.getLocalAddress());
-            connectCallback.accept(CONNECTED_FAILED);
-        }
-    }
 
     private Mqtt5AsyncClient buildClient(MqttClientConnectedListener connectedListener,
                                          MqttClientDisconnectedListener disconnectedListener) {
@@ -274,7 +281,7 @@ public class HiveMQTTClientWrapper implements MQTTClientWrapper {
                 emptyClientId = false;
             }
         }
-        connLogger.debug("clientId:{}, localAddress: {} , host: {}, port: {},username: {}, password: {}", clientConfig.getClientId(),clientConfig.getLocalAddress(), clientConfig.getHost(), clientConfig.getPort(), clientConfig.getUsername(), clientConfig.getPassword());
+        connLogger.debug("clientId:{}, localAddress: {} , host: {}, port: {},username: {}, password: {}", clientConfig.getClientId(), clientConfig.getLocalAddress(), clientConfig.getHost(), clientConfig.getPort(), clientConfig.getUsername(), clientConfig.getPassword());
         // TODO ssl support
         return mqttClient = com.hivemq.client.mqtt.MqttClient.builder()
                 .useMqttVersion5()

@@ -33,6 +33,7 @@ public class VertxConfig {
                 .setEnabled(true)
                 .addMember(vertxProperties.getMembers());
         HazelcastClusterManager hazelcastClusterManager = new HazelcastClusterManager(hazelcastConfig);
+        VertxCodecManager.registerStreamSerializerAll(hazelcastConfig);
 
         return Vertx.builder()
                 .with(new VertxOptions(vertxProperties.getVertxOptions())
@@ -43,7 +44,7 @@ public class VertxConfig {
                 .toCompletableFuture()
                 .thenApply(vertx -> {
                     vertx.exceptionHandler((e) -> log.error("EventBus error:", e));
-                    VertxCodecManager.registerAll(vertx);
+                    VertxCodecManager.registerCodecAll(vertx);
                     return vertx;
                 })
                 .whenComplete((vertx, throwable) -> {

@@ -5,6 +5,7 @@ import static com.baidu.iot.test.suite.constants.CommonConstants.CONN_LATENCY_ST
 import com.baidu.iot.test.suite.Constants;
 import com.baidu.iot.test.suite.ShareDataManager;
 import com.baidu.iot.test.suite.TaskSchedule;
+import com.baidu.iot.test.suite.TaskStage;
 import com.baidu.iot.test.suite.client.MQTTClientWrapper;
 import com.google.common.util.concurrent.RateLimiter;
 import io.reactivex.subjects.PublishSubject;
@@ -44,8 +45,7 @@ import org.slf4j.LoggerFactory;
 @Slf4j
 public class TaskConnWorker extends BaseTaskWorker {
 
-    Logger tagLogger = LoggerFactory.getLogger("tagLogger");
-
+    private final Logger tagLogger = LoggerFactory.getLogger("tagLogger");
     private final TaskConnStatsManager connStatsManager;
     private final Map<String, ConnClientTask> connClients = new HashMap<>();
     private final Set<String> connClientIds = new HashSet<>();
@@ -66,7 +66,7 @@ public class TaskConnWorker extends BaseTaskWorker {
 
     public void startTask() {
         taskStage.set(TaskStage.START);
-        reportResult();
+        eventReport();
         this.taskEventConsumer = this.vertx.eventBus()
                 .localConsumer(TaskUtils.getClientTaskAddr(taskConfig.getTaskId()), this::handleClientTaskEvent);
         this.taskFinishConsumer = this.vertx.eventBus()
@@ -82,7 +82,7 @@ public class TaskConnWorker extends BaseTaskWorker {
             return CompletableFuture.completedFuture(null);
         }
         taskStage.set(TaskStage.SHUTDOWN_ING);
-        reportResult();
+        eventReport();
         CompletableFuture<Void> result = new CompletableFuture<>();
         ForkJoinPool.commonPool().execute(() -> {
             RateLimiter rateLimiter = taskConfig.getDisConnectRateLimiter();
@@ -112,13 +112,8 @@ public class TaskConnWorker extends BaseTaskWorker {
             taskFinishConsumer.unregister();
         }
         taskStage.compareAndSet(TaskStage.SHUTDOWN_ING, TaskStage.SHUTDOWN);
-        reportResult();
+        eventReport();
         return result;
-    }
-
-    @Override
-    public TaskStage getTaskState() {
-        return this.taskStage.get();
     }
 
     /**
@@ -135,7 +130,7 @@ public class TaskConnWorker extends BaseTaskWorker {
             clientTaskConfig.setType(ClientTaskType.CONN);
             ConfigHelper.fillCommonTaskConfig(clientTaskConfig, taskConfig);
             ConnClientTask connClientTask =
-                    new ConnClientTask(vertx, clientTaskConfig, mqttClientConfig, connStatsManager);
+                    new ConnClientTask(vertx, clientTaskConfig, mqttClientConfig, connStatsManager,taskStage);
             connClients.put(mqttClientConfig.getClientId(), connClientTask);
         }
         connClientIds.addAll(connClients.keySet());
@@ -146,10 +141,10 @@ public class TaskConnWorker extends BaseTaskWorker {
      */
     private void startClientTask() {
         taskStage.compareAndSet(TaskStage.START, TaskStage.ONGOING);
-        reportResult();
+        eventReport();
         periodCollectTimer = vertx.setPeriodic(5000, t -> {
             StatsBasicResult periodConnLatencyStats = connStatsManager.tagPeriodResult();
-            reportResult(periodConnLatencyStats);
+            eventReport(periodConnLatencyStats);
             tagLogger.info("Task {} period connect latency stats: {}",
                     taskConfig.getTaskId(), Json.encodePrettily(periodConnLatencyStats));
             WorkerTaskEvent event = WorkerTaskEvent.builder()
@@ -185,7 +180,7 @@ public class TaskConnWorker extends BaseTaskWorker {
         totalResult.setExpectConnQps(taskConfig.getConnectRate());
         totalResult.setActualConnCount(totalResult.getActualResult().getCount());
         totalResult.setActualConnQps(totalResult.getActualResult().getQps());
-        reportResult(totalResult);
+        eventReport(totalResult);
         log.debug("Task {} total connect latency stats: {}",
                 taskConfig.getTaskId(), Json.encodePrettily(totalResult));
 

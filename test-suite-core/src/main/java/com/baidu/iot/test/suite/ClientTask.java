@@ -15,7 +15,9 @@ import com.baidu.iot.test.suite.models.ClientTaskEvent;
 import com.baidu.iot.test.suite.utils.TaskUtils;
 import io.netty.channel.EventLoop;
 import io.vertx.core.Vertx;
+
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import lombok.NonNull;
@@ -28,21 +30,25 @@ public abstract class ClientTask {
     protected final MqttClientConfig clientConfig;
     protected final ClientTaskConfig taskConfig;
     protected final String eventAddr;
+    protected final AtomicReference<TaskStage> taskStage;
 
     protected MQTTClientWrapper mqttClientWrapper;
     protected EventLoop eventLoop;
 
     ClientTask(@NonNull Vertx vertx,
                @NonNull ClientTaskConfig taskConfig,
-               @NonNull MqttClientConfig mqttClientConfig) {
+               @NonNull MqttClientConfig mqttClientConfig,
+               AtomicReference<TaskStage> taskStage) {
         this.vertx = vertx;
         this.taskConfig = taskConfig;
         this.clientConfig = mqttClientConfig;
         this.eventAddr = TaskUtils.getClientTaskAddr(taskConfig.getTaskId());
         this.eventLoop = vertx.nettyEventLoopGroup().next();
+        this.taskStage = taskStage;
+
         mqttClientWrapper = taskConfig.isMqtt5() ?
-            new HiveMQTTClientWrapper(vertx, taskConfig, mqttClientConfig, eventLoop) :
-            new VertxMQTTClientWrapper(vertx, taskConfig, mqttClientConfig, eventLoop);
+                new HiveMQTTClientWrapper(vertx, taskConfig, mqttClientConfig, eventLoop,taskStage) :
+                new VertxMQTTClientWrapper(vertx, taskConfig, mqttClientConfig, eventLoop,taskStage);
     }
 
     public abstract void initTask();
@@ -71,7 +77,7 @@ public abstract class ClientTask {
     }
 
     protected void connect(Consumer<ConnectionStatus> callback, IPubMsgListener msgListener) {
-         mqttClientWrapper.connect(callback, msgListener);
+        mqttClientWrapper.connect(callback, msgListener);
     }
 
 }

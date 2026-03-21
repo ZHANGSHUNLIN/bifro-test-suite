@@ -6,27 +6,25 @@ package com.baidu.iot.test.suite.client;
 
 import static com.baidu.iot.test.suite.constants.ConnectionStatus.CLOSED;
 import static com.baidu.iot.test.suite.constants.ConnectionStatus.CONNECTED;
-import static com.baidu.iot.test.suite.constants.ConnectionStatus.CONNECTED_FAILED;
-import static com.baidu.iot.test.suite.constants.ConnectionStatus.CONNECTING;
 import static com.baidu.iot.test.suite.constants.ConnectionStatus.DISCONNECTED;
 
-import com.baidu.iot.test.suite.IPubMsgListener;
+import com.baidu.iot.test.suite.TaskStage;
 import com.baidu.iot.test.suite.WillConfig;
 import com.baidu.iot.test.suite.configs.ClientTaskConfig;
 import com.baidu.iot.test.suite.configs.MqttClientConfig;
 import com.baidu.iot.test.suite.constants.ConnectionStatus;
+import com.baidu.iot.test.suite.metric.BifroTaskMetric;
+import com.baidu.iot.test.suite.metric.MetricsHelper;
 import com.baidu.iot.test.suite.models.TopicFilter;
 import com.baidu.iot.test.suite.utils.ConnectionUtil;
-import io.netty.bootstrap.Bootstrap;
+import io.micrometer.core.instrument.Tags;
 import io.netty.channel.EventLoop;
 import io.netty.handler.codec.mqtt.MqttQoS;
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
-import io.vertx.core.net.impl.NetClientImpl;
 import io.vertx.mqtt.MqttClient;
 import io.vertx.mqtt.MqttClientOptions;
 
-import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -34,53 +32,38 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
-import io.vertx.mqtt.impl.MqttClientImpl;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @Slf4j
-public class VertxMQTTClientWrapper implements MQTTClientWrapper {
+public class VertxMQTTClientWrapper extends BaseMQTTClientWrapper {
 
-    Logger connLogger = LoggerFactory.getLogger("connLogger");
-    Logger pubLogger = LoggerFactory.getLogger("pubLogger");
-    Logger subLogger = LoggerFactory.getLogger("subLogger");
-
-    private final Vertx vertx;
-    private final MqttClientConfig clientConfig;
-    private final ClientTaskConfig taskConfig;
-    private final AtomicInteger reconnectAttempts = new AtomicInteger(0);
     private final AtomicBoolean reconnectFlag = new AtomicBoolean();
     private final MqttClientOptions mqttOptions;
     private final EventLoop eventLoop;
 
     private MqttClient mqttClient;
-    private ConnectionStatus status;
-    private Consumer<ConnectionStatus> connectCallback;
-    private IPubMsgListener pubMsgListener;
-    protected long reconnectTimer;
     private final Set<TopicFilter> subscribedTopicFilter = new HashSet<>();
     private final Map<Integer, CompletableFuture<List<Integer>>> inflightSubs = new HashMap<>();
     private final Map<Integer, CompletableFuture<Void>> inflightPubs = new HashMap<>();
     private final Set<Integer> pubAckCache = new HashSet<>();
+    private final AtomicReference<TaskStage> taskStage;
+
 
     public VertxMQTTClientWrapper(@NonNull Vertx vertx,
                                   @NonNull ClientTaskConfig taskConfig,
                                   @NonNull MqttClientConfig mqttClientConfig,
-                                  @NonNull EventLoop eventLoop) {
+                                  @NonNull EventLoop eventLoop, AtomicReference<TaskStage> taskStage) {
+        super(vertx, mqttClientConfig, taskConfig);
         status = ConnectionStatus.INIT;
-        this.vertx = vertx;
-        this.taskConfig = taskConfig;
-        this.clientConfig = mqttClientConfig;
         this.eventLoop = eventLoop;
+        this.taskStage = taskStage;
         log.debug("mqtt client config, {}", clientConfig);
 
         mqttOptions = new MqttClientOptions()
@@ -148,6 +131,8 @@ public class VertxMQTTClientWrapper implements MQTTClientWrapper {
         CompletableFuture<Void> closeFuture = new CompletableFuture<>();
         if (mqttClient != null) {
             if (mqttClient.isConnected()) {
+                MetricsHelper.counter(BifroTaskMetric.CLIENT_CLOSE_COUNT,
+                        Tags.of("taskId", taskConfig.getTaskId()));
                 this.mqttClient.disconnect(event -> {
                     closeFuture.complete(null);
                     if (event.failed()) {
@@ -156,7 +141,11 @@ public class VertxMQTTClientWrapper implements MQTTClientWrapper {
                     }
                 });
             }
+            MetricsHelper.counter(BifroTaskMetric.CLIENT_CLOSE_EXCEPTION_COUNT,
+                    Tags.of("taskId", taskConfig.getTaskId()));
         } else {
+            MetricsHelper.counter(BifroTaskMetric.CLIENT_CLOSE_EXCEPTION_COUNT,
+                    Tags.of("taskId", taskConfig.getTaskId()));
 //            log.info("mqtt client is null");
             closeFuture.complete(null);
         }
@@ -166,48 +155,44 @@ public class VertxMQTTClientWrapper implements MQTTClientWrapper {
     @Override
     public CompletableFuture<Void> disconnect() {
         if (mqttClient != null) {
-            return mqttClient.disconnect().toCompletionStage().toCompletableFuture();
+            return mqttClient.disconnect().toCompletionStage().toCompletableFuture()
+                    .exceptionally(e -> {
+                        log.error("Failed to disconnect mqtt client, clientId={}, ", mqttClient.clientId(), e);
+                        MetricsHelper.counter(BifroTaskMetric.DISCONNECT_COMPLETION_EXPIRATION_COUNT,
+                                Tags.of("taskId", taskConfig.getTaskId()));
+                        return null;
+                    });
         }
         return CompletableFuture.completedFuture(null);
     }
 
-    @Override
-    public void connect(Consumer<ConnectionStatus> connectCallback, IPubMsgListener pubMsgListener) {
-        if (status == CONNECTED || status == CONNECTING || isConnected()) {
-            log.warn("mqttClient is already connected, clientId={}", clientConfig.getClientId());
-            return;
-        }
-        this.connectCallback = connectCallback;
-        this.pubMsgListener = pubMsgListener;
-        status = ConnectionStatus.CONNECTING;
-         internalConnect();
-    }
 
     @Override
     public CompletableFuture<List<Integer>> subscribe(Set<TopicFilter> topicFilters) {
-        CompletableFuture<List<Integer>> subFuture = new CompletableFuture<>();
-        if (!(status == CONNECTED && isConnected())) {
-            log.warn("Subscribe cancelled for mqttClient is not connected, clientId={}", clientConfig.getClientId());
-            subFuture.completeExceptionally(new RuntimeException("mqttClient is not connected"));
-            return subFuture;
+        CompletableFuture<List<Integer>> subscribe = super.subscribe(topicFilters);
+        if (subscribe != null) {
+            return subscribe;
         }
+        CompletableFuture<List<Integer>> future = new CompletableFuture<>();
         mqttClient.subscribe(
                 topicFilters.stream().collect(Collectors.toMap(TopicFilter::getName, tf -> tf.getQos().value())),
                 subPacket -> {
                     if (subPacket.failed()) {
-                        subFuture.completeExceptionally(subPacket.cause());
+                        future.completeExceptionally(subPacket.cause());
                     } else {
-                        inflightSubs.put(subPacket.result(), subFuture);
+                        inflightSubs.put(subPacket.result(), future);
                         subscribedTopicFilter.addAll(topicFilters);
                     }
                 }
         );
-        return subFuture;
+        return future;
     }
 
     public CompletableFuture<Void> unsubscribeAll() {
         CompletableFuture<Void> unsubFuture = new CompletableFuture<>();
         if (!(status == CONNECTED && isConnected())) {
+            MetricsHelper.counter(BifroTaskMetric.UNSUBSCRIBE_COMPLETION_EXPIRATION_COUNT,
+                    Tags.of("taskId", taskConfig.getTaskId()));
             log.warn("Unsubscribe cancelled for mqttClient is not connected, clientId={}", clientConfig.getClientId());
             unsubFuture.completeExceptionally(new RuntimeException("mqttClient is not connected"));
             return unsubFuture;
@@ -216,6 +201,8 @@ public class VertxMQTTClientWrapper implements MQTTClientWrapper {
         subscribedTopicFilter.forEach(topicFilter -> mqttClient.unsubscribe(topicFilter.getName(), event -> {
             log.info("unsub the topicFilter: {}, ok: {}", topicFilter.getName(), event.succeeded());
             subscribedTopicFilter.remove(topicFilter);
+            MetricsHelper.counter(BifroTaskMetric.UNSUBSCRIBE_COMPLETION_COUNT,
+                    Tags.of("taskId", taskConfig.getTaskId()));
             if (futureCount.incrementAndGet() == subscribedTopicFilter.size()) {
                 unsubFuture.complete(null);
             }
@@ -232,7 +219,7 @@ public class VertxMQTTClientWrapper implements MQTTClientWrapper {
                     pubResult -> {
                         if (pubResult.succeeded()) {
                             // qos0 immediately record succeed
-                            if (MqttQoS.AT_MOST_ONCE.equals( MqttQoS.valueOf(qos))) {
+                            if (MqttQoS.AT_MOST_ONCE.equals(MqttQoS.valueOf(qos))) {
                                 result.complete(null);
                             } else {
                                 // if pub ack return earlier than tcp ack
@@ -248,8 +235,8 @@ public class VertxMQTTClientWrapper implements MQTTClientWrapper {
                             result.completeExceptionally(new RuntimeException(pubResult.cause()));
                         }
                     }).exceptionHandler(e -> {
-                        log.error("Failed to publish message", e);
-                        result.completeExceptionally(e);
+                log.error("Failed to publish message", e);
+                result.completeExceptionally(e);
             });
         } else {
             result.completeExceptionally(new RuntimeException("Client not connected!"));
@@ -257,29 +244,19 @@ public class VertxMQTTClientWrapper implements MQTTClientWrapper {
         return result;
     }
 
-
-    public void bindLocalAddress(MqttClient client, String localIp, int localPort) {
-        try {
-            // 1. 从 MqttClientImpl 拿到底层的 NetClientImpl
-            Field clientField = MqttClientImpl.class.getDeclaredField("client");
-            clientField.setAccessible(true);
-            NetClientImpl netClient = (NetClientImpl) clientField.get(client);
-            // 2. 从 NetClientImpl 拿到 Netty 的 Bootstrap
-            // 注意：不同版本中字段名可能略有不同，通常是 "bootstrap"
-            Field bootstrapField = NetClientImpl.class.getDeclaredField("bootstrap");
-            bootstrapField.setAccessible(true);
-            Bootstrap bootstrap = (Bootstrap) bootstrapField.get(netClient);
-            // 3. 强行绑定本地 IP 和端口
-            bootstrap.localAddress(localIp, localPort);
-            System.out.println("Successfully bound to " + localIp + ":" + localPort);
-        } catch (Exception e) {
-            e.printStackTrace();
+    @Override
+    public void internalConnect() {
+        TaskStage stage = taskStage.get();
+        if (stage != TaskStage.ONGOING) {
+            MetricsHelper.counter(BifroTaskMetric.ILLEGAL_TASK_STATE,
+                    Tags.of("stage", stage.name(), "taskId", taskConfig.getTaskId()));
+            log.warn("MqttClient reconnect cancelled, clientId={}, taskStage={}", clientConfig.getClientId(), stage);
+            return;
         }
-    }
-
-    private void internalConnect() {
         long start = System.currentTimeMillis();
         if (status == CLOSED) {
+            MetricsHelper.counter(BifroTaskMetric.ILLEGAL_STATE_CLIENT_CLOSED,
+                    Tags.of("taskId", taskConfig.getTaskId()));
             log.warn("MqttClient is closed, clientId={}", clientConfig.getClientId());
             return;
         }
@@ -291,6 +268,8 @@ public class VertxMQTTClientWrapper implements MQTTClientWrapper {
                             clientConfig.getClientId(), status);
                     inflightSubs.values().forEach(future -> future.completeExceptionally(
                             new CancellationException("inflightSubs cancelled when connection closed")));
+                    MetricsHelper.counter(BifroTaskMetric.DISCONNECT_COMPLETION_COUNT,
+                            Tags.of("taskId", taskConfig.getTaskId()));
                     if (status == CLOSED) {
                         return;
                     }
@@ -298,17 +277,28 @@ public class VertxMQTTClientWrapper implements MQTTClientWrapper {
                     connectCallback.accept(DISCONNECTED);
                     tryRecoverConnect();
                 });
-                mqttClient.exceptionHandler(error ->
-                        log.error("MqttClient exception, id={}", mqttClient.clientId(), error));
-                mqttClient.subscribeCompletionHandler(subAckMessage -> {
-                    inflightSubs.computeIfPresent(subAckMessage.messageId(), (id, future) -> {
-                        future.complete(subAckMessage.grantedQoSLevels());
-                        return null;
-                    });
+                mqttClient.exceptionHandler(error -> {
+                    MetricsHelper.counter(BifroTaskMetric.CONNECT_EXCEPTION_COUNT,
+                            Tags.of("taskId", taskConfig.getTaskId()));
+                    log.error("MqttClient exception, id={}", mqttClient.clientId(), error);
                 });
+                mqttClient.subscribeCompletionHandler(subAckMessage -> {
+                            MetricsHelper.counter(BifroTaskMetric.SUBSCRIBE_COMPLETION_COUNT,
+                                    Tags.of("taskId", taskConfig.getTaskId()));
+                            inflightSubs.computeIfPresent(subAckMessage.messageId(),
+                                    (id, future) -> {
+                                        future.complete(subAckMessage.grantedQoSLevels());
+                                        return null;
+                                    });
+                        }
+                );
                 mqttClient.publishHandler(
-                        mqttPublishMessage -> this.pubMsgListener.onPublishMessage(mqttPublishMessage.payload().getBytes(),
-                                mqttPublishMessage.isDup()));
+                        mqttPublishMessage -> {
+                            this.pubMsgListener.onPublishMessage(mqttPublishMessage.payload().getBytes(),
+                                    mqttPublishMessage.isDup());
+                            MetricsHelper.counter(BifroTaskMetric.PUBLISH_COMPLETION_COUNT,
+                                    Tags.of("taskId", taskConfig.getTaskId()));
+                        });
                 mqttClient.publishCompletionHandler(pubAckPacketId -> {
                     CompletableFuture<Void> pendingResult = inflightPubs.remove(pubAckPacketId);
                     if (pendingResult != null) {
@@ -316,13 +306,17 @@ public class VertxMQTTClientWrapper implements MQTTClientWrapper {
                     } else {
                         pubAckCache.add(pubAckPacketId);
                     }
+                    MetricsHelper.counter(BifroTaskMetric.PUBLISH_COUNT, Tags.of("taskId", taskConfig.getTaskId()));
+
                 });
                 mqttClient.publishCompletionExpirationHandler(pubPacketId -> {
                     inflightPubs.remove(pubPacketId);
-                    log.warn("PubAck has not arrive in ackTimeout, pubPacketId={}", pubPacketId);
+                    MetricsHelper.counter(BifroTaskMetric.PUBLISH_COMPLETION_EXPIRATION_COUNT, Tags.of("taskId", taskConfig.getTaskId()));
+                    log.warn("PubAck has not arrive in ack Timeout, pubPacketId={}", pubPacketId);
                 });
                 mqttClient.publishCompletionUnknownPacketIdHandler(pubPacketId -> {
                     inflightPubs.remove(pubPacketId);
+                    MetricsHelper.counter(BifroTaskMetric.PUBLISH_COMPLETION_UNKNOWN_PACKET_ID_COUNT, Tags.of("taskId", taskConfig.getTaskId()));
                     log.warn("Publish completion unknown, pubPacketId={}", pubPacketId);
                 });
                 mqttClient.connect(clientConfig.getPort(), clientConfig.getHost(), connAck -> {
@@ -332,11 +326,13 @@ public class VertxMQTTClientWrapper implements MQTTClientWrapper {
                                 "MqttClient connect failed in {}th attempt, clientId={}, localAddr={}, reason={}, costs={}ms",
                                 reconnectAttempts.get() + 1, clientConfig.getClientId(), clientConfig.getLocalAddress(),
                                 connAck.result(), System.currentTimeMillis() - start, connAck.cause());
+                        MetricsHelper.counter(BifroTaskMetric.SUBSCRIBE_COMPLETION_EXPIRATION_COUNT, Tags.of("taskId", taskConfig.getTaskId()));
                         tryRecoverConnect();
                     } else {
                         connLogger.debug("MqttClient connect success, clientId={}, costs={}ms, hashcode: {}",
                                 clientConfig.getClientId(), System.currentTimeMillis() - start, this.hashCode());
                         status = CONNECTED;
+                        MetricsHelper.counter(BifroTaskMetric.CONNECT_SUCCESS_COUNT, Tags.of("taskId", taskConfig.getTaskId()));
                         connectCallback.accept(CONNECTED);
                     }
                 });
@@ -344,18 +340,5 @@ public class VertxMQTTClientWrapper implements MQTTClientWrapper {
         }
     }
 
-    private void tryRecoverConnect() {
-        if (reconnectAttempts.getAndIncrement() < clientConfig.getReconnectMaxAttempts()) {
-            reconnectTimer =
-                    vertx.setTimer(ThreadLocalRandom.current().nextLong(clientConfig.getReconnectIntervalInMs(),
-                                    clientConfig.getReconnectIntervalInMs() * 2L),
-                            t -> internalConnect());
-        } else {
-            status = CONNECTED_FAILED;
-            log.error("MqttClient connect failed after {} retries, clientId={}, localAddr={}",
-                    clientConfig.getReconnectMaxAttempts(),
-                    clientConfig.getClientId(), clientConfig.getLocalAddress());
-            connectCallback.accept(CONNECTED_FAILED);
-        }
-    }
+
 }

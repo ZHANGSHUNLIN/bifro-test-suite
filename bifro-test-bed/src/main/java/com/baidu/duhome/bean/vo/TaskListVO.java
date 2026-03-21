@@ -2,13 +2,14 @@ package com.baidu.duhome.bean.vo;
 
 import com.baidu.duhome.database.pojo.TaskInfoMetadata;
 import com.baidu.duhome.database.pojo.MqttBroker;
+import com.baidu.iot.test.suite.TaskStage;
 import com.baidu.iot.test.suite.WillConfig;
 import com.baidu.iot.test.suite.worker.TaskConfig;
-import com.baidu.iot.test.suite.worker.TaskStage;
 import io.netty.handler.codec.mqtt.MqttQoS;
 import lombok.Data;
 import org.springframework.beans.BeanUtils;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -19,6 +20,9 @@ import java.util.Map;
  */
 @Data
 public class TaskListVO implements Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
     private String id;
 
     private String taskName;

@@ -1,5 +1,6 @@
 package com.baidu.iot.test.suite.worker;
 
+import com.baidu.iot.test.suite.TaskStage;
 import com.baidu.iot.test.suite.stats.pojo.StatsBasicResult;
 import com.baidu.iot.test.suite.stats.pojo.StatsConnResult;
 import com.baidu.iot.test.suite.stats.pojo.StatsPubResult;
@@ -37,35 +38,35 @@ public abstract class BaseTaskWorker implements TaskWorker {
     protected boolean canceled() {
         if (interrupt.get()) {
             taskStage.set(TaskStage.BREAKING);
-            reportResult();
+            eventReport();
             log.info("interrupt task");
             return true;
         }
         return false;
     }
 
-    protected void reportResult(StatsBasicResult statsBasicResult) {
+    protected void eventReport(StatsBasicResult statsBasicResult) {
         this.reportEventSubject.onNext(EventReport.builder()
                 .statsBasicResult(statsBasicResult)
                 .taskStage(taskStage.get())
                 .build());
     }
 
-    protected void reportResult(StatsConnResult statsConnResult) {
+    protected void eventReport(StatsConnResult statsConnResult) {
         this.reportEventSubject.onNext(EventReport.builder()
                 .statsConnResult(statsConnResult)
                 .taskStage(taskStage.get())
                 .build());
     }
 
-    protected void reportResult(StatsSubResult statsSubResult) {
+    protected void eventReport(StatsSubResult statsSubResult) {
         this.reportEventSubject.onNext(EventReport.builder()
                 .statsSubResult(statsSubResult)
                 .taskStage(taskStage.get())
                 .build());
     }
 
-    protected void reportResult(StatsPubResult statsPubResult, StatsSubResult statsSubResult) {
+    protected void eventReport(StatsPubResult statsPubResult, StatsSubResult statsSubResult) {
         this.reportEventSubject.onNext(EventReport.builder()
                 .statsSubResult(statsSubResult)
                 .statsPubResult(statsPubResult)
@@ -74,7 +75,7 @@ public abstract class BaseTaskWorker implements TaskWorker {
     }
 
 
-    protected void reportResult(StatsPubResult statsPubResult) {
+    protected void eventReport(StatsPubResult statsPubResult) {
         this.reportEventSubject.onNext(EventReport.builder()
                 .statsPubResult(statsPubResult)
                 .taskStage(taskStage.get())
@@ -82,11 +83,11 @@ public abstract class BaseTaskWorker implements TaskWorker {
     }
 
 
-    protected void reportResult(EventReport eventReport) {
+    protected void eventReport(EventReport eventReport) {
         this.reportEventSubject.onNext(eventReport);
     }
 
-    protected void reportResult() {
+    protected void eventReport() {
         this.reportEventSubject.onNext(EventReport.builder()
                 .taskStage(taskStage.get())
                 .build());

@@ -12,10 +12,10 @@ import lombok.Builder;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.Closeable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import com.baidu.iot.test.suite.configs.ClientTaskConfig;
@@ -37,8 +37,8 @@ public class ConnClientTask extends ClientTask {
     public ConnClientTask(@NonNull Vertx vertx,
                           @NonNull ClientTaskConfig taskConfig,
                           @NonNull MqttClientConfig mqttClientConfig,
-                          @NonNull TaskConnStatsManager statsManager) {
-        super(vertx, taskConfig, mqttClientConfig);
+                          @NonNull TaskConnStatsManager statsManager, AtomicReference<TaskStage> taskStage) {
+        super(vertx, taskConfig, mqttClientConfig, taskStage);
         this.statsManager = statsManager;
     }
 
@@ -47,20 +47,20 @@ public class ConnClientTask extends ClientTask {
     }
 
     @Override
-    public void startTask(Consumer<MQTTClientWrapper> mqttClientWrapperConsumer) {
+    public void startTask(Consumer<MQTTClientWrapper> onConnected) {
         ClientTaskEvent clientTaskEvent = ClientTaskEvent.builder()
                 .clientId(getCId())
                 .taskId(taskConfig.getTaskId())
                 .clientTaskType(ClientTaskType.CONN)
                 .build();
         long start = System.nanoTime();
-         connect(new Consumer<>() {
+        connect(new Consumer<>() {
             final AtomicInteger count = new AtomicInteger();
 
             @Override
             public void accept(ConnectionStatus connectionStatus) {
-                if (mqttClientWrapperConsumer != null) {
-                    mqttClientWrapperConsumer.accept(mqttClientWrapper);
+                if (onConnected != null) {
+                    onConnected.accept(mqttClientWrapper);
                 }
                 clientTaskEvent.setEventType(ClientTaskEvent.EventType.CONNECT_STATUS);
                 clientTaskEvent.putDetail(STATUS, connectionStatus.name());
@@ -77,7 +77,8 @@ public class ConnClientTask extends ClientTask {
                     }
                 }
             }
-        }, (payload, isDup) -> {});
+        }, (payload, isDup) -> {
+        });
     }
 
     public CompletableFuture<Void> close() {

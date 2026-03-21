@@ -1,26 +1,30 @@
 package com.baidu.duhome.config.vertx.codec;
 
-import com.baidu.iot.test.suite.WillConfig;
-import com.baidu.iot.test.suite.worker.models.WorkerTaskEvent;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hazelcast.nio.ObjectDataInput;
+import com.hazelcast.nio.ObjectDataOutput;
+import com.hazelcast.nio.serialization.StreamSerializer;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.eventbus.MessageCodec;
 import io.vertx.core.json.DecodeException;
 import io.vertx.core.json.Json;
+import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.IOException;
+
 @Slf4j
-public  class DefaultVertxCodec<T> implements MessageCodec<T, T> {
+public class DefaultVertxCodec<T> implements MessageCodec<T, T>, StreamSerializer<T> {
 
     private final Class<T> codecClass;
+    private final int typeId;
 
-    private static final byte CODEC_ID = -1;
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
 
-
-    public DefaultVertxCodec( Class<T> codecClass) {
+    public DefaultVertxCodec(Class<T> codecClass, int typeId) {
         this.codecClass = codecClass;
+        this.typeId = typeId;
     }
 
 
@@ -75,5 +79,22 @@ public  class DefaultVertxCodec<T> implements MessageCodec<T, T> {
     @Override
     public byte systemCodecID() {
         return -1;
+    }
+
+    @Override
+    public int getTypeId() {
+        return typeId;
+    }
+
+    @Override
+    public void write(ObjectDataOutput out, @NonNull T obj) throws IOException {
+        byte[] data = MAPPER.writeValueAsBytes(obj);
+        out.writeByteArray(data);
+    }
+
+    @Override
+    public T read(@NonNull ObjectDataInput in) throws IOException {
+        byte[] data = in.readByteArray();
+        return MAPPER.readValue(data, codecClass);
     }
 }

@@ -16,6 +16,7 @@ import com.baidu.iot.test.suite.ShareDataManager;
 import com.baidu.iot.test.suite.SubClientTask;
 import com.baidu.iot.test.suite.ClientTask;
 import com.baidu.iot.test.suite.TaskSchedule;
+import com.baidu.iot.test.suite.TaskStage;
 import com.baidu.iot.test.suite.configs.ClientTaskConfig;
 import com.baidu.iot.test.suite.configs.MqttClientConfig;
 import com.baidu.iot.test.suite.models.ClientTaskEvent;
@@ -104,7 +105,7 @@ public class TaskPubSubWorker extends BaseTaskWorker {
 
     public void startTask() {
         taskStage.set(TaskStage.START);
-        reportResult();
+        eventReport();
 //        统计报告
         this.vertx.eventBus()
                 .localConsumer(TaskUtils.getClientTaskAddr(taskConfig.getTaskId()), this::handleClientTaskEvent);
@@ -150,7 +151,7 @@ public class TaskPubSubWorker extends BaseTaskWorker {
     public CompletableFuture<Void> stopTask() {
         log.info("stopTask , taskId: {} ", taskConfig.getTaskId());
         taskStage.set(TaskStage.SHUTDOWN_ING);
-        reportResult();
+        eventReport();
         vertx.cancelTimer(stageTimer);
         vertx.cancelTimer(startClientTimer);
         vertx.cancelTimer(periodCollectTimer);
@@ -181,13 +182,8 @@ public class TaskPubSubWorker extends BaseTaskWorker {
         subStatsManager.reset();
         pubStatsManager.reset();
         taskStage.set(TaskStage.SHUTDOWN);
-        reportResult();
+        eventReport();
         return result;
-    }
-
-    @Override
-    public TaskStage getTaskState() {
-        return this.taskStage.get();
     }
 
     /**
@@ -195,7 +191,7 @@ public class TaskPubSubWorker extends BaseTaskWorker {
      */
     private void initPubClients() {
         taskStage.compareAndSet(TaskStage.START, TaskStage.INIT_PUB_CLIENT);
-        reportResult();
+        eventReport();
         int clientIndex = 0;
         int topicIndex;
         RateLimiter rateLimiter = taskConfig.getConnectRateLimiter();
@@ -218,7 +214,7 @@ public class TaskPubSubWorker extends BaseTaskWorker {
             pubTaskConfig.setPubTopic(buildClientTopic(topicIndex, false, taskConfig.isWildcard()));
             ConfigHelper.fillCommonTaskConfig(pubTaskConfig, taskConfig);
             PubClientTask pubClientTask =
-                    new PubClientTask(vertx, pubTaskConfig, mqttClientConfig, pubStatsManager);
+                    new PubClientTask(vertx, pubTaskConfig, mqttClientConfig, pubStatsManager, taskStage);
             pubClients.put(clientId, pubClientTask);
             pubClientTask.initTask();
         }
@@ -232,7 +228,7 @@ public class TaskPubSubWorker extends BaseTaskWorker {
      */
     private void initSubClients() {
         taskStage.compareAndSet(TaskStage.INIT_PUB_CLIENTED, TaskStage.INIT_SUB_CLIENT);
-        reportResult();
+        eventReport();
         int clientIndex = 0;
         int topicIndex;
         RateLimiter rateLimiter = taskConfig.getConnectRateLimiter();
@@ -259,7 +255,7 @@ public class TaskPubSubWorker extends BaseTaskWorker {
             }});
             ConfigHelper.fillCommonTaskConfig(subTaskConfig, taskConfig);
             SubClientTask subClientTask =
-                    new SubClientTask(vertx, subTaskConfig, mqttClientConfig, subStatsManager);
+                    new SubClientTask(vertx, subTaskConfig, mqttClientConfig, subStatsManager, taskStage);
             subClients.put(clientId, subClientTask);
             subClientTask.initTask();
         }
@@ -272,7 +268,7 @@ public class TaskPubSubWorker extends BaseTaskWorker {
      */
     private void startClientTask() {
         taskStage.compareAndSet(TaskStage.INIT_SUB_CLIENTED, TaskStage.ONGOING);
-        reportResult();
+        eventReport();
         log.info("Pubsub task: {} start , pubClients: {} , subClients: {}, readyPubClients: {} , readySubClients: {}",
                 taskConfig.getTaskId(), pubClients.size(), subClients.size(), readySubClients.size(), readySubClients.size());
         startReadyClients(pubClients, readyPubClients::contains);
@@ -288,8 +284,8 @@ public class TaskPubSubWorker extends BaseTaskWorker {
                     long start = System.currentTimeMillis();
                     StatsBasicResult periodPubLatencyStats = pubStatsManager.tagPeriodResult();
                     StatsBasicResult periodSubLatencyStats = subStatsManager.tagPeriodResult();
-                    reportResult(periodPubLatencyStats);
-                    reportResult(periodSubLatencyStats);
+                    eventReport(periodPubLatencyStats);
+                    eventReport(periodSubLatencyStats);
                     // TODO just print result
                     tagLogger.info("Task {} period pub latency stats: {}",
                             taskConfig.getTaskId(), Json.encodePrettily(periodPubLatencyStats));
@@ -355,7 +351,7 @@ public class TaskPubSubWorker extends BaseTaskWorker {
                 .taskId(taskConfig.getTaskId())
                 .eventType(WorkerTaskEvent.EventType.TOTAL_PUB_SUB_RESULT)
                 .build();
-        reportResult(totalPubResult, totalSubResult);
+        eventReport(totalPubResult, totalSubResult);
         event.putDetail(SUB_LATENCY_STATS_RESULT, Json.encode(totalSubResult));
         event.putDetail(PUB_LATENCY_STATS_RESULT, Json.encode(totalPubResult));
         vertx.eventBus().send(workerEventAddr, event, ShareDataManager.getLocalDeliveryOptions());
