@@ -108,13 +108,15 @@ public class TaskController implements ApiController {
 
     @PostMapping("/stop/{id}")
     public ApiResponse<String> stopTask(@PathVariable(value = "id") String id) {
-        vertx.eventBus().publish(Constants.STOP_CLUSTER_TASK_ADDR, id);
+        TaskSchedule taskSchedule =
+                TaskSchedule.builder().op(TaskSchedule.Op.UN_REG).id(id).build();
+        // 通知全部节点任务准备
+        vertx.eventBus().publish(Constants.CLUSTER_TASK_MESSAGE, taskSchedule);
         return ApiResponse.success("已提交任务");
     }
 
     @DeleteMapping("/{id}")
     public ApiResponse<TaskDetailResponse> del(@PathVariable(value = "id") String id) {
-
         return taskManager.delTask(id);
     }
 

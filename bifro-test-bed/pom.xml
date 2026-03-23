@@ -17,11 +17,6 @@
 
     <dependencies>
 
-<!--        <dependency>-->
-<!--            <groupId>io.projectreactor.addons</groupId>-->
-<!--            <artifactId>reactor-adapter</artifactId>-->
-<!--        </dependency>-->
-
         <!-- Spring Boot Starter Data MongoDB -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -201,13 +196,8 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <!-- 关键配置：使用标准JAR而不是可执行JAR -->
                     <executable>false</executable>
-
-                    <!-- 或者使用ZIP布局 -->
                     <layout>ZIP</layout>
-
-                    <!-- 或者排除Spring Boot Loader -->
                     <excludes>
                         <exclude>
                             <groupId>org.springframework.boot</groupId>
@@ -216,7 +206,6 @@
                     </excludes>
                 </configuration>
             </plugin>
-
 
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

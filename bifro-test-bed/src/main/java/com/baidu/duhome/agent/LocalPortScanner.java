@@ -422,7 +422,7 @@ public class LocalPortScanner {
             System.out.printf("\n端口 %d 是否可用: %s%n", testPort, available ? "是" : "否");
 
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("端口扫描出错", e);
         }
     }
 }

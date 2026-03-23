@@ -45,6 +45,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -91,14 +92,11 @@ public class LocalTaskCoordinator {
     @Value("${bifro.nodeName}")
     private String nodeName;
 
-    public void unRegTask(String taskId) {
-    }
-
     /**
      * 通过制定的任务参数执行任务,
      * 当前的任务发布均为本地任务，不参与集群间传递哦
      */
-    public void regTask(String id) {
+    public void startTask(String id) {
         if (runningTasks.contains(id)) {
             log.warn("Task {} is running", id);
             return;
@@ -110,7 +108,8 @@ public class LocalTaskCoordinator {
         String currentNodeId = clusterDataManager.getCurrentNodeIdCache();
         TaskInfoMetadata taskInfoMetadata = taskInfoMetadataRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Task not found"));
-        String taskId = taskInfoMetadata.getTaskConfig().getTaskId();
+        TaskConfig mainTask = taskInfoMetadata.getTaskConfig();
+        String taskId = mainTask.getTaskId();
         NodeTask nodeTask = nodeTaskRepository.searchByTaskIdAndNodeId(taskId, currentNodeId);
         if (nodeTask == null) {
             log.debug("Task {} has no task", taskId);
@@ -187,8 +186,8 @@ public class LocalTaskCoordinator {
                 break;
         }
 
-        taskConfig.setTaskWorkStage(TaskStage.ONGOING);
-        taskInfoMetadataRepository.updateTaskConfigById(id, taskConfig);
+        mainTask.setTaskWorkStage(TaskStage.ONGOING);
+        taskInfoMetadataRepository.updateTaskConfigById(id, mainTask);
 
 //        clusterDataManager.upgradeMainTaskStage(taskConfig.getTaskId(), TaskStage.ONGOING);
 
@@ -338,11 +337,11 @@ public class LocalTaskCoordinator {
             switch (op) {
                 // 任务确认，任务待执行
                 case REG:
-                    regTask(id);
+                    startTask(id);
                     break;
                 // 任务取消
                 case UN_REG:
-                    unRegTask(id);
+                    stopTask(id);
                     break;
                 case TASK_FINISH:
                     taskFinish(id, nodeId);
@@ -353,37 +352,10 @@ public class LocalTaskCoordinator {
             }
         });
 
-//            clusterDataManager.getMainTask(id)
-//                    .thenAccept(taskConfig -> {
-//                        if (taskConfig.isEmpty()) {
-//                            log.error("任务不存在,taskSchedule : {}", taskSchedule);
-//                            throw new RuntimeException("任务不存在");
-//                        }
-//                        switch (op) {
-//                            // 任务确认，任务待执行
-//                            case REG:
-//                                regTask(id);
-//                                break;
-//                            // 任务取消
-//                            case UN_REG:
-//                                unRegTask(id);
-//                                break;
-//                            case TASK_FINISH:
-//                                taskFinish(id, nodeId);
-//                                break;
-//                            default:
-//                                log.warn("Unknown operation: {}", op);
-//                                break;
-//                        }
-//                    });
-
-
         // 将本机的基础信息同步到集群中
         clusterDataManager.regClusterNodeInfo(nodeName);
 
-        localConsumer.stopTaskConsumer(runningTaskMap);
-
-        localConsumer.delTaskConsumer(runningTaskMap);
+        localConsumer.currentNodeDelTaskConsumer(runningTaskMap);
 
     }
 
@@ -498,6 +470,54 @@ public class LocalTaskCoordinator {
     public Map<String, TaskStage> runningTask() {
         return runningTaskMap.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, v -> v.getValue().getTaskState()));
+    }
+
+
+    public void stopTask(String taskId){
+
+            TaskWorker taskWorker = runningTaskMap.get(taskId);
+            if (taskWorker != null) {
+                log.info("cluster task STOP , {}", taskId);
+                taskWorker.stopTask().thenAccept(r -> {
+                    log.info("taskId stopped: {}", taskId);
+                    taskInfoMetadataRepository.findById(taskId).ifPresent(t -> {
+                        TaskConfig taskConfig = t.getTaskConfig();
+                        taskConfig.setTaskWorkStage(TaskStage.STOPPED);
+                        taskInfoMetadataRepository.updateTaskConfigById(taskId, taskConfig);
+                    });
+                    runningTaskMap.remove(taskId);
+                    List<NodeTask> nodeTasks = nodeTaskRepository.searchAllByTaskId(taskId);
+                    for (NodeTask nodeTask : nodeTasks) {
+                        nodeTask.getTaskConfig().setTaskWorkStage(TaskStage.STOPPED);
+                    }
+                    nodeTaskRepository.saveAll(nodeTasks);
+                    clusterDataManager.upgradeClusterNodeTaskStage(runningTask());
+                });
+            } else {
+                clusterDataManager.currentNode().thenAccept(nodeInfo -> {
+                    Optional<NodeTask> nodeTaskOptional = nodeTaskRepository.searchFirstByTaskId(taskId);
+                    if (nodeTaskOptional.isEmpty()) {
+                        log.error("taskId: {}, nodeTask not found", taskId);
+                        return;
+                    }
+                    NodeTask nodeTask = nodeTaskOptional.get();
+                    String dbNodeName = nodeTask.getNodeName();
+                    String nodeName = nodeInfo.getNodeName();
+                    log.info("taskId: {}, nodeName: {}, dbNodeName: {}", taskId, nodeName, dbNodeName);
+                    if (Objects.equals(dbNodeName, nodeName)) {
+                        taskInfoMetadataRepository.findById(taskId).ifPresent(t -> {
+                            TaskConfig taskConfig = t.getTaskConfig();
+                            taskConfig.setTaskWorkStage(TaskStage.STOPPED);
+                            taskInfoMetadataRepository.updateTaskConfigById(taskId, taskConfig);
+                            List<NodeTask> nodeTasks = nodeTaskRepository.searchAllByTaskId(taskId);
+                            for (NodeTask nt : nodeTasks) {
+                                nt.getTaskConfig().setTaskWorkStage(TaskStage.STOPPED);
+                            }
+                            nodeTaskRepository.saveAll(nodeTasks);
+                        });
+                    }
+                });
+            }
     }
 
 }
