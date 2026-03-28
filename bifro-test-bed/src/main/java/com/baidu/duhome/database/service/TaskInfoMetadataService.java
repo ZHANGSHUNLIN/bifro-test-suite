@@ -4,12 +4,14 @@ import com.baidu.duhome.database.pojo.TaskInfoMetadata;
 import com.baidu.duhome.database.repository.TaskInfoMetadataRepository;
 import jakarta.annotation.Resource;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
-import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,22 +23,27 @@ public class TaskInfoMetadataService {
     private TaskInfoMetadataRepository taskInfoMetadataRepository;
 
     @Resource
-    private MongoTemplate mongoTemplate;
+    private ReactiveMongoTemplate reactiveMongoTemplate;
 
 
-    public TaskInfoMetadata insertTaskInfoMetadata(TaskInfoMetadata taskInfoMetadata) {
+    public Mono<TaskInfoMetadata> insertTaskInfoMetadata(TaskInfoMetadata taskInfoMetadata) {
         return taskInfoMetadataRepository.insert(taskInfoMetadata);
     }
 
 
-    public Page<TaskInfoMetadata> findAll(Pageable pageable) {
-        return taskInfoMetadataRepository.findAll(pageable);
+    public Mono<Page<TaskInfoMetadata>> findAll(Pageable pageable) {
+        Query query = new Query();
+        query.with(pageable);
+        return reactiveMongoTemplate.find(query, TaskInfoMetadata.class)
+                .collectList()
+                .zipWith(reactiveMongoTemplate.count(Query.of(query).limit(-1).skip(-1), TaskInfoMetadata.class))
+                .map(tuple -> new PageImpl<>(tuple.getT1(), pageable, tuple.getT2()));
     }
 
     /**
      * 根据任务名称和任务类型分页查询
      */
-    public Page<TaskInfoMetadata> findByFilters(String taskName, String taskType, Pageable pageable) {
+    public Mono<Page<TaskInfoMetadata>> findByFilters(String taskName, String taskType, Pageable pageable) {
         Query query = new Query();
         List<Criteria> criteriaList = new ArrayList<>();
 
@@ -55,8 +62,9 @@ public class TaskInfoMetadataService {
         }
 
         query.with(pageable);
-        List<TaskInfoMetadata> list = mongoTemplate.find(query, TaskInfoMetadata.class);
-        return PageableExecutionUtils.getPage(list, pageable,
-            () -> mongoTemplate.count(Query.of(query).limit(-1).skip(-1), TaskInfoMetadata.class));
+        return reactiveMongoTemplate.find(query, TaskInfoMetadata.class)
+                .collectList()
+                .zipWith(reactiveMongoTemplate.count(Query.of(query).limit(-1).skip(-1), TaskInfoMetadata.class))
+                .map(tuple -> new PageImpl<>(tuple.getT1(), pageable, tuple.getT2()));
     }
 }

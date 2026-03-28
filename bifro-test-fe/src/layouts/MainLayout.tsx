@@ -1,34 +1,23 @@
 import React, { useState } from 'react';
 import {
-    MenuFoldOutlined,
-    MenuUnfoldOutlined,
-    UserOutlined,
-    DashboardOutlined,
-    FileTextOutlined,
-    SettingOutlined,
-    LogoutOutlined,
-    ClusterOutlined,
-    TeamOutlined
-} from '@ant-design/icons';
-import {
     Layout,
     Menu,
-    Button,
-    theme,
-    Avatar,
-    Dropdown,
     Breadcrumb,
-    Space,
-    Typography
+    Typography,
+    theme,
+    Button,
 } from 'antd';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import {
+    MenuFoldOutlined,
+    MenuUnfoldOutlined,
+} from '@ant-design/icons';
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
 
 type MenuItem = {
     key: string;
-    icon: React.ReactNode;
     label: string;
     path?: string;
 };
@@ -41,119 +30,51 @@ const MainLayout: React.FC = () => {
         token: { colorBgContainer, borderRadiusLG },
     } = theme.useToken();
 
-    // 用户下拉菜单
-    const userMenuItems = [
-        {
-            key: 'profile',
-            label: '个人中心',
-            icon: <UserOutlined />
-        },
-        {
-            key: 'settings',
-            label: '设置',
-            icon: <SettingOutlined />
-        },
-        {
-            type: 'divider' as const,
-        },
-        {
-            key: 'logout',
-            label: '退出登录',
-            icon: <LogoutOutlined />
-        },
-    ];
-
     // 侧边栏菜单配置
     const menuItems: MenuItem[] = [
         {
             key: '/',
-            icon: <DashboardOutlined />,
             label: '首页',
             path: '/'
         },
         {
             key: '/tasks',
-            icon: <FileTextOutlined />,
             label: '任务管理',
             path: '/tasks'
         },
         {
-            key: '/mqtt-brokers',
-            icon: <ClusterOutlined />,
-            label: 'Broker 管理',
-            path: '/mqtt-brokers'
+            key: '/mqtt-instances',
+            label: 'broker实例管理',
+            path: '/mqtt-instances'
         },
         {
             key: '/cluster',
-            icon: <TeamOutlined />,
             label: '集群管理',
             path: '/cluster'
         }
     ];
 
-    const flatMenuItems = menuItems;
-
     // 获取当前面包屑路径
     const getBreadcrumbItems = () => {
         const pathSnippets = location.pathname.split('/').filter(i => i);
-        const breadcrumbItems = [];
-
+        type BreadcrumbItem = { title: string; key: string };
+        const breadcrumbItems: BreadcrumbItem[] = [];
         for (let i = 0; i < pathSnippets.length; i++) {
             const url = `/${pathSnippets.slice(0, i + 1).join('/')}`;
-            const menuItem = flatMenuItems.find(item => item.key === url);
+            const menuItem = menuItems.find(item => item.key === url);
             if (menuItem) {
                 breadcrumbItems.push({
-                    title: menuItem.label
+                    title: menuItem.label,
+                    key: menuItem.key
                 });
             }
         }
-
         return breadcrumbItems;
     };
 
     // 处理菜单点击
     const handleMenuClick = ({ key }: { key: string }) => {
         navigate(key);
-    };
-
-    // 处理用户菜单点击
-    const handleUserMenuClick = ({ key }: { key: string }) => {
-        switch (key) {
-            case 'logout':
-                // 处理退出登录逻辑
-                console.log('退出登录');
-                break;
-            case 'profile':
-                navigate('/profile');
-                break;
-            case 'settings':
-                navigate('/settings');
-                break;
-        }
-    };
-
-    // 找到当前选中的菜单项
-    const findSelectedKey = (): string[] => {
-        const currentPath = location.pathname;
-
-        // 精确匹配
-        const exactMatch = flatMenuItems.find(item => item.path === currentPath);
-        if (exactMatch) return [exactMatch.key];
-
-        // 模糊匹配
-        const pathParts = currentPath.split('/').filter(Boolean);
-        for (let i = pathParts.length; i > 0; i--) {
-            const path = '/' + pathParts.slice(0, i).join('/');
-            const match = flatMenuItems.find(item => item.path === path);
-            if (match) return [match.key];
-        }
-
-        return [];
-    };
-
-    // 找到打开的父菜单
-    const findOpenKeys = (): string[] => {
-        return [];
     };
 
     return (
@@ -193,8 +114,7 @@ const MainLayout: React.FC = () => {
                 {/* 菜单 */}
                 <Menu
                     mode="inline"
-                    selectedKeys={findSelectedKey()}
-                    defaultOpenKeys={findOpenKeys()}
+                    selectedKeys={getBreadcrumbItems().map(item => item.key)}
                     items={menuItems}
                     onClick={handleMenuClick}
                     style={{
@@ -232,22 +152,6 @@ const MainLayout: React.FC = () => {
                             style={{ marginLeft: 16 }}
                         />
                     </div>
-
-                    {/* 右侧用户信息 */}
-                    <Space size="large">
-                        <Dropdown
-                            menu={{
-                                items: userMenuItems,
-                                onClick: handleUserMenuClick
-                            }}
-                            placement="bottomRight"
-                        >
-                            <Space style={{ cursor: 'pointer' }}>
-                                <Avatar icon={<UserOutlined />} />
-                                <span>管理员</span>
-                            </Space>
-                        </Dropdown>
-                    </Space>
                 </Header>
 
                 {/* 内容区域 */}

@@ -5,8 +5,8 @@
 package com.baidu.iot.test.suite.stats;
 
 import com.baidu.iot.test.suite.stats.pojo.StatsBasicResult;
-import com.baidu.iot.test.suite.stats.recoder.LatencyRecorder;
-import com.baidu.iot.test.suite.stats.recoder.MetricsRecorder;
+import com.baidu.iot.test.suite.stats.recorder.LatencyRecorder;
+import com.baidu.iot.test.suite.stats.recorder.MetricsRecorder;
 import com.google.common.collect.Lists;
 import io.micrometer.core.instrument.Tags;
 

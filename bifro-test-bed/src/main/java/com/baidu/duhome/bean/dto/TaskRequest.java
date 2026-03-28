@@ -32,6 +32,11 @@ public class TaskRequest {
     private TaskType taskType;
 
     /**
+     * 任务分组（用于任务分类管理）
+     */
+    private String group;
+
+    /**
      * 协议类型
      */
     @NotBlank(message = "协议类型不能为空")
@@ -310,6 +315,7 @@ public class TaskRequest {
         config.setConnectRate(this.connectRate);
         config.setDisconnectRate(this.disconnectRate);
         config.setTagPeriodIntervalInSec(this.tagPeriodIntervalInSec);
+        config.setGroup(this.group);
         config.setWillConfig(willConfig);
         config.setLifecycleActions(lifecycleActions);
         config.setLifecycleActionsConfig(this.lifecycleActionsConfig);

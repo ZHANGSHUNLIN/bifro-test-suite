@@ -7,6 +7,7 @@ import lombok.Setter;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import reactor.core.publisher.Mono;
 
 import java.io.Serial;
 import java.io.Serializable;
@@ -106,13 +107,45 @@ public class ApiResponse<T> implements Serializable {
         return response;
     }
 
+    /**
+     * 手动分页响应方法 - 用于响应式 MongoDB 等不支持原生分页的场景
+     */
+    public static <T> ApiResponse<PageInfo<T>> pageSuccess(List<T> content, long total, int pageNum, int pageSize) {
+        int totalPages = (int) Math.ceil((double) total / pageSize);
+        PageInfo<T> pageInfo = new PageInfo<>();
+        pageInfo.setContent(content);
+        pageInfo.setTotalElements(total);
+        pageInfo.setTotalPages(totalPages);
+        pageInfo.setSize(pageSize);
+        pageInfo.setNumber(pageNum - 1); // Spring Data Page 的页码从0开始
+        pageInfo.setNumberOfElements(content.size());
+        ApiResponse<PageInfo<T>> response = new ApiResponse<>();
+        response.setCode(200);
+        response.setMessage("查询成功");
+        response.setData(pageInfo);
+        return response;
+    }
+
+    /**
+     * 响应式分页响应方法 - 接受 Mono<Page>
+     */
+    public static <T> Mono<ApiResponse<PageInfo<T>>> pageSuccessMono(Mono<Page<T>> pageMono) {
+        return pageMono.map(page -> pageSuccess(page));
+    }
+
+    /**
+     * 响应式分页响应方法 - 接受 Mono<Page> 并支持类型转换
+     */
+    public static <S, T> Mono<ApiResponse<PageInfo<T>>> pageSuccessMono(Mono<Page<S>> pageMono,
+                                                                          @NonNull Function<S, T> converter) {
+        return pageMono.map(page -> pageSuccess(page, converter));
+    }
 
     private static <T> Page<T> getPage(Page<T> page) {
         return page;
     }
 
     public boolean isSuccess() {
-        return this.code == 200; // 或者根据你的业务码规则判断
+        return this.code == 200;
     }
-
 }

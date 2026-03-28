@@ -1,0 +1,174 @@
+/**
+ * API 错误类
+ */
+export class ApiError extends Error {
+    code?: number;
+    status?: number;
+
+    constructor(
+        message: string,
+        code?: number,
+        status?: number
+    ) {
+        super(message);
+        this.name = 'ApiError';
+        this.code = code;
+        this.status = status;
+    }
+}
+
+/**
+ * API 响应类型
+ */
+export interface ApiResponse<T = unknown> {
+    code: number;
+    message: string;
+    data: T;
+}
+
+/**
+ * 请求配置
+ */
+export interface RequestConfig {
+    timeout?: number;
+    showError?: boolean;
+}
+
+/**
+ * 通用请求方法封装（增强版）
+ */
+export const request = async <T>(
+    endpoint: string,
+    {headers, params, ...customConfig}: RequestInit & {params?: Record<string, string | number | boolean>} = {}
+): Promise<T> => {
+    // 处理路径参数
+    let url = endpoint;
+
+    // 如果有参数映射，替换URL中的占位符
+    if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+            url = url.replace(`:${key}`, encodeURIComponent(String(value)));
+        });
+    }
+
+    // 处理查询参数（非路径参数）
+    const searchParams = new URLSearchParams();
+    if (params && customConfig.method === 'GET') {
+        Object.entries(params).forEach(([key, value]) => {
+            if (!url.includes(`:${key}`)) {
+                searchParams.append(key, String(value));
+            }
+        });
+    }
+
+    const queryString = searchParams.toString();
+    if (queryString) {
+        url += (url.includes('?') ? '&' : '?') + queryString;
+    }
+
+    // 添加基础URL
+    if (!url.startsWith('http')) {
+        url = `/api${url}`;
+    }
+
+    const config: RequestInit = {
+        method: 'GET',
+        ...customConfig,
+        headers: {
+            'Content-Type': 'application/json',
+            ...headers,
+        },
+    };
+
+    // 设置超时
+    if ((customConfig as RequestConfig).timeout) {
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), (customConfig as RequestConfig).timeout);
+        config.signal = controller.signal;
+    }
+
+    try {
+        const response = await fetch(url, config);
+
+        if (!response.ok) {
+            throw new ApiError(
+                `HTTP error! status: ${response.status}`,
+                response.status,
+                response.status
+            );
+        }
+
+        // 204 No Content 时不解析 JSON
+        if (response.status === 204) {
+            return {} as T;
+        }
+
+        const result = await response.json();
+
+        // 解析 ApiResponse 格式
+        if (result && typeof result === 'object' && 'code' in result) {
+            if (result.code === 200) {
+                return result.data as T;
+            } else {
+                const error = new ApiError(
+                    result.message || `API error! code: ${result.code}`,
+                    result.code,
+                    response.status
+                );
+                if ((customConfig as RequestConfig).showError !== false) {
+                    console.error('API Error:', result.message);
+                }
+                throw error;
+            }
+        }
+
+        // 非 ApiResponse 格式直接返回
+        return result as T;
+    } catch (error: unknown) {
+        console.error(`API request failed: ${url}`, error);
+        if (error instanceof ApiError) {
+            throw error;
+        }
+        throw new ApiError(error instanceof Error ? error.message : 'Request failed');
+    }
+};
+
+/**
+ * 更优雅的请求方法封装
+ */
+interface RequestOptions extends RequestInit {
+    params?: Record<string, string | number | boolean>;
+}
+
+export const api = {
+    // GET 请求
+    get: <T>(url: string, options?: RequestOptions) => request<T>(url, {...options, method: 'GET'}),
+
+    // POST 请求
+    post: <T>(url: string, data?: unknown, options?: RequestOptions) => request<T>(url, {
+        ...options,
+        method: 'POST',
+        body: data ? JSON.stringify(data) : undefined
+    }),
+
+    // PUT 请求
+    put: <T>(url: string, data?: unknown, options?: RequestOptions) => request<T>(url, {
+        ...options,
+        method: 'PUT',
+        body: data ? JSON.stringify(data) : undefined
+    }),
+
+    // DELETE 请求
+    delete: <T>(url: string, data?: unknown, options?: RequestOptions) => request<T>(url, {
+        ...options,
+        method: 'DELETE',
+        body: data ? JSON.stringify(data) : undefined
+    }),
+
+    // PATCH 请求
+    patch: <T>(url: string, data?: unknown, options?: RequestOptions) => request<T>(url, {
+        ...options,
+        method: 'PATCH',
+        body: data ? JSON.stringify(data) : undefined
+    })
+};

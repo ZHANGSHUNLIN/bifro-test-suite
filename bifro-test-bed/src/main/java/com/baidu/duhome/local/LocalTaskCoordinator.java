@@ -1,6 +1,5 @@
 package com.baidu.duhome.local;
 
-import com.baidu.duhome.config.tag.ClusterScope;
 import com.baidu.duhome.cluster.ClusterDataManager;
 import com.baidu.duhome.database.pojo.NodeTask;
 import com.baidu.duhome.database.pojo.Report;
@@ -45,13 +44,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import static com.baidu.iot.test.suite.constants.CommonConstants.PUB_LATENCY_STATS_RESULT;
 import static com.baidu.iot.test.suite.constants.CommonConstants.SUB_LATENCY_STATS_RESULT;
@@ -107,23 +108,17 @@ public class LocalTaskCoordinator {
                 new AtomicReference<>();
         String currentNodeId = clusterDataManager.getCurrentNodeIdCache();
         TaskInfoMetadata taskInfoMetadata = taskInfoMetadataRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Task not found"));
+                .block();
+        if (taskInfoMetadata == null) {
+            throw new RuntimeException("Task not found");
+        }
         TaskConfig mainTask = taskInfoMetadata.getTaskConfig();
         String taskId = mainTask.getTaskId();
-        NodeTask nodeTask = nodeTaskRepository.searchByTaskIdAndNodeId(taskId, currentNodeId);
+        NodeTask nodeTask = nodeTaskRepository.findByTaskIdAndNodeId(taskId, currentNodeId).block();
         if (nodeTask == null) {
             log.debug("Task {} has no task", taskId);
             return;
         }
-//        clusterDataManager.getSubTasks(taskId, currentNodeId)
-//                .thenApply(r -> {
-//                    if (r == null) {
-//                        log.error("TaskConfig is null: {}", taskId);
-//                        throw new RuntimeException("TaskConfig is null");
-//                    }
-//                    return r;
-//                })
-//                .thenApply(taskConfig -> {
         TaskConfig taskConfig = nodeTask.getTaskConfig();
         log.info("Start to reg taskConfig: {}", taskConfig);
         String workerTaskAddr = TaskUtils.getWorkerTaskAddr(taskConfig.getTaskId());
@@ -148,7 +143,7 @@ public class LocalTaskCoordinator {
                     report.setTaskId(taskConfig.getTaskId());
                     report.setNodeId(currentNodeId);
                     report.setCreateTime(LocalDateTime.now());
-                    reportRepository.insert(report);
+                    reportRepository.insert(report).subscribe();
                 });
                 compositeDisposable.add(subscribe);
 
@@ -172,7 +167,7 @@ public class LocalTaskCoordinator {
                     report.setNodeId(currentNodeId);
                     report.setTaskType(taskConfig.getTaskType());
                     report.setCreateTime(LocalDateTime.now());
-                    reportRepository.insert(report);
+                    reportRepository.insert(report).subscribe();
                 });
                 compositeDisposable.add(pubSubDis);
 
@@ -187,30 +182,14 @@ public class LocalTaskCoordinator {
         }
 
         mainTask.setTaskWorkStage(TaskStage.ONGOING);
-        taskInfoMetadataRepository.updateTaskConfigById(id, mainTask);
+        taskInfoMetadataRepository.updateTaskConfigById(id, mainTask).block();
 
-//        clusterDataManager.upgradeMainTaskStage(taskConfig.getTaskId(), TaskStage.ONGOING);
-
-        List<NodeTask> nodeTasks = nodeTaskRepository.searchAllByTaskId(id);
+        List<NodeTask> nodeTasks = nodeTaskRepository.findAllByTaskId(id).collectList().block();
         for (NodeTask task : nodeTasks) {
             task.getTaskConfig().setTaskWorkStage(TaskStage.ONGOING);
-            nodeTaskRepository.save(task);
+            nodeTaskRepository.save(task).block();
         }
-//        clusterDataManager.upgradeSubTaskStage(taskConfig, TaskStage.ONGOING);
         log.info("Task started: {}", id);
-
-//                    return taskConfig;
-//                })
-//                .thenAccept(r -> {
-//                    clusterDataManager.upgradeMainTaskStage(r.getTaskId(), TaskStage.ONGOING);
-//                    clusterDataManager.upgradeSubTaskStage(r, TaskStage.ONGOING);
-//                    log.info("Task started: {}", taskId);
-//                })
-//                .exceptionally(e -> {
-//                    log.error("Failed to start task: {}", taskId, e);
-//                    return null;
-//                });
-
 
     }
 
@@ -225,21 +204,20 @@ public class LocalTaskCoordinator {
                                         log.info("Call Stop: conn task start time: {}", taskConfig.getStressDurationInSec());
                                         connWorker.stopTask()
                                                 .thenAccept(r -> {
-//                                                        clusterDataManager.upgradeMainTaskStage(taskId, TaskStage.SHUTDOWN);
-                                                    taskInfoMetadataRepository.findById(id).ifPresent(taskInfoMetadata -> {
-                                                        taskInfoMetadata.getTaskConfig().setTaskWorkStage(TaskStage.SHUTDOWN);
-                                                        taskInfoMetadataRepository.save(taskInfoMetadata);
-                                                    });
-                                                })
-                                                .get();
+                                                    TaskInfoMetadata metadata = taskInfoMetadataRepository.findById(id).block();
+                                                    if (metadata != null) {
+                                                        metadata.getTaskConfig().setTaskWorkStage(TaskStage.SHUTDOWN);
+                                                        taskInfoMetadataRepository.save(metadata).block();
+                                                    }
+                                                });
                                         runningTaskMap.remove(id);
                                         clusterDataManager.upgradeClusterNodeTaskStage(runningTask());
 //                                        clusterDataManager.upgradeSubTaskStage(taskConfig, TaskStage.SHUTDOWN);
 
-                                        List<NodeTask> nodeTasks = nodeTaskRepository.searchAllByTaskId(id);
+                                        List<NodeTask> nodeTasks = nodeTaskRepository.findAllByTaskId(id).collectList().block();
                                         for (NodeTask task : nodeTasks) {
                                             task.getTaskConfig().setTaskWorkStage(TaskStage.SHUTDOWN);
-                                            nodeTaskRepository.save(task);
+                                            nodeTaskRepository.save(task).block();
                                         }
 
                                     } catch (Exception e) {
@@ -283,23 +261,20 @@ public class LocalTaskCoordinator {
                                 log.info("start to stop pubsub task");
                                 pubSubWorker.stopTask()
                                         .thenAccept(r -> {
-//                                            clusterDataManager.upgradeMainTaskStage(taskId, TaskStage.SHUTDOWN);
-                                            taskInfoMetadataRepository.findById(id).ifPresent(taskInfoMetadata -> {
-                                                taskInfoMetadata.getTaskConfig().setTaskWorkStage(TaskStage.SHUTDOWN);
-                                                taskInfoMetadataRepository.save(taskInfoMetadata);
-                                            });
-                                        }).
-                                        get();
+                                            TaskInfoMetadata metadata = taskInfoMetadataRepository.findById(id).block();
+                                            if (metadata != null) {
+                                                metadata.getTaskConfig().setTaskWorkStage(TaskStage.SHUTDOWN);
+                                                taskInfoMetadataRepository.save(metadata).block();
+                                            }
+                                        });
                                 runningTaskMap.remove(id);
                                 clusterDataManager.upgradeClusterNodeTaskStage(runningTask());
 
-                                List<NodeTask> nodeTasks = nodeTaskRepository.searchAllByTaskId(id);
+                                List<NodeTask> nodeTasks = nodeTaskRepository.findAllByTaskId(id).collectList().block();
                                 for (NodeTask task : nodeTasks) {
                                     task.getTaskConfig().setTaskWorkStage(TaskStage.SHUTDOWN);
-                                    nodeTaskRepository.save(task);
+                                    nodeTaskRepository.save(task).block();
                                 }
-
-//                                clusterDataManager.upgradeSubTaskStage(taskConfig, TaskStage.SHUTDOWN);
 
                             } catch (Exception e) {
                                 log.error("Failed to stop pubsub task: {}",
@@ -325,7 +300,6 @@ public class LocalTaskCoordinator {
      * 注册一个全局的任务调度器,用于接收和处理集群任务消息
      */
     @PostConstruct
-    @ClusterScope
     public void registerGlobalTaskScheduler() {
         vertx.eventBus().<TaskSchedule>consumer(Constants.CLUSTER_TASK_MESSAGE, message -> {
             TaskSchedule taskSchedule = message.body();
@@ -402,7 +376,7 @@ public class LocalTaskCoordinator {
     // 提取出来的检查方法
     private void checkAllTasksComplete(String taskId, Set<String> finishNodeIds) {
 
-        List<NodeTask> nodeTasks = nodeTaskRepository.searchAllByTaskId(taskId);
+        List<NodeTask> nodeTasks = nodeTaskRepository.findAllByTaskId(taskId).collectList().block();
         Map<String, TaskConfig> subTasks = nodeTasks.stream()
                 .collect(Collectors.toMap(
                         NodeTask::getNodeId,
@@ -480,41 +454,42 @@ public class LocalTaskCoordinator {
                 log.info("cluster task STOP , {}", taskId);
                 taskWorker.stopTask().thenAccept(r -> {
                     log.info("taskId stopped: {}", taskId);
-                    taskInfoMetadataRepository.findById(taskId).ifPresent(t -> {
-                        TaskConfig taskConfig = t.getTaskConfig();
+                    TaskInfoMetadata metadata = taskInfoMetadataRepository.findById(taskId).block();
+                    if (metadata != null) {
+                        TaskConfig taskConfig = metadata.getTaskConfig();
                         taskConfig.setTaskWorkStage(TaskStage.STOPPED);
-                        taskInfoMetadataRepository.updateTaskConfigById(taskId, taskConfig);
-                    });
+                        taskInfoMetadataRepository.updateTaskConfigById(taskId, taskConfig).block();
+                    }
                     runningTaskMap.remove(taskId);
-                    List<NodeTask> nodeTasks = nodeTaskRepository.searchAllByTaskId(taskId);
+                    List<NodeTask> nodeTasks = nodeTaskRepository.findAllByTaskId(taskId).collectList().block();
                     for (NodeTask nodeTask : nodeTasks) {
                         nodeTask.getTaskConfig().setTaskWorkStage(TaskStage.STOPPED);
                     }
-                    nodeTaskRepository.saveAll(nodeTasks);
+                    nodeTaskRepository.saveAll(nodeTasks).collectList().block();
                     clusterDataManager.upgradeClusterNodeTaskStage(runningTask());
                 });
             } else {
                 clusterDataManager.currentNode().thenAccept(nodeInfo -> {
-                    Optional<NodeTask> nodeTaskOptional = nodeTaskRepository.searchFirstByTaskId(taskId);
-                    if (nodeTaskOptional.isEmpty()) {
+                    NodeTask nodeTask = nodeTaskRepository.findFirstByTaskId(taskId).block();
+                    if (nodeTask == null) {
                         log.error("taskId: {}, nodeTask not found", taskId);
                         return;
                     }
-                    NodeTask nodeTask = nodeTaskOptional.get();
                     String dbNodeName = nodeTask.getNodeName();
                     String nodeName = nodeInfo.getNodeName();
                     log.info("taskId: {}, nodeName: {}, dbNodeName: {}", taskId, nodeName, dbNodeName);
                     if (Objects.equals(dbNodeName, nodeName)) {
-                        taskInfoMetadataRepository.findById(taskId).ifPresent(t -> {
-                            TaskConfig taskConfig = t.getTaskConfig();
+                        TaskInfoMetadata metadata = taskInfoMetadataRepository.findById(taskId).block();
+                        if (metadata != null) {
+                            TaskConfig taskConfig = metadata.getTaskConfig();
                             taskConfig.setTaskWorkStage(TaskStage.STOPPED);
-                            taskInfoMetadataRepository.updateTaskConfigById(taskId, taskConfig);
-                            List<NodeTask> nodeTasks = nodeTaskRepository.searchAllByTaskId(taskId);
+                            taskInfoMetadataRepository.updateTaskConfigById(taskId, taskConfig).block();
+                            List<NodeTask> nodeTasks = nodeTaskRepository.findAllByTaskId(taskId).collectList().block();
                             for (NodeTask nt : nodeTasks) {
                                 nt.getTaskConfig().setTaskWorkStage(TaskStage.STOPPED);
                             }
-                            nodeTaskRepository.saveAll(nodeTasks);
-                        });
+                            nodeTaskRepository.saveAll(nodeTasks).collectList().block();
+                        }
                     }
                 });
             }

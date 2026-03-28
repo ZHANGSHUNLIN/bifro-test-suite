@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2021 Baidu, Inc. All Rights Reserved.
  */
-package com.baidu.iot.test.suite.stats.recoder;
+package com.baidu.iot.test.suite.stats.recorder;
 
 import com.hivemq.client.internal.annotations.NotThreadSafe;
 import io.micrometer.core.instrument.*;
@@ -23,7 +23,7 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 @Data
 @NotThreadSafe
-public class MetricsRecorder extends BucketLatencyRecorder{
+public class MetricsRecorder extends BucketLatencyRecorder {
 
     static {
         Metrics.addRegistry(new SimpleMeterRegistry());

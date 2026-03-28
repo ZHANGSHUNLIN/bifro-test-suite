@@ -1,27 +1,21 @@
 package com.baidu.duhome.database.repository;
 
 import com.baidu.duhome.database.pojo.NodeTask;
-import com.baidu.duhome.database.pojo.TaskInfoMetadata;
-import com.baidu.iot.test.suite.worker.TaskConfig;
-import org.springframework.data.mongodb.repository.MongoRepository;
-import org.springframework.data.mongodb.repository.Query;
-import org.springframework.data.mongodb.repository.Update;
+import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
-import java.util.Optional;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 @Repository
-public interface NodeTaskRepository extends MongoRepository<NodeTask, String> {
+public interface NodeTaskRepository extends ReactiveMongoRepository<NodeTask, String> {
 
+    Flux<NodeTask> findAllByTaskId(String taskId);
 
-    List<NodeTask> searchAllByTaskId(String taskId);
+    Mono<NodeTask> findFirstByTaskId(String taskId);
 
-    Optional<NodeTask> searchFirstByTaskId(String taskId);
+    Mono<NodeTask> findByTaskIdAndNodeId(String taskId, String nodeId);
 
-    NodeTask searchByTaskIdAndNodeId(String taskId, String nodeId);
-
-    NodeTask searchById(String id);
-
-    void deleteByTaskId(String taskId);
+    Mono<Void> deleteByTaskId(String taskId);
 }
+

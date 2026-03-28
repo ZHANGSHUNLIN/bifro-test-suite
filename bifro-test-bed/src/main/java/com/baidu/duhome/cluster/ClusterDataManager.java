@@ -34,9 +34,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -48,7 +45,7 @@ import static com.baidu.duhome.util.RuntimeUtil.getSystemLoadAverage;
  */
 @Slf4j
 @Component
-public class ClusterDataManager implements DataManager {
+public class ClusterDataManager {
 
     @Resource
     private ShareDataManager shareDataManager;
@@ -260,19 +257,6 @@ public class ClusterDataManager implements DataManager {
                 .thenApply(r -> CommonResp.success());
     }
 
-//    public CompletableFuture<TaskConfig> assignTask(String taskId) {
-//        return shareDataManager.<String, TaskInfoMetadata>map(ShareDataAddr.CLUSTER_TASK_CONFIGS)
-//                .key(taskId)
-//                .thenAccept(taskInfoMetadata -> {
-//                    TaskConfig taskConfig = taskInfoMetadata.getTaskConfig();
-//                    distributeTasksToNodes(taskConfig);
-//                }).future().thenApply(TaskInfoMetadata::getTaskConfig);
-//    }
-
-//    public void assignTask(TaskConfig taskConfig) {
-//        distributeTasksToNodes(taskConfig);
-//    }
-
     public CompletableFuture<TaskInfoMetadata> replaceTask(String taskId, TaskInfoMetadata taskInfoMetadata) {
         return shareDataManager.<String, TaskInfoMetadata>map(ShareDataAddr.CLUSTER_TASK_CONFIGS)
                 .key(taskId)
@@ -284,102 +268,57 @@ public class ClusterDataManager implements DataManager {
                 });
     }
 
+    private CompletableFuture<Void> distributeTasksToNodes2(String id, TaskConfig mainTaskConfig, NodeTaskAllocationRequest nodeTaskAllocationRequest) {
+        return shareDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO)
+                .entries()
+                .thenApplyAsync(nodeInfoMap -> {
+                    Map<String, NodeInfo> newHash = new HashMap<>();
+                    nodeInfoMap.forEach((k, v) -> {
+                        if (v.isAlive()) {
+                            newHash.put(k, v);
+                        }
+                    });
 
-//    private void distributeTasksToNodes(TaskConfig mainTaskConfig) {
-//        String taskId = mainTaskConfig.getTaskId();
-//        shareDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO)
-//                .entries()
-//                .thenAccept(entries -> {
-//                    Map<String, NodeInfo> newHash = new HashMap<>();
-//                    entries.forEach((k, v) -> {
-//                        // 过滤掉已下线或心跳包超时的节点
-//                        if (v.isAlive()) {
-//                            newHash.put(k, v);
-//                        }
-//                    });
-//                    Map<String, TaskConfig> nodeTaskConfigs = calculateNodeTasks(mainTaskConfig, newHash, 1, 1);
-//                    List<NodeTask> nodeTasks = new ArrayList<>();
-//                    nodeTaskConfigs.forEach((k, v) -> {
-//                        NodeTask nodeTask = new NodeTask();
-//                        nodeTask.setTaskId(taskId);
-//                        nodeTask.setNodeId(k);
-//                        nodeTask.setTaskConfig(v);
-//                        nodeTasks.add(nodeTask);
-//                    });
-//                    nodeTaskRepository.saveAll(nodeTasks);
-//
+                    Map<String, TaskConfig> nodeTaskConfigs = new HashMap<>();
+                    int currentThingIdOffset = 0;
 
-    /// /                    shareDataManager.getMap(ShareDataAddr.NODE_TASK_CONFIGS).putIfAbsent(taskId, nodeTaskConfigs);
-    /// /                    log.info("Distributed task {} to {} nodes", taskId, nodeTaskConfigs.size());
-    /// /                }).whenComplete((r, e) -> {
-    /// /                    if (e != null) {
-    /// /                        log.error("Error when distribute task {} to nodes", taskId, e);
-    /// /                    }
-    /// /                });
-//                });
-//    }
-    private void distributeTasksToNodes2(String id, TaskConfig mainTaskConfig, NodeTaskAllocationRequest nodeTaskAllocationRequest) {
-        try {
-            Map<String, NodeInfo> nodeInfoMap = shareDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO)
-                    .entries().get(3, TimeUnit.SECONDS);
+                    List<String> notFoundNodeIdList = new ArrayList<>();
+                    for (String nodeId : newHash.keySet()) {
+                        Optional<NodeTaskAllocationRequest.NodeAllocation> first = nodeTaskAllocationRequest.getNodeAllocationList().stream().filter(r -> Objects.equals(r.getNodeId(), nodeId)).findFirst();
+                        if (first.isPresent()) {
+                            NodeTaskAllocationRequest.NodeAllocation nodeAllocation = first.get();
+                            int nodeClientCount = nodeAllocation.getAllocatedClientCount();
+                            TaskConfig nodeTaskConfig = createTaskConfig(mainTaskConfig, nodeId, nodeClientCount);
+                            nodeTaskConfig.setThingIdStartAt(mainTaskConfig.getThingIdStartAt() + currentThingIdOffset);
+                            currentThingIdOffset += nodeClientCount;
+                            nodeTaskConfigs.put(nodeId, nodeTaskConfig);
+                        } else {
+                            notFoundNodeIdList.add(nodeId);
+                        }
+                    }
+                    if (!notFoundNodeIdList.isEmpty()) {
+                        throw new ApiException("Node not found: " + notFoundNodeIdList);
+                    }
 
-            Map<String, NodeInfo> newHash = new HashMap<>();
-            nodeInfoMap.forEach((k, v) -> {
-                // 过滤掉已下线或心跳包超时的节点
-                if (v.isAlive()) {
-                    newHash.put(k, v);
-                }
-            });
+                    nodeTaskRepository.deleteByTaskId(id).block();
 
-            // 根据分配后的数值，创建最终配置
-            Map<String, TaskConfig> nodeTaskConfigs = new HashMap<>();
-            int currentThingIdOffset = 0;
-
-            List<String> notFoundNodeIdList = new ArrayList<>();
-            for (String nodeId : newHash.keySet()) {
-                Optional<NodeTaskAllocationRequest.NodeAllocation> first = nodeTaskAllocationRequest.getNodeAllocationList().stream().filter(r -> Objects.equals(r.getNodeId(), nodeId)).findFirst();
-                if (first.isPresent()) {
-                    NodeTaskAllocationRequest.NodeAllocation nodeAllocation = first.get();
-                    int nodeClientCount = nodeAllocation.getAllocatedClientCount();
-                    TaskConfig nodeTaskConfig = createTaskConfig(mainTaskConfig, nodeId, nodeClientCount);
-                    // 设置ThingId起始位置
-                    nodeTaskConfig.setThingIdStartAt(mainTaskConfig.getThingIdStartAt() + currentThingIdOffset);
-                    currentThingIdOffset += nodeClientCount;
-                    nodeTaskConfigs.put(nodeId, nodeTaskConfig);
-                } else {
-                    notFoundNodeIdList.add(nodeId);
-                }
-            }
-            if (!notFoundNodeIdList.isEmpty()) {
-                throw new ApiException("Node not found: " + notFoundNodeIdList);
-            }
-
-            List<NodeTask> nodeTasks = new ArrayList<>();
-            nodeTaskConfigs.forEach((k, v) -> {
-                NodeTask nodeTask = new NodeTask();
-                nodeTask.setTaskId(id);
-                nodeTask.setNodeId(k);
-                nodeTask.setTaskConfig(v);
-                nodeTask.setNodeName(nodeName);
-                nodeTasks.add(nodeTask);
-            });
-            nodeTaskRepository.saveAll(nodeTasks);
-
-            //                    shareDataManager.getMap(ShareDataAddr.NODE_TASK_CONFIGS).putIfAbsent(taskId, nodeTaskConfigs);
-            //                    log.info("Distributed task {} to {} nodes", taskId, nodeTaskConfigs.size());
-            //                }).whenComplete((r, e) -> {
-            //                    if (e != null) {
-            //                        log.error("Error when distribute task {} to nodes", taskId, e);
-            //                    }
-            //                });
-        } catch (InterruptedException | ExecutionException | TimeoutException e) {
-            throw new ApiException("查询节点信息超时");
-        }
+                    List<NodeTask> nodeTasks = new ArrayList<>();
+                    nodeTaskConfigs.forEach((k, v) -> {
+                        NodeTask nodeTask = new NodeTask();
+                        nodeTask.setTaskId(id);
+                        nodeTask.setNodeId(k);
+                        nodeTask.setTaskConfig(v);
+                        nodeTask.setNodeName(nodeName);
+                        nodeTasks.add(nodeTask);
+                    });
+                    nodeTaskRepository.saveAll(nodeTasks).collectList().block();
+                    return null;
+                });
     }
 
-    public void assignCheck(String id, TaskConfig taskConfig, NodeTaskAllocationRequest nodeTaskAllocationRequest) {
+    public CompletableFuture<Void> assignCheck(String id, TaskConfig taskConfig, NodeTaskAllocationRequest nodeTaskAllocationRequest) {
         checkClientCount(nodeTaskAllocationRequest);
-        distributeTasksToNodes2(id,taskConfig, nodeTaskAllocationRequest);
+        return distributeTasksToNodes2(id, taskConfig, nodeTaskAllocationRequest);
     }
 
     private static void checkClientCount(NodeTaskAllocationRequest nodeTaskAllocationRequest) {

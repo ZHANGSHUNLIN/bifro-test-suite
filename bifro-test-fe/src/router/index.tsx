@@ -2,7 +2,7 @@ import {createBrowserRouter} from 'react-router-dom';
 import MainLayout from '../layouts/MainLayout';
 import Home from '../pages/Home';
 import TaskManagement from '../pages/TaskManagement/index';
-import MqttBrokerManagement from '../pages/MqttBrokerManagement';
+import MqttInstanceManagement from '../pages/MqttInstanceManagement';
 import ClusterManagement from '../pages/ClusterManagement';
 
 const router = createBrowserRouter([
@@ -19,8 +19,8 @@ const router = createBrowserRouter([
                     element: <TaskManagement/>
                 },
                 {
-                    path: 'mqtt-brokers',
-                    element: <MqttBrokerManagement/>
+                    path: 'mqtt-instances',
+                    element: <MqttInstanceManagement/>
                 },
                 {
                     path: 'cluster',

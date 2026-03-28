@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, InputNumber, Table, Typography, Space, Button, message } from 'antd';
+import { Modal, InputNumber, Table, Typography, Space, Button, message, Select, Popconfirm } from 'antd';
 import type { NodeTaskAllocationVO, NodeAllocation } from '../../types/task';
 import taskApi from '../../services/taskApi';
+import { DeleteOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
 
@@ -24,6 +25,8 @@ const TaskAllocationModal: React.FC<TaskAllocationModalProps> = ({
   const [calculating, setCalculating] = useState(false);
   const [allocationData, setAllocationData] = useState<NodeTaskAllocationVO | null>(null);
   const [editingData, setEditingData] = useState<NodeAllocation[]>([]);
+  const [availableNodes, setAvailableNodes] = useState<string[]>([]);
+  const [selectedNodeToAdd, setSelectedNodeToAdd] = useState<string | undefined>(undefined);
 
   // 计算分配
   const calculateAllocation = async () => {
@@ -32,6 +35,8 @@ const TaskAllocationModal: React.FC<TaskAllocationModalProps> = ({
       const data = await taskApi.calculateNodeTaskAllocation(taskId);
       setAllocationData(data);
       setEditingData(data.nodeAllocationList || []);
+      // 初始化时所有节点都在编辑数据中，所以可用节点为空
+      setAvailableNodes([]);
     } catch (error) {
       message.error('计算分配失败');
       console.error('Calculate allocation failed:', error);
@@ -55,6 +60,24 @@ const TaskAllocationModal: React.FC<TaskAllocationModalProps> = ({
         item.nodeId === nodeId ? { ...item, allocatedClientCount: newValue } : item
       )
     );
+  };
+
+  // 删除节点
+  const handleRemoveNode = (nodeId: string) => {
+    const nodeToRemove = editingData.find(item => item.nodeId === nodeId);
+    if (nodeToRemove) {
+      setEditingData(prev => prev.filter(item => item.nodeId !== nodeId));
+      setAvailableNodes(prev => [...prev, nodeId]);
+    }
+  };
+
+  // 添加节点
+  const handleAddNode = () => {
+    if (selectedNodeToAdd && !editingData.some(item => item.nodeId === selectedNodeToAdd)) {
+      setEditingData(prev => [...prev, { nodeId: selectedNodeToAdd, allocatedClientCount: 0 }]);
+      setAvailableNodes(prev => prev.filter(nodeId => nodeId !== selectedNodeToAdd));
+      setSelectedNodeToAdd(undefined);
+    }
   };
 
   // 提交分配
@@ -89,6 +112,8 @@ const TaskAllocationModal: React.FC<TaskAllocationModalProps> = ({
   const handleClose = () => {
     setAllocationData(null);
     setEditingData([]);
+    setAvailableNodes([]);
+    setSelectedNodeToAdd(undefined);
     onCancel();
   };
 
@@ -97,13 +122,13 @@ const TaskAllocationModal: React.FC<TaskAllocationModalProps> = ({
       title: '节点ID',
       dataIndex: 'nodeId',
       key: 'nodeId',
-      width: '40%',
+      width: '35%',
     },
     {
       title: '分配客户端数',
       dataIndex: 'allocatedClientCount',
       key: 'allocatedClientCount',
-      width: '40%',
+      width: '45%',
       render: (_: unknown, record: NodeAllocation) => (
         <InputNumber
           min={0}
@@ -111,6 +136,23 @@ const TaskAllocationModal: React.FC<TaskAllocationModalProps> = ({
           onChange={(value) => handleCountChange(record.nodeId, value)}
           style={{ width: '100%' }}
         />
+      ),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: '20%',
+      render: (_: unknown, record: NodeAllocation) => (
+        <Popconfirm
+          title="确定要移除该节点吗？"
+          onConfirm={() => handleRemoveNode(record.nodeId)}
+          okText="确定"
+          cancelText="取消"
+        >
+          <Button type="link" danger icon={<DeleteOutlined />} size="small">
+            移除
+          </Button>
+        </Popconfirm>
       ),
     },
   ];
@@ -155,6 +197,27 @@ const TaskAllocationModal: React.FC<TaskAllocationModalProps> = ({
               <Text strong>{allocationData.totalClientCount}</Text>
             </div>
 
+            {/* 添加节点区域 */}
+            {availableNodes.length > 0 && (
+              <Space direction="horizontal" size="small" style={{ width: '100%' }}>
+                <Text>添加节点:</Text>
+                <Select
+                  style={{ flex: 1 }}
+                  placeholder="选择要添加的节点"
+                  value={selectedNodeToAdd}
+                  onChange={setSelectedNodeToAdd}
+                  options={availableNodes.map(nodeId => ({ label: nodeId, value: nodeId }))}
+                />
+                <Button
+                  type="primary"
+                  onClick={handleAddNode}
+                  disabled={!selectedNodeToAdd}
+                >
+                  添加
+                </Button>
+              </Space>
+            )}
+
             <Table
               columns={columns}
               dataSource={editingData}
@@ -180,6 +243,12 @@ const TaskAllocationModal: React.FC<TaskAllocationModalProps> = ({
             {totalAllocated !== allocationData.totalClientCount && (
               <Text type="danger">
                 警告: 分配的客户端总数必须等于总客户端数
+              </Text>
+            )}
+
+            {editingData.length === 0 && (
+              <Text type="warning">
+                提示: 当前没有选择任何节点，请添加节点后进行分配
               </Text>
             )}
           </Space>

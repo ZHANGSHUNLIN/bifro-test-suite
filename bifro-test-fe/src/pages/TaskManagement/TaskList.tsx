@@ -15,6 +15,7 @@ import type {TaskListItem} from '../../types/task';
 
 interface TaskListProps {
     tasks: TaskListItem[];
+    groupSelectOptions?: { label: string; value: string }[];
     onViewDetail: (id: string, taskId: string) => void;
     onEdit: (task: TaskListItem) => void;
     onDelete: (id: string) => Promise<void>;
@@ -24,11 +25,12 @@ interface TaskListProps {
     onBatchDelete: (ids: string[]) => Promise<void>;
     selectedRowKeys?: React.Key[];
     onSelectChange?: (selectedRowKeys: React.Key[]) => void;
-    onSearch?: (taskName: string, taskType: string | null) => void;
+    onSearch?: (taskName: string, taskType: string | null, group: string) => void;
 }
 
 const TaskList: React.FC<TaskListProps> = ({
                                                tasks,
+                                               groupSelectOptions = [],
                                                onViewDetail,
                                                onEdit,
                                                onDelete,
@@ -43,11 +45,12 @@ const TaskList: React.FC<TaskListProps> = ({
     // 过滤状态
     const [taskNameFilter, setTaskNameFilter] = useState<string>('');
     const [taskTypeFilter, setTaskTypeFilter] = useState<string | null>(null);
+    const [groupFilter, setGroupFilter] = useState<string>('');
 
     // 处理搜索
     const handleSearch = () => {
         if (onSearch) {
-            onSearch(taskNameFilter, taskTypeFilter);
+            onSearch(taskNameFilter, taskTypeFilter, groupFilter);
         }
     };
 
@@ -64,7 +67,15 @@ const TaskList: React.FC<TaskListProps> = ({
         setTaskTypeFilter(value);
         // 任务类型变化时自动搜索
         if (onSearch) {
-            onSearch(taskNameFilter, value);
+            onSearch(taskNameFilter, value, groupFilter);
+        }
+    };
+
+    const handleGroupChange = (value: string) => {
+        setGroupFilter(value);
+        // 分组变化时自动搜索
+        if (onSearch) {
+            onSearch(taskNameFilter, taskTypeFilter, value);
         }
     };
 
@@ -72,8 +83,9 @@ const TaskList: React.FC<TaskListProps> = ({
     const handleClearFilters = () => {
         setTaskNameFilter('');
         setTaskTypeFilter(null);
+        setGroupFilter('');
         if (onSearch) {
-            onSearch('', null);
+            onSearch('', null, '');
         }
     };
 
@@ -107,6 +119,13 @@ const TaskList: React.FC<TaskListProps> = ({
             key: 'taskId',
             width: 100,
             ellipsis: true,
+        },
+        {
+            title: '分组',
+            dataIndex: 'group',
+            key: 'group',
+            width: 100,
+            render: (group: string) => group ? <Tag color="blue">{group}</Tag> : <span>-</span>,
         },
         {
             title: '任务类型',
@@ -191,6 +210,16 @@ const TaskList: React.FC<TaskListProps> = ({
 
                     <Button
                         type="link"
+                        icon={<DeploymentUnitOutlined/>}
+                        onClick={() => onAssign(record)}
+                        hidden={record.status !== TaskStatusValues.INIT && record.status !== TaskStatusValues.ASSIGNED}
+                        disabled={record.status !== TaskStatusValues.INIT && record.status !== TaskStatusValues.ASSIGNED}
+                        title={record.status === TaskStatusValues.ASSIGNED ? '重新分配任务到集群节点' : '分配任务到集群节点'}
+                    >
+                        {record.status === TaskStatusValues.ASSIGNED ? '重新分配' : '分配'}
+                    </Button>
+                    <Button
+                        type="link"
                         icon={<CheckCircleOutlined/>}
                         onClick={() => onConfirm(record.id)}
                         disabled={record.status !== TaskStatusValues.ASSIGNED}
@@ -198,16 +227,6 @@ const TaskList: React.FC<TaskListProps> = ({
                         title={record.status !== TaskStatusValues.INIT ? '只能在"已创建"状态确认' : '确认开始任务'}
                     >
                         确认
-                    </Button>
-                    <Button
-                        type="link"
-                        icon={<DeploymentUnitOutlined/>}
-                        hidden={record.status !== TaskStatusValues.INIT}
-                        onClick={() => onAssign(record)}
-                        disabled={record.status !== TaskStatusValues.INIT}
-                        title={record.status !== TaskStatusValues.INIT ? '只能在"已创建"状态分配' : '分配任务到集群节点'}
-                    >
-                        分配
                     </Button>
                     <Button
                         type="link"
@@ -269,6 +288,13 @@ const TaskList: React.FC<TaskListProps> = ({
                     prefix={<SearchOutlined style={{color: '#bfbfbf'}}/>}
                 />
                 <Select
+                    placeholder="选择分组"
+                    value={groupFilter}
+                    onChange={handleGroupChange}
+                    style={{width: 150}}
+                    options={groupSelectOptions}
+                />
+                <Select
                     placeholder="选择任务类型"
                     value={taskTypeFilter}
                     onChange={handleTaskTypeChange}
@@ -280,7 +306,7 @@ const TaskList: React.FC<TaskListProps> = ({
                     ]}
                 />
                 <Button type="primary" icon={<SearchOutlined/>} onClick={handleSearch}>搜索</Button>
-                {(taskNameFilter || taskTypeFilter) && (
+                {(taskNameFilter || taskTypeFilter || groupFilter) && (
                     <Button onClick={handleClearFilters}>清除过滤</Button>
                 )}
             </div>

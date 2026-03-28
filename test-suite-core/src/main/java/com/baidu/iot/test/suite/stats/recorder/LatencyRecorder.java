@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2021 Baidu, Inc. All Rights Reserved.
  */
-package com.baidu.iot.test.suite.stats.recoder;
+package com.baidu.iot.test.suite.stats.recorder;
 
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;

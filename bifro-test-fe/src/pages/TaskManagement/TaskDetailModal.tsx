@@ -217,6 +217,8 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                         {taskDetail.brokers?.map(b => `${b.host}:${b.port}`).join(', ') || '-'}
                                     </Descriptions.Item>
                                     <Descriptions.Item
+                                        label="任务分组">{taskDetail.mainTask.group || '-'}</Descriptions.Item>
+                                    <Descriptions.Item
                                         label="客户端数量">{taskDetail.mainTask.totalClientCount}</Descriptions.Item>
                                     <Descriptions.Item
                                         label="连接速率">{taskDetail.mainTask.connectRate || 1} 个/秒</Descriptions.Item>

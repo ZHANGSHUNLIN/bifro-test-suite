@@ -1,89 +1,60 @@
 import React, { useState, useEffect } from 'react';
-import {
-    Card,
-    Table,
-    Button,
-    Space,
-    Modal,
-    Form,
-    Input,
-    InputNumber,
-    Switch,
-    message,
-    Popconfirm,
-    Tag,
-    Typography,
-    Spin,
-    Descriptions,
-    Row,
-    Col
-} from 'antd';
-import {
-    PlusOutlined,
-    EditOutlined,
-    DeleteOutlined,
-    EyeOutlined,
-    ReloadOutlined,
-} from '@ant-design/icons';
-import dayjs from 'dayjs';
+import { useNavigate } from 'react-router-dom';
+import { Card, Table, Button, Space, Input, Modal, Form, Select, Tag, Popconfirm, Spin, Typography, InputNumber, Switch, message, Descriptions } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons';
 import mqttBrokerApi from '../services/mqttBrokerApi';
-import type {
-    BrokerListItem,
-    MqttBrokerConfig
-} from '../types/mqttBroker';
+import groupApi from '../services/groupApi';
+import type { BrokerListItem, MqttBrokerConfig } from '../types/mqttBroker';
+import type { MqttGroup } from '../types/mqttGroup';
+import dayjs from 'dayjs';
 
 const { Title } = Typography;
 
 const MqttBrokerManagement: React.FC = () => {
+    const navigate = useNavigate();
     const [brokers, setBrokers] = useState<BrokerListItem[]>([]);
     const [loading, setLoading] = useState(false);
     const [isModalVisible, setIsModalVisible] = useState(false);
-    const [detailModalVisible, setDetailModalVisible] = useState(false);
     const [editingBroker, setEditingBroker] = useState<BrokerListItem | null>(null);
-    const [selectedBrokerId, setSelectedBrokerId] = useState<string | null>(null);
-    const [brokerDetail, setBrokerDetail] = useState<MqttBrokerConfig | null>(null);
     const [form] = Form.useForm();
+    const [selectedGroup, setSelectedGroup] = useState<string>('');
+    const [groupSelectOptions, setGroupSelectOptions] = useState<{ label: string; value: string }[]>([]);
+    const [detailVisible, setDetailVisible] = useState(false);
+    const [brokerDetail, setBrokerDetail] = useState<MqttBrokerConfig | null>(null);
+    const [detailLoading, setDetailLoading] = useState(false);
 
     // 加载 Broker 列表
-    const loadBrokers = async () => {
+    const loadBrokers = async (group?: string) => {
         setLoading(true);
         try {
-            const pageInfo = await mqttBrokerApi.getAllBrokers()
-            const brokerListItems: BrokerListItem[] = pageInfo.content.map((config: BrokerListItem) => ({
-                brokerId: config.brokerId || '',
-                id: config.id,
-                name: config.name,
-                host: config.host,
-                port: config.port,
-                description: config.description || '',
-                enabled: config.enabled,
-                sslEnabled: config.sslEnabled || false,
-                lastHealthCheck: config.lastHealthCheck || '',
-            }));
-            setBrokers(brokerListItems);
+            const pageInfo = await mqttBrokerApi.getAllBrokers(undefined, group ?? selectedGroup);
+            setBrokers(pageInfo.content || []);
         } catch (error) {
-            message.error('加载 Broker 列表失败');
+            console.error('加载 Broker 列表失败:', error);
         } finally {
             setLoading(false);
         }
     };
 
-    // 加载 Broker 详情
-    const loadBrokerDetail = async (id: string) => {
+    // 加载分组选项（用于下拉选择）
+    const loadGroupSelectOptions = async () => {
         try {
-            const detail = await mqttBrokerApi.getBrokerDetails(id);
-            setBrokerDetail(detail);
+            const allGroups = await groupApi.getAllGroupsForSelect();
+            const options = allGroups.map((g: MqttGroup) => ({
+                label: g.name,
+                value: g.name
+            }));
+            setGroupSelectOptions([{ label: '所有分组', value: '' }, ...options]);
         } catch (error) {
-            message.error('加载 Broker 详情失败');
-            console.error('Failed to load broker detail:', error);
+            console.error('加载分组选项失败:', error);
         }
     };
 
-
+    // 初始化加载
     useEffect(() => {
         loadBrokers();
+        loadGroupSelectOptions();
     }, []);
-
 
     const columns = [
         {
@@ -94,10 +65,18 @@ const MqttBrokerManagement: React.FC = () => {
             ellipsis: true,
         },
         {
+            title: '分组',
+            dataIndex: 'group',
+            key: 'group',
+            width: 120,
+            render: (group: string) => group ? <Tag color="blue">{group}</Tag> : <span>-</span>,
+        },
+        {
             title: '主机地址',
             dataIndex: 'host',
             key: 'host',
             width: 120,
+            ellipsis: true,
         },
         {
             title: '端口',
@@ -123,7 +102,13 @@ const MqttBrokerManagement: React.FC = () => {
             key: 'description',
             width: 150,
             ellipsis: true,
-            render: (description: string) => description || '-',
+        },
+        {
+            title: '最后检查',
+            dataIndex: 'lastHealthCheck',
+            key: 'lastHealthCheck',
+            width: 100,
+            render: (lastHealthCheck: string) => lastHealthCheck ? dayjs(lastHealthCheck).format('YYYY-MM-DD HH:mm:ss') : '-',
         },
         {
             title: '操作',
@@ -134,7 +119,7 @@ const MqttBrokerManagement: React.FC = () => {
                     <Button
                         type="link"
                         icon={<EyeOutlined />}
-                        onClick={() => handleViewDetail(record.id,record.brokerId)}
+                        onClick={() => handleViewDetail(record.id, record.brokerId)}
                     >
                         详情
                     </Button>
@@ -144,13 +129,6 @@ const MqttBrokerManagement: React.FC = () => {
                         onClick={() => handleEdit(record)}
                     >
                         编辑
-                    </Button>
-                    <Button
-                        type="link"
-                        danger={record.enabled}
-                        onClick={() => handleToggleStatus(record.id, !record.enabled)}
-                    >
-                        {record.enabled ? '禁用' : '启用'}
                     </Button>
                     <Popconfirm
                         title="确定要删除这个 Broker 吗？"
@@ -183,74 +161,77 @@ const MqttBrokerManagement: React.FC = () => {
             name: broker.name,
             host: broker.host,
             port: broker.port,
-            description: broker.description,
+            description: broker.description || '',
             enabled: broker.enabled,
+            group: broker.group || '',
         });
         setIsModalVisible(true);
-    };
-
-    const handleViewDetail = (id: string, brokerId: string) => {
-        setSelectedBrokerId(brokerId);
-        setDetailModalVisible(true);
-        loadBrokerDetail(id);
     };
 
     const handleDelete = async (id: string) => {
         try {
             await mqttBrokerApi.deleteBroker(id);
             message.success('删除成功');
-            await loadBrokers();
-        } catch {
+            loadBrokers();
+            loadGroupSelectOptions();
+        } catch (error) {
             message.error('删除失败');
         }
     };
 
-    const handleToggleStatus = async (brokerId: string, enabled: boolean) => {
+    const handleViewDetail = async (id: string, _brokerId: string) => {
+        setDetailLoading(true);
+        setDetailVisible(true);
         try {
-            await mqttBrokerApi.toggleBrokerStatus(brokerId, enabled);
-            message.success(`${enabled ? '启用' : '禁用'}成功`);
-            await loadBrokers();
-        } catch {
-            message.error(`${enabled ? '启用' : '禁用'}失败`);
+            const detail = await mqttBrokerApi.getBrokerDetails(id);
+            setBrokerDetail(detail);
+        } catch (error) {
+            message.error('加载 Broker 详情失败');
+            console.error('Failed to load broker detail:', error);
+        } finally {
+            setDetailLoading(false);
         }
     };
 
     const handleModalOk = async () => {
         try {
             const values = await form.validateFields();
-            const brokerRequest = {
-                id: values.id,
+            const brokerRequest: any = {
+                id: editingBroker?.id || '',
                 name: values.name,
                 host: values.host,
                 port: values.port,
-                description: values.description,
+                description: values.description || '',
                 enabled: values.enabled !== false,
-                username: values.username,
-                password: values.password,
-                sslEnabled: values.sslEnabled || false,
-                keepAliveSeconds: values.keepAliveSeconds || 60,
-                connectionTimeoutSeconds: values.connectionTimeoutSeconds || 10,
-                maxConnections: values.maxConnections || 1000,
+                group: values.group || '',
             };
 
             if (editingBroker) {
                 await mqttBrokerApi.updateBroker(editingBroker.id, brokerRequest);
                 message.success('更新成功');
             } else {
-                await mqttBrokerApi.addBroker(brokerRequest)
+                await mqttBrokerApi.addBroker(brokerRequest);
                 message.success('添加成功');
             }
+
             setIsModalVisible(false);
+            setEditingBroker(null);
             form.resetFields();
-            await loadBrokers();
-        } catch {
+            loadBrokers();
+            loadGroupSelectOptions();
+        } catch (error) {
             message.error('操作失败');
         }
     };
 
-    const handleModalCancel = () => {
-        setIsModalVisible(false);
-        form.resetFields();
+    const handleGroupChange = (group: string) => {
+        setSelectedGroup(group);
+        loadBrokers(group);
+    };
+
+    const handleRefresh = () => {
+        loadBrokers();
+        loadGroupSelectOptions();
     };
 
     return (
@@ -258,17 +239,17 @@ const MqttBrokerManagement: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
                 <Title level={2}>MQTT Broker 管理</Title>
                 <Space>
-                    <Button
-                        icon={<ReloadOutlined />}
-                        onClick={loadBrokers}
-                    >
+                    <Select
+                        placeholder="选择分组"
+                        style={{ width: 150 }}
+                        value={selectedGroup}
+                        onChange={handleGroupChange}
+                        options={groupSelectOptions}
+                    />
+                    <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
                         刷新
                     </Button>
-                    <Button
-                        type="primary"
-                        icon={<PlusOutlined />}
-                        onClick={handleAdd}
-                    >
+                    <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
                         添加 Broker
                     </Button>
                 </Space>
@@ -279,7 +260,7 @@ const MqttBrokerManagement: React.FC = () => {
                     <Table
                         columns={columns}
                         dataSource={brokers}
-                        rowKey="brokerId"
+                        rowKey="id"
                         pagination={{
                             pageSize: 10,
                             showSizeChanger: true,
@@ -295,60 +276,68 @@ const MqttBrokerManagement: React.FC = () => {
                 title={editingBroker ? '编辑 Broker' : '添加 Broker'}
                 open={isModalVisible}
                 onOk={handleModalOk}
-                onCancel={handleModalCancel}
-                width={800}
+                onCancel={() => {
+                    setIsModalVisible(false);
+                    setEditingBroker(null);
+                }}
+                width={500}
             >
-                <Form
-                    form={form}
-                    layout="vertical"
-                >
-                    <Row gutter={16}>
-                        <Col span={12}>
-                            <Form.Item
-                                name="name"
-                                label="Broker 名称"
-                                rules={[{ required: true, message: '请输入 Broker 名称' }]}
-                            >
-                                <Input placeholder="请输入 Broker 名称" />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item
-                                name="enabled"
-                                label="是否启用"
-                                valuePropName="checked"
-                                initialValue={true}
-                            >
-                                <Switch checkedChildren="启用" unCheckedChildren="禁用" />
-                            </Form.Item>
-                        </Col>
-                    </Row>
+                <Form form={form} layout="vertical">
+                    <Form.Item
+                        name="name"
+                        label="Broker 名称"
+                        rules={[{ required: true, message: '请输入 Broker 名称' }]}
+                    >
+                        <Input placeholder="请输入 Broker 名称" />
+                    </Form.Item>
 
-                    <Row gutter={16}>
-                        <Col span={12}>
-                            <Form.Item
-                                name="host"
-                                label="主机地址"
-                                rules={[{ required: true, message: '请输入主机地址' }]}
-                            >
-                                <Input placeholder="例如: 127.0.0.1 或 broker.example.com" />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item
-                                name="port"
-                                label="端口"
-                                rules={[{ required: true, message: '请输入端口号' }]}
-                            >
-                                <InputNumber
-                                    placeholder="1883"
-                                    min={1}
-                                    max={65535}
-                                    style={{ width: '100%' }}
-                                />
-                            </Form.Item>
-                        </Col>
-                    </Row>
+                    <Form.Item
+                        name="host"
+                        label="主机地址"
+                        rules={[{ required: true, message: '请输入主机地址' }]}
+                    >
+                        <Input placeholder="例如: 127.0.0.1" />
+                    </Form.Item>
+
+                    <Form.Item
+                        name="port"
+                        label="端口"
+                        rules={[{ required: true, message: '请输入端口号' }]}
+                    >
+                        <InputNumber min={1} max={65535} style={{ width: '100%' }} />
+                    </Form.Item>
+
+                    <Form.Item
+                        name="enabled"
+                        label="是否启用"
+                        valuePropName="checked"
+                        initialValue={true}
+                    >
+                        <Switch />
+                    </Form.Item>
+
+                    <Form.Item
+                        name="group"
+                        label="分组/项目"
+                    >
+                        <Select
+                            placeholder="请选择分组"
+                            options={groupSelectOptions}
+                            dropdownRender={(menu) => (
+                                <>
+                                    {menu}
+                                    <Button
+                                        type="link"
+                                        icon={<SettingOutlined />}
+                                        style={{ fontSize: 12, marginLeft: 8 }}
+                                        onClick={() => navigate('/mqtt-groups')}
+                                    >
+                                        管理分组
+                                    </Button>
+                                </>
+                            )}
+                        />
+                    </Form.Item>
 
                     <Form.Item
                         name="description"
@@ -356,57 +345,58 @@ const MqttBrokerManagement: React.FC = () => {
                     >
                         <Input.TextArea placeholder="可选，输入 Broker 的描述信息" rows={2} />
                     </Form.Item>
-
-                    <Row gutter={16}>
-                        <Col span={12}>
-                            <Form.Item
-                                name="maxConnections"
-                                label="最大连接数"
-                                initialValue={1000}
-                            >
-                                <InputNumber
-                                    placeholder="1000"
-                                    min={1}
-                                    style={{ width: '100%' }}
-                                />
-                            </Form.Item>
-                        </Col>
-                    </Row>
                 </Form>
             </Modal>
 
             {/* Broker 详情模态框 */}
             <Modal
-                title={`Broker 详情 - ${selectedBrokerId}`}
-                open={detailModalVisible}
-                onCancel={() => setDetailModalVisible(false)}
-                footer={null}
-                width={800}
+                title="Broker 详情"
+                open={detailVisible}
+                onCancel={() => {
+                    setDetailVisible(false);
+                    setBrokerDetail(null);
+                }}
+                footer={[
+                    <Button key="close" onClick={() => {
+                        setDetailVisible(false);
+                        setBrokerDetail(null);
+                    }}>
+                        关闭
+                    </Button>
+                ]}
+                width={600}
             >
-                {brokerDetail && (
-                    <Descriptions bordered column={2}>
-                        <Descriptions.Item label="Broker ID">{brokerDetail.brokerId}</Descriptions.Item>
-                        <Descriptions.Item label="名称">{brokerDetail.name}</Descriptions.Item>
-                        <Descriptions.Item label="主机地址">{brokerDetail.host}</Descriptions.Item>
-                        <Descriptions.Item label="端口">{brokerDetail.port}</Descriptions.Item>
-                        <Descriptions.Item label="是否启用">
-                            <Tag color={brokerDetail.enabled ? 'green' : 'red'}>
-                                {brokerDetail.enabled ? '启用' : '禁用'}
-                            </Tag>
-                        </Descriptions.Item>
-                        <Descriptions.Item label="备注" span={2}>
-                            {brokerDetail.description || '-'}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="创建时间">
-                            {brokerDetail.createdAt ? dayjs(brokerDetail.createdAt).format('YYYY-MM-DD HH:mm:ss') : '-'}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="更新时间">
-                            {brokerDetail.updatedAt ? dayjs(brokerDetail.updatedAt).format('YYYY-MM-DD HH:mm:ss') : '-'}
-                        </Descriptions.Item>
-                    </Descriptions>
-                )}
+                <Spin spinning={detailLoading}>
+                    {brokerDetail && (
+                        <Descriptions column={2} bordered size="small">
+                            <Descriptions.Item label="名称" span={2}>{brokerDetail.name}</Descriptions.Item>
+                            <Descriptions.Item label="分组" span={2}>
+                                {brokerDetail.group ? <Tag color="blue">{brokerDetail.group}</Tag> : '-'}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="主机地址">{brokerDetail.host}</Descriptions.Item>
+                            <Descriptions.Item label="端口">
+                                <Tag color="blue">{brokerDetail.port}</Tag>
+                            </Descriptions.Item>
+                            <Descriptions.Item label="是否启用">
+                                <Tag color={brokerDetail.enabled ? 'green' : 'red'}>
+                                    {brokerDetail.enabled ? '启用' : '禁用'}
+                                </Tag>
+                            </Descriptions.Item>
+                            <Descriptions.Item label="备注" span={2}>{brokerDetail.description || '-'}</Descriptions.Item>
+                            <Descriptions.Item label="最后检查">
+                                {brokerDetail.lastHealthCheck
+                                    ? dayjs(brokerDetail.lastHealthCheck).format('YYYY-MM-DD HH:mm:ss')
+                                    : '-'}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="创建时间">
+                                {brokerDetail.createdAt
+                                    ? dayjs(brokerDetail.createdAt).format('YYYY-MM-DD HH:mm:ss')
+                                    : '-'}
+                            </Descriptions.Item>
+                        </Descriptions>
+                    )}
+                </Spin>
             </Modal>
-
         </div>
     );
 };

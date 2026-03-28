@@ -42,6 +42,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -106,10 +107,9 @@ public class TaskPubSubWorker extends BaseTaskWorker {
     public void startTask() {
         taskStage.set(TaskStage.START);
         eventReport();
-//        统计报告
         this.vertx.eventBus()
                 .localConsumer(TaskUtils.getClientTaskAddr(taskConfig.getTaskId()), this::handleClientTaskEvent);
-        vertx.executeBlocking(() -> {
+        vertx.executeBlocking((Callable<Void>) () -> {
 
             // 计算 pub 和 sub的client 数量；
             if (taskConfig.isPubOnly()) {
@@ -249,9 +249,9 @@ public class TaskPubSubWorker extends BaseTaskWorker {
             topicIndex = taskConfig.getFanOut() > 1 ?
                     (clientIndex + taskConfig.getFanOut() - 1) / taskConfig.getFanOut() : clientIndex;
             String topic = buildClientTopic(topicIndex, true, taskConfig.isWildcard());
-            subTaskConfig.setTopicFilters(new HashSet<TopicFilter>() {{
-                add(new TopicFilter(topic, taskConfig.getQos()));
-            }});
+            Set<TopicFilter> topicFilters = new HashSet<>();
+            topicFilters.add(new TopicFilter(topic, taskConfig.getQos()));
+            subTaskConfig.setTopicFilters(topicFilters);
             ConfigHelper.fillCommonTaskConfig(subTaskConfig, taskConfig);
             SubClientTask subClientTask =
                     new SubClientTask(vertx, subTaskConfig, mqttClientConfig, subStatsManager, taskStage);

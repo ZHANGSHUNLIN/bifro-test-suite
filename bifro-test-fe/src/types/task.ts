@@ -47,7 +47,7 @@ export interface BrokerItem {
     name?: string;
     description?: string;
     enabled?: boolean;
-    maxConnections?: number;
+    group?: string; // 分组/项目名称
 }
 
 // 任务请求对象
@@ -55,6 +55,7 @@ export interface TaskRequest {
     taskName?: string;
     taskType: TaskType;
     protocol?: string;
+    group?: string; // 分组/项目名称
     autoMultiAddress?: boolean;
     localAddresses?: string[];
     brokers: BrokerItem[];
@@ -78,7 +79,7 @@ export interface TaskRequest {
     topic?: string;
     qos?: MqttQoS;
     fixedTopic?: boolean;
-    isWildcard?: boolean;
+    wildcard?: boolean;
     messageSize?: number;
     pubIntervalInMs?: number;
     stressDurationInSec?: number;
@@ -86,7 +87,7 @@ export interface TaskRequest {
     delayAfterReadyInSec?: number;
     skipStatsPeriod?: number;
     retain?: boolean;
-    isMqtt5?: boolean;
+    mqtt5?: boolean;
     authType?: string;
     isEmptyClientId?: boolean;
     expiryIntervalInSec?: number;
@@ -106,6 +107,7 @@ export interface TaskConfig {
     taskId?: string;
     taskType: TaskType;
     protocol: string;
+    group?: string; // 分组/项目名称
     brokers: BrokerItem[];
     port: number;
     customSpecificParamList?: CustomSpecificParamRequest[];
@@ -145,6 +147,7 @@ export interface TaskConfig {
     connectRate?: number;
     disconnectRate?: number;
     tagPeriodIntervalInSec?: number;
+    enableAutoMultiAddress?: boolean;
     willConfig?: WillConfig;
     lifecycleActions?: string[];
     lifecycleActionsConfig?: Record<string, any>;
@@ -170,6 +173,7 @@ export interface TaskDetailResponse {
     message?: string;
     taskId?: string;
     taskName?: string;
+    group?: string; // 分组/项目名称
     mainTask?: TaskConfig;
     brokers: BrokerItem[];
     subTasks?: Record<string, TaskConfig>;
@@ -195,6 +199,7 @@ export interface TaskListItem {
     taskName?: string;
     taskType: TaskType;
     protocol: string;
+    group?: string; // 分组/项目名称
     brokers: BrokerItem[];
     totalClientCount: number;
     status: string;

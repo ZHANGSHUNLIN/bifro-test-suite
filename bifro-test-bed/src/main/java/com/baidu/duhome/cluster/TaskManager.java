@@ -3,9 +3,9 @@ package com.baidu.duhome.cluster;
 
 import com.baidu.duhome.bean.ApiResponse;
 import com.baidu.duhome.bean.TaskDetailResponse;
+import com.baidu.duhome.bean.dto.BrokerEntry;
 import com.baidu.duhome.bean.dto.NodeTaskAllocationRequest;
 import com.baidu.duhome.bean.vo.NodeTaskAllocationVO;
-import com.baidu.duhome.config.Constants;
 import com.baidu.duhome.database.pojo.NodeTask;
 import com.baidu.duhome.database.pojo.TaskInfoMetadata;
 import com.baidu.duhome.database.pojo.MqttBroker;
@@ -13,6 +13,7 @@ import com.baidu.duhome.bean.dto.TaskRequest;
 import com.baidu.duhome.bean.TaskStatistics;
 import com.baidu.duhome.database.repository.NodeTaskRepository;
 import com.baidu.duhome.database.repository.TaskInfoMetadataRepository;
+import com.baidu.duhome.database.repository.MqttBrokerRepository;
 import com.baidu.duhome.database.service.TaskInfoMetadataService;
 import com.baidu.duhome.exception.ApiException;
 import com.baidu.iot.test.suite.TaskStage;
@@ -31,9 +32,11 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 /**
  * 所有的任务均爆粗你在vertx的分布式数据结构中存储和通信。暂无引入持久化机制。
@@ -59,238 +62,222 @@ public class TaskManager {
     @Resource
     private NodeTaskRepository nodeTaskRepository;
 
-    public TaskInfoMetadata addTask(TaskRequest taskRequest) {
+    @Resource
+    private MqttBrokerRepository mqttBrokerRepository;
+
+    public Mono<TaskInfoMetadata> addTask(TaskRequest taskRequest) {
         if (taskRequest == null) {
-            throw new ApiException("Task request cannot be null");
+            return Mono.error(new ApiException("Task request cannot be null"));
         }
 
-        List<MqttBroker> brokers = taskRequest.getBrokers().stream().map(r -> MqttBroker.builder()
-                .brokerId(r.getBrokerId())
-                .host(r.getHost())
-                .port(r.getPort())
-                .build()).toList();
+        List<String> brokerIds = taskRequest.getBrokers().stream()
+                .map(BrokerEntry::getBrokerId)
+                .collect(Collectors.toList());
 
-        TaskConfig mainTaskConfig = taskRequest.toTaskConfig();
-        String nextTaskId = RandomStringUtils.secure().next(8, true, true);
-        mainTaskConfig.setTaskId(nextTaskId);
-        TaskInfoMetadata taskInfoMetadata = TaskInfoMetadata.builder()
-                .taskName(taskRequest.getTaskName())
-                .taskConfig(mainTaskConfig)
-                .createTime(LocalDateTime.now())
-                .taskId(nextTaskId)
-                .brokers(brokers)
-                .build();
-        log.info("add task taskInfoMetadata: {}", taskInfoMetadata);
-        return taskInfoMetadataService.insertTaskInfoMetadata(taskInfoMetadata);
-        // todo 不要删除，需要根据配置切换，使用内存和mongo可选。
-//        return clusterDataManager.addTask(taskInfoMetadata);
+        // 校验 Broker 是否属于同一分组
+        return validateBrokersInSameGroup(brokerIds)
+                .flatMap(isValid -> {
+                    if (!isValid) {
+                        return Mono.error(new ApiException("选中的 Broker 必须属于同一分组"));
+                    }
+
+                    List<MqttBroker> brokers = taskRequest.getBrokers().stream()
+                            .map(r -> MqttBroker.builder()
+                                    .brokerId(r.getBrokerId())
+                                    .host(r.getHost())
+                                    .port(r.getPort())
+                                    .build())
+                            .toList();
+
+                    TaskConfig mainTaskConfig = taskRequest.toTaskConfig();
+                    String nextTaskId = RandomStringUtils.secure().next(8, true, true);
+                    mainTaskConfig.setTaskId(nextTaskId);
+                    mainTaskConfig.setGroup(taskRequest.getGroup());
+                    TaskInfoMetadata taskInfoMetadata = TaskInfoMetadata.builder()
+                            .taskName(taskRequest.getTaskName())
+                            .taskConfig(mainTaskConfig)
+                            .createTime(LocalDateTime.now())
+                            .taskId(nextTaskId)
+                            .brokers(brokers)
+                            .group(taskRequest.getGroup())
+                            .build();
+                    log.info("add task taskInfoMetadata: {}", taskInfoMetadata);
+                    return taskInfoMetadataService.insertTaskInfoMetadata(taskInfoMetadata);
+                });
     }
 
 
-    public ApiResponse<TaskConfig> assignTask(String id, NodeTaskAllocationRequest nodeTaskAllocationRequest) {
+    public Mono<ApiResponse<TaskConfig>> assignTask(String id, NodeTaskAllocationRequest nodeTaskAllocationRequest) {
+        return taskInfoMetadataRepository.findById(id)
+                .flatMap(taskInfoMetadata -> {
+                    TaskConfig taskConfig = taskInfoMetadata.getTaskConfig();
+                    TaskStage currentStage = taskConfig.getTaskWorkStage();
 
-        Optional<TaskInfoMetadata> metadata = taskInfoMetadataRepository.findById(id);
-        if (metadata.isPresent()) {
-            TaskInfoMetadata taskInfoMetadata = metadata.get();
-            TaskConfig taskConfig = taskInfoMetadata.getTaskConfig();
-            clusterDataManager.assignCheck(id,taskConfig,nodeTaskAllocationRequest);
-            taskConfig.setTaskWorkStage(TaskStage.ASSIGNED);
-            taskInfoMetadataRepository.updateTaskConfigById(id, taskConfig);
-            return ApiResponse.success(taskConfig);
-        } else {
-            return ApiResponse.error("任务不存在");
-        }
+                    if (currentStage == TaskStage.ONGOING || currentStage == TaskStage.START
+                            || currentStage == TaskStage.COLLECTING || currentStage == TaskStage.SHUTDOWN_ING) {
+                        return Mono.just(ApiResponse.<TaskConfig>error("当前状态不允许分配任务: " + currentStage));
+                    }
 
-//        return clusterDataManager.assignTask(taskId).thenApply(r -> {
-//            clusterDataManager.upgradeMainTaskStage(taskId, TaskStage.ASSIGNED);
-//            return r;
-//        });
+                    return Mono.fromFuture(clusterDataManager.assignCheck(id, taskConfig, nodeTaskAllocationRequest))
+                            .then(Mono.defer(() -> {
+                                taskConfig.setTaskWorkStage(TaskStage.ASSIGNED);
+                                return taskInfoMetadataRepository.updateTaskConfigById(id, taskConfig);
+                            }))
+                            .thenReturn(ApiResponse.success(taskConfig));
+                })
+                .switchIfEmpty(Mono.just(ApiResponse.error("任务不存在")));
     }
 
-    public ApiResponse<NodeTaskAllocationVO> calculateNodeTaskAllocation(String id) {
-        Optional<TaskInfoMetadata> metadata = taskInfoMetadataRepository.findById(id);
-        if (metadata.isPresent()) {
-            TaskInfoMetadata taskInfoMetadata = metadata.get();
-            TaskConfig taskConfig = taskInfoMetadata.getTaskConfig();
-            return ApiResponse.success(clusterDataManager.calcuTasksToNodes(taskConfig));
-        } else {
-            return ApiResponse.error("任务不存在");
-        }
+    public Mono<ApiResponse<NodeTaskAllocationVO>> calculateNodeTaskAllocation(String id) {
+        return taskInfoMetadataRepository.findById(id)
+                .map(taskInfoMetadata -> {
+                    TaskConfig taskConfig = taskInfoMetadata.getTaskConfig();
+                    return ApiResponse.success(clusterDataManager.calcuTasksToNodes(taskConfig));
+                })
+                .switchIfEmpty(Mono.just(ApiResponse.error("任务不存在")));
     }
 
 
-    public TaskInfoMetadata modifyTask(String taskId, TaskRequest taskRequest) {
+    public Mono<TaskInfoMetadata> modifyTask(String taskId, TaskRequest taskRequest) {
         if (taskRequest == null) {
-            throw new ApiException("Task request cannot be null");
+            return Mono.error(new ApiException("Task request cannot be null"));
         }
 
         if (taskId == null) {
-            throw new ApiException("Task id cannot be null");
+            return Mono.error(new ApiException("Task id cannot be null"));
         }
 
-        List<MqttBroker> brokers = taskRequest.getBrokers().stream().map(r -> MqttBroker.builder()
-                .brokerId(r.getBrokerId())
-                .host(r.getHost())
-                .port(r.getPort())
-                .build()).toList();
+        List<String> brokerIds = taskRequest.getBrokers().stream()
+                .map(BrokerEntry::getBrokerId)
+                .collect(Collectors.toList());
 
-        TaskConfig mainTaskConfig = taskRequest.toTaskConfig();
-        mainTaskConfig.setTaskId(taskId);
-        TaskInfoMetadata taskInfoMetadata = TaskInfoMetadata.builder()
-                .taskConfig(mainTaskConfig)
-                .brokers(brokers)
-                .build();
-        log.info("modify task: {}", taskInfoMetadata);
+        // 校验 Broker 是否属于同一分组
+        return validateBrokersInSameGroup(brokerIds)
+                .flatMap(isValid -> {
+                    if (!isValid) {
+                        return Mono.error(new ApiException("选中的 Broker 必须属于同一分组"));
+                    }
 
-        return taskInfoMetadataRepository.save(taskInfoMetadata);
+                    return taskInfoMetadataRepository.findById(taskId)
+                            .flatMap(existingMetadata -> {
+                                List<MqttBroker> brokers = taskRequest.getBrokers().stream()
+                                        .map(r -> MqttBroker.builder()
+                                                .brokerId(r.getBrokerId())
+                                                .host(r.getHost())
+                                                .port(r.getPort())
+                                                .build())
+                                        .toList();
 
+                                TaskConfig mainTaskConfig = taskRequest.toTaskConfig();
+                                mainTaskConfig.setTaskId(taskId);
 
-//        return clusterDataManager.replaceTask(taskId, taskInfoMetadata);
+                                // 更新现有记录的字段
+                                existingMetadata.setTaskConfig(mainTaskConfig);
+                                existingMetadata.setBrokers(brokers);
+                                existingMetadata.setTaskName(taskRequest.getTaskName());
+                                existingMetadata.setGroup(taskRequest.getGroup());
+
+                                log.info("modify task: {}", existingMetadata);
+
+                                return taskInfoMetadataRepository.save(existingMetadata);
+                            })
+                            .switchIfEmpty(Mono.error(new ApiException("Task not found with id: " + taskId)));
+                });
     }
 
 
-    public ApiResponse<TaskDetailResponse> delTask(String taskId) {
-        Optional<TaskInfoMetadata> taskInfoMetadata = taskInfoMetadataRepository.findById(taskId);
-        if (taskInfoMetadata.isPresent()) {
-            TaskConfig taskConfig = taskInfoMetadata.map(TaskInfoMetadata::getTaskConfig).orElseThrow();
-            TaskStage taskWorkStage = taskConfig.getTaskWorkStage();
-            if (!Constants.CAN_NOT_DEL_STATE.contains(taskWorkStage)) {
-                return ApiResponse.error("任务已开始无法删除");
-            }
-            taskInfoMetadataRepository.deleteById(taskId);
-            nodeTaskRepository.deleteByTaskId(taskId);
-            return ApiResponse.success();
-        } else {
-            return ApiResponse.error("任务不存在");
-        }
-//        return clusterDataManager.getMainTask(taskId)
-//                .thenApply(r -> {
-//                    if (r.isEmpty()) {
-//                        return ResponseEntity.ok(TaskDetailResponse.error("未找到该任务"));
-//                    }
-//
-//                    TaskConfig taskConfig = r.map(TaskInfoMetadata::getTaskConfig).orElseThrow();
-//                    TaskStage taskWorkStage = taskConfig.getTaskWorkStage();
-//                    if (!Objects.equals(taskWorkStage, TaskStage.INIT) && !Objects.equals(taskWorkStage, TaskStage.SHUTDOWN)) {
-//                        return ResponseEntity.ok(TaskDetailResponse.error("任务已开始无法删除"));
-//                    }
-//                    vertx.eventBus().publish(Constants.DEL_CLUSTER_TASK_ADDR, taskId);
-//                    return ResponseEntity.ok(TaskDetailResponse.error("del task success"));
-//                });
+    public Mono<ApiResponse<TaskDetailResponse>> delTask(String taskId) {
+        return taskInfoMetadataRepository.findById(taskId)
+                .flatMap(taskInfoMetadata -> {
+                    TaskConfig taskConfig = taskInfoMetadata.getTaskConfig();
+                    TaskStage taskWorkStage = taskConfig.getTaskWorkStage();
+                    if (taskWorkStage == TaskStage.ONGOING || taskWorkStage == TaskStage.START || taskWorkStage == TaskStage.COLLECTING) {
+                        return Mono.just(ApiResponse.<TaskDetailResponse>error("任务已开始无法删除"));
+                    }
+                    return Mono.zip(
+                            taskInfoMetadataRepository.deleteById(taskId),
+                            nodeTaskRepository.deleteByTaskId(taskId)
+                    ).thenReturn(ApiResponse.<TaskDetailResponse>success());
+                })
+                .switchIfEmpty(Mono.just(ApiResponse.<TaskDetailResponse>error("任务不存在")));
     }
 
-    public ApiResponse<String> batchDelTask(List<String> taskIds) {
+    public Mono<ApiResponse<String>> batchDelTask(List<String> taskIds) {
         if (taskIds == null || taskIds.isEmpty()) {
-            return ApiResponse.error("任务ID列表不能为空");
+            return Mono.just(ApiResponse.error("任务ID列表不能为空"));
         }
+
         List<String> deletedIds = new ArrayList<>();
         List<String> failedIds = new ArrayList<>();
-        // todo AI生成需改为批量查询和删除
-        for (String taskId : taskIds) {
-            Optional<TaskInfoMetadata> taskInfoMetadata = taskInfoMetadataRepository.findById(taskId);
-            if (taskInfoMetadata.isPresent()) {
-                TaskConfig taskConfig = taskInfoMetadata.map(TaskInfoMetadata::getTaskConfig).orElseThrow();
-                TaskStage taskWorkStage = taskConfig.getTaskWorkStage();
-                if (!Constants.CAN_NOT_DEL_STATE.contains(taskWorkStage)) {
-                    failedIds.add(taskId + "(任务已开始无法删除)");
-                    continue;
-                }
-                taskInfoMetadataRepository.deleteById(taskId);
-                nodeTaskRepository.deleteByTaskId(taskId);
-                deletedIds.add(taskId);
-            } else {
-                failedIds.add(taskId + "(任务不存在)");
-            }
-        }
-        if (failedIds.isEmpty()) {
-            return ApiResponse.success("成功删除" + deletedIds.size() + "个任务");
-        } else {
-            return ApiResponse.success("成功删除" + deletedIds.size() + "个任务，失败" + failedIds.size() + "个: " + String.join(", ", failedIds));
-        }
+
+        return Flux.fromIterable(taskIds)
+                .flatMap(taskId -> taskInfoMetadataRepository.findById(taskId)
+                        .flatMap(taskInfoMetadata -> {
+                            TaskConfig taskConfig = taskInfoMetadata.getTaskConfig();
+                            TaskStage taskWorkStage = taskConfig.getTaskWorkStage();
+                            if (taskWorkStage == TaskStage.ONGOING || taskWorkStage == TaskStage.START || taskWorkStage == TaskStage.COLLECTING) {
+                                failedIds.add(taskId + "(任务已开始无法删除)");
+                                return Mono.empty();
+                            }
+                            return Mono.zip(
+                                    taskInfoMetadataRepository.deleteById(taskId),
+                                    nodeTaskRepository.deleteByTaskId(taskId)
+                            ).doOnSuccess(v -> deletedIds.add(taskId));
+                        })
+                        .switchIfEmpty(Mono.fromRunnable(() -> failedIds.add(taskId + "(任务不存在)"))))
+                .then(Mono.fromSupplier(() -> {
+                    if (failedIds.isEmpty()) {
+                        return ApiResponse.success("成功删除" + deletedIds.size() + "个任务");
+                    } else {
+                        return ApiResponse.success("成功删除" + deletedIds.size() + "个任务，失败" + failedIds.size() + "个: " + String.join(", ", failedIds));
+                    }
+                }));
     }
 
 
-    public Page<TaskInfoMetadata> getAllTask(Pageable pageable) {
+    public Mono<Page<TaskInfoMetadata>> getAllTask(Pageable pageable) {
         return taskInfoMetadataService.findAll(pageable);
-        // todo 不要删除，需要根据配置切换，使用内存和mongo可选。
-//        return clusterDataManager.getAllTask();
     }
 
     /**
      * 根据任务名称和任务类型分页查询
      */
-    public Page<TaskInfoMetadata> getAllTask(String taskName, String taskType, Pageable pageable) {
+    public Mono<Page<TaskInfoMetadata>> getAllTask(String taskName, String taskType, Pageable pageable) {
         return taskInfoMetadataService.findByFilters(taskName, taskType, pageable);
     }
 
-    public ApiResponse<TaskDetailResponse> getTaskDetails(String taskId) {
+    public Mono<ApiResponse<TaskDetailResponse>> getTaskDetails(String taskId) {
+        return taskInfoMetadataRepository.findById(taskId)
+                .flatMap(taskInfoMetadata -> {
+                    TaskConfig mainTask = taskInfoMetadata.getTaskConfig();
 
-        Optional<TaskInfoMetadata> taskInfoMetadataOpt = taskInfoMetadataRepository.findById(taskId);
-        if (taskInfoMetadataOpt.isPresent()) {
-            TaskInfoMetadata taskInfoMetadata = taskInfoMetadataOpt.get();
-            TaskConfig mainTask = taskInfoMetadata.getTaskConfig();
+                    TaskDetailResponse response = new TaskDetailResponse();
+                    response.setSuccess(true);
+                    response.setTaskId(taskId);
+                    // todo 当前 hard code
+                    String topic = mainTask.getTopic();
+                    if (!StringUtil.isNullOrEmpty(topic)) {
+                        mainTask.setTopic(String.format("%s/%s/%s/{num}", topic, taskInfoMetadata.getTaskId(), "xxxx"));
+                    }
+                    response.setMainTask(mainTask);
+                    response.setBrokers(taskInfoMetadata.getBrokers());
+                    response.setTaskName(taskInfoMetadata.getTaskName());
+                    response.setGroup(taskInfoMetadata.getGroup());
 
-            TaskDetailResponse response = new TaskDetailResponse();
-            response.setSuccess(true);
-            response.setTaskId(taskId);
-            // todo 当前 hard code
-            String topic = mainTask.getTopic();
-            if (!StringUtil.isNullOrEmpty(topic)) {
-                mainTask.setTopic(String.format("%s/%s/%s/{num}", topic, taskInfoMetadata.getTaskId(), "xxxx"));
-            }
-            response.setMainTask(mainTask);
-            response.setBrokers(taskInfoMetadata.getBrokers());
-            response.setTaskName(taskInfoMetadata.getTaskName());
-            List<NodeTask> nodeTasks = nodeTaskRepository.searchAllByTaskId(taskInfoMetadata.getTaskId());
-            Map<String, TaskConfig> subTasks = nodeTasks.stream()
-                    .collect(Collectors.toMap(
-                            NodeTask::getNodeId,    // 用来提取 map 的 key
-                            NodeTask::getTaskConfig // 用来提取 map 的 value
-                    ));
-
-            response.setSubTasks(subTasks);
-
-            // 计算统计信息
-            calculateStatistics(response);
-
-            return ApiResponse.success(response);
-
-        } else {
-            return ApiResponse.error("任务不存在");
-        }
-
-//        return clusterDataManager.getMainTask(taskId)
-//                .thenCombine(clusterDataManager.getSubTasks(taskId),
-//                        (taskInfoMetadataOpt, subTasks) -> {
-//                            if (taskInfoMetadataOpt.isEmpty()) {
-//                                return TaskDetailResponse.error("任务不存在: " + taskId);
-//                            }
-//                            TaskInfoMetadata taskInfoMetadata = taskInfoMetadataOpt.get();
-//
-//                            TaskConfig mainTask = taskInfoMetadata.getTaskConfig();
-//                            // 构建响应
-//                            TaskDetailResponse response = new TaskDetailResponse();
-//                            response.setSuccess(true);
-//                            response.setTaskId(taskId);
-//                            // todo 当前 hard code
-//                            String topic = mainTask.getTopic();
-//                            if (!StringUtil.isNullOrEmpty(topic)) {
-//                                mainTask.setTopic(String.format("%s/%s/%s/{num}", topic, taskId, "xxxx"));
-//                            }
-//                            response.setMainTask(mainTask);
-//                            response.setBrokers(taskInfoMetadata.getBrokers());
-//                            response.setSubTasks(subTasks);
-//
-//                            // 计算统计信息
-//                            calculateStatistics(response);
-//
-//                            return response;
-//                        })
-//                .orTimeout(5, TimeUnit.SECONDS)
-//                .exceptionally(ex -> {
-//                    log.error("查询任务详情超时或出错: {}", taskId, ex);
-//                    return TaskDetailResponse.error("查询任务详情失败: " + ex.getMessage());
-//                });
+                    return nodeTaskRepository.findAllByTaskId(taskId).collectList()
+                            .map(nodeTasks -> {
+                                Map<String, TaskConfig> subTasks = nodeTasks.stream()
+                                        .collect(Collectors.toMap(
+                                                NodeTask::getNodeId,
+                                                NodeTask::getTaskConfig
+                                        ));
+                                response.setSubTasks(subTasks);
+                                // 计算统计信息
+                                calculateStatistics(response);
+                                return ApiResponse.success(response);
+                            });
+                })
+                .switchIfEmpty(Mono.just(ApiResponse.<TaskDetailResponse>error("任务不存在")));
     }
 
     /**
@@ -322,6 +309,40 @@ public class TaskManager {
         stats.setAverageClientsPerNode(activeNodes.isEmpty() ? 0 : totalAssignedClients / activeNodes.size());
 
         response.setStatistics(stats);
+    }
+
+    /**
+     * 校验选中的 Broker 是否属于同一分组
+     * 规则：
+     * 1. 有分组的 Broker 必须属于同一分组
+     * 2. 所有选中的 Broker 必须要么全有分组，要么全没有分组
+     * @param brokerIds Broker ID 列表
+     * @return 校验通过返回 true，否则返回 false
+     */
+    private Mono<Boolean> validateBrokersInSameGroup(List<String> brokerIds) {
+        if (brokerIds == null || brokerIds.isEmpty()) {
+            return Mono.just(true);
+        }
+        return mqttBrokerRepository.findAllById(brokerIds)
+                .collectList()
+                .map(brokers -> {
+                    String commonGroup = null;
+                    boolean hasGroup = false;
+                    for (MqttBroker broker : brokers) {
+                        String group = broker.getGroup();
+                        if (group != null && !group.isEmpty()) {
+                            if (!hasGroup) {
+                                commonGroup = group;
+                                hasGroup = true;
+                            } else if (!commonGroup.equals(group)) {
+                                return false; // 分组不一致
+                            }
+                        } else if (hasGroup) {
+                            return false; // 不能混用有分组和无分组
+                        }
+                    }
+                    return true;
+                });
     }
 
 }

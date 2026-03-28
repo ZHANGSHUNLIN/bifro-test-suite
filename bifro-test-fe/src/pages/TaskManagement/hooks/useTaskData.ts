@@ -10,18 +10,19 @@ export const useTaskData = () => {
   const [error, setError] = useState<Error | null>(null);
 
   // 加载任务列表
-  const loadTasks = useCallback(async (taskName?: string, taskType?: string) => {
+  const loadTasks = useCallback(async (taskName?: string, taskType?: string, group?: string) => {
     setIsLoading(true);
     setError(null);
     try {
       // 后端返回 ApiResponse<PageInfo<TaskListVO>>，request.ts 已提取 data 部分
-      const pageInfo = await taskApi.getAllTasks(taskName, taskType);
+      const pageInfo = await taskApi.getAllTasks(taskName, taskType, group);
       const taskListItems: TaskListItem[] = pageInfo.content.map((config: any) => ({
         id: config.id || '',
         taskId: config.taskId || '',
         taskName: config.taskName,
         taskType: config.taskType,
         protocol: config.protocol,
+        group: config.group,
         brokers: config.brokers || config.hosts, // 兼容旧数据
         totalClientCount: config.totalClientCount || 0,
         status: config.taskWorkStage,

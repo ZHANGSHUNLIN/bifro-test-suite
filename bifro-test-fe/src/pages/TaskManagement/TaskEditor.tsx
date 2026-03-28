@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Form, Row, Col, Select, Card, Switch, Input, InputNumber, Button, Space } from 'antd';
-import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import { Modal, Form, Row, Col, Select, Card, Switch, Input, InputNumber, Button, Space, Tag, message } from 'antd';
+import { MinusCircleOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { useTaskData } from './hooks';
 import { formFieldGroups } from './form-schema';
 import { TaskTypeValues, MqttQoSValues } from '../../types/task';
 import type { TaskListItem, TaskRequest } from '../../types/task';
+import taskGroupApi from '../../services/taskGroupApi';
+import type { TaskGroup } from '../../types/taskGroup';
+import groupApi from '../../services/groupApi';
+import type { MqttGroup } from '../../types/mqttGroup';
 
 const { Option } = Select;
 
@@ -21,6 +26,7 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
   onCancel,
   onOk
 }) => {
+  const navigate = useNavigate();
   const [form] = Form.useForm();
   const [currentTaskType, setCurrentTaskType] = useState<string>(TaskTypeValues.CONN);
   const [willEnabled, setWillEnabled] = useState<boolean>(false);
@@ -28,20 +34,64 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
   const { loadTaskDetail, loadBrokers } = useTaskData();
   const [brokers, setBrokers] = useState<any[]>([]);
   const [brokerLoading, setBrokerLoading] = useState(false);
+  const [taskGroupSelectOptions, setTaskGroupSelectOptions] = useState<{ label: string; value: string }[]>([]);
+  const [brokerGroupSelectOptions, setBrokerGroupSelectOptions] = useState<{ label: string; value: string }[]>([]);
+  const [selectedBrokerGroup, setSelectedBrokerGroup] = useState<string>('');
+
+  // 加载任务分组选项
+  const loadTaskGroupSelectOptions = async () => {
+    try {
+      const allGroups = await taskGroupApi.getAllGroupsForSelect();
+      const options = allGroups.map((g: TaskGroup) => ({
+        label: g.name,
+        value: g.name
+      }));
+      setTaskGroupSelectOptions([{ label: '所有分组', value: '' }, ...options]);
+    } catch (error) {
+      console.error('加载任务分组选项失败:', error);
+      message.error('加载任务分组选项失败');
+    }
+  };
+
+  // 加载broker分组选项
+  const loadBrokerGroupSelectOptions = async () => {
+    try {
+      const allGroups = await groupApi.getAllGroupsForSelect();
+      const options = allGroups.map((g: MqttGroup) => ({
+        label: g.name,
+        value: g.name
+      }));
+      setBrokerGroupSelectOptions([{ label: '所有分组', value: '' }, ...options]);
+    } catch (error) {
+      console.error('加载broker分组选项失败:', error);
+      message.error('加载broker分组选项失败');
+    }
+  };
 
   // 初始化表单
   useEffect(() => {
     if (visible) {
+      loadTaskGroupSelectOptions();
+      loadBrokerGroupSelectOptions();
       if (editingTask) {
         loadTaskData(editingTask.id);
+        loadBrokerList();
       } else {
         form.resetFields();
         setCurrentTaskType(TaskTypeValues.CONN);
         setWillEnabled(false);
+        setSelectedBrokerGroup('');
         loadBrokerList();
       }
     }
   }, [visible, editingTask]);
+
+  // 当分组改变时，重新加载 broker 列表
+  useEffect(() => {
+    if (visible) {
+      loadBrokerList();
+    }
+  }, [selectedBrokerGroup, visible]);
 
   // 加载任务详情数据
   const loadTaskData = async (id: string) => {
@@ -51,12 +101,24 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
         form.setFieldsValue({
           ...detail.mainTask,
           taskName: detail.taskName,
+          group: detail.group || '', // 任务分组回显
           brokers: detail.brokers?.map((broker: { host: string; port: number }) => `${broker.host}:${broker.port}`) || [],
-          willConfig: detail.mainTask.willConfig || { willFlag: false }
+          willConfig: detail.mainTask.willConfig || { willFlag: false },
+          // 字段名映射：后端字段名 -> 前端字段名
+          autoMultiAddress: detail.mainTask.enableAutoMultiAddress || false,
+          wildcard: detail.mainTask.wildcard || false,
+          mqtt5: detail.mainTask.mqtt5 || false,
+          emptyClientId: detail.mainTask.emptyClientId || false
         });
         setCurrentTaskType(detail.mainTask.taskType);
         setWillEnabled(detail.mainTask.willConfig?.willFlag || false);
         setAuthType(detail.mainTask.authType || 'normal');
+
+        // broker 分组回显：获取任务中的 brokers 对应的分组
+        if (detail.brokers && detail.brokers.length > 0) {
+          const brokerGroup = detail.brokers[0]?.group || '';
+          setSelectedBrokerGroup(brokerGroup);
+        }
       }
     } catch (error) {
       console.error('Failed to load task detail:', error);
@@ -68,7 +130,11 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
     setBrokerLoading(true);
     try {
       const brokerData = await loadBrokers();
-      setBrokers(brokerData);
+      // 根据选中的分组过滤 broker
+      const filtered = selectedBrokerGroup
+        ? brokerData.filter((broker: any) => broker.group === selectedBrokerGroup)
+        : brokerData;
+      setBrokers(filtered);
     } catch (error) {
       console.error('Failed to load brokers:', error);
     } finally {
@@ -92,11 +158,12 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
       const taskRequest: TaskRequest = {
         taskName: values.taskName,
         taskType: values.taskType,
+        group: values.group || '',
         autoMultiAddress: values.autoMultiAddress || false,
         brokers: brokerItems,
         cleanSession: values.cleanSession !== false,
         totalClientCount: values.totalClientCount || 100,
-        connectRate: values.connectRate || 1,
+        connectRate: values.connectRate || 100,
         disconnectRate: values.disconnectRate || 2000,
         fanOut: values.fanOut || 1,
         fanIn: values.fanIn || 1,
@@ -131,7 +198,8 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
         reconnectIntervalInMs: values.reconnectIntervalInMs || 5000,
         connectTimeoutInMs: values.connectTimeoutInMs || 10000,
         maxInflightQueue: values.maxInflightQueue || 200,
-        isWildcard: values.wildcard || false,
+        wildcard: values.wildcard || false,
+        mqtt5: values.mqtt5 || false,
         isEmptyClientId: values.emptyClientId || false
       };
 
@@ -147,6 +215,7 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
     form.resetFields();
     setCurrentTaskType(TaskTypeValues.CONN);
     setWillEnabled(false);
+    setSelectedBrokerGroup('');
     onCancel();
   };
 
@@ -241,9 +310,69 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
           }
           return field;
         }))}
+        {/* 任务分组 */}
+        <Form.Item
+          name="group"
+          label="任务分组"
+          initialValue={editingTask?.group || ''}
+        >
+          <Select
+            placeholder="选择任务分组（可选）"
+            allowClear
+            options={taskGroupSelectOptions}
+            dropdownRender={(menu) => (
+              <>
+                {menu}
+                <Button
+                  type="link"
+                  icon={<SettingOutlined />}
+                  style={{ fontSize: 12, marginLeft: 8 }}
+                  onClick={() => navigate('/task-groups')}
+                >
+                  管理任务分组
+                </Button>
+              </>
+            )}
+          />
+        </Form.Item>
 
         {/* Broker选择 */}
         <Card title="服务器配置" size="small" style={{ marginBottom: 16 }}>
+          <Row gutter={16} style={{ marginBottom: 16 }}>
+            <Col span={12}>
+              <Form.Item label="Broker分组（用于筛选）">
+                <Select
+                  placeholder="选择Broker分组（可选）"
+                  value={selectedBrokerGroup}
+                  onChange={(value) => {
+                    setSelectedBrokerGroup(value);
+                    // 清空已选择的 broker，因为分组改变了
+                    form.setFieldsValue({ brokers: [] });
+                  }}
+                  allowClear
+                  options={brokerGroupSelectOptions}
+                  dropdownRender={(menu) => (
+                    <>
+                      {menu}
+                      <Button
+                        type="link"
+                        icon={<SettingOutlined />}
+                        style={{ fontSize: 12, marginLeft: 8 }}
+                        onClick={() => navigate('/mqtt-groups')}
+                      >
+                        管理Broker分组
+                      </Button>
+                    </>
+                  )}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <span style={{ color: '#888', fontSize: '12px' }}>
+                提示：一个任务只能选择同一分组中的 Broker
+              </span>
+            </Col>
+          </Row>
           <Form.Item
             name="brokers"
             label="选择Broker"
@@ -256,7 +385,14 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
               loading={brokerLoading}
               options={brokers.map(broker => ({
                 value: `${broker.host}:${broker.port}`,
-                label: `${broker.name} (${broker.host}:${broker.port})`
+                label: (
+                  <div>
+                    <span>{broker.name} ({broker.host}:{broker.port})</span>
+                    {broker.group && (
+                      <Tag color="blue" style={{ marginLeft: 8 }}>{broker.group}</Tag>
+                    )}
+                  </div>
+                )
               }))}
             />
           </Form.Item>

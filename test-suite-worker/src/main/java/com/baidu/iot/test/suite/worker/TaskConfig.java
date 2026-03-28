@@ -5,7 +5,6 @@
 package com.baidu.iot.test.suite.worker;
 
 import static com.baidu.iot.test.suite.client.MqttCloudHelper.generateUsername;
-
 import com.baidu.iot.test.suite.TaskStage;
 import com.baidu.iot.test.suite.WillConfig;
 import com.baidu.iot.test.suite.client.MqttCloudHelper;
@@ -13,8 +12,6 @@ import com.baidu.iot.test.suite.configs.MqttClientConfig;
 import com.baidu.iot.test.suite.worker.utils.ConfigHelper;
 import com.google.common.util.concurrent.RateLimiter;
 import io.netty.handler.codec.mqtt.MqttQoS;
-
-import java.io.Serial;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
@@ -22,7 +19,6 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -31,7 +27,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.beanutils.BeanUtils;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
-
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
@@ -45,8 +40,6 @@ import java.util.List;
 @NoArgsConstructor
 @Builder
 public class TaskConfig implements Serializable {
-
-    @Serial
     private static final long serialVersionUID = 1L;
 
     @Builder.Default
@@ -58,7 +51,6 @@ public class TaskConfig implements Serializable {
     private String protocol;
     private List<String> localAddresses = new ArrayList<>();
     private List<TaskBroker> brokers = new ArrayList<>();
-
     private String username;
     private String password;
     private String tenantId;
@@ -68,7 +60,6 @@ public class TaskConfig implements Serializable {
     @Builder.Default
     private int thingIdStartAt = 0;
     private String thingIdPrefix;
-    //    private SSLContext sslContext;
     private boolean cleanSession;
     @Builder.Default
     private int keepAliveInSec = 120;
@@ -120,18 +111,15 @@ public class TaskConfig implements Serializable {
     private int connectRate = 500;
     @Builder.Default
     private int disconnectRate = 500;
-
     @Builder.Default
     private boolean enableAutoMultiAddress = false;
-
+    @Builder.Default
+    private String group = "";
     private String[] lifecycleActions;
-
     @Builder.Default
     private Map<String, Object> lifecycleActionsConfig = new HashMap<>();
-
     @Builder.Default
     private WillConfig willConfig = new WillConfig();
-
     /**
      * 是否在任务发生异常时结束会话（模拟异常断开）
      */
@@ -149,13 +137,6 @@ public class TaskConfig implements Serializable {
     public synchronized RateLimiter getDisConnectRateLimiter() {
         return RateLimiter.create(disconnectRate);
     }
-
-
-    @Deprecated
-    public void enableAutoMultiAddress() {
-        this.enableAutoMultiAddress = true;
-    }
-
 
     public synchronized List<String> loadLocalAddresses() {
         if (this.localAddresses == null || this.localAddresses.isEmpty()) {
@@ -184,7 +165,6 @@ public class TaskConfig implements Serializable {
         return this.localAddresses;
     }
 
-
     public String nextLocalAddress() {
         if (!this.enableAutoMultiAddress) {
             return null;
@@ -195,22 +175,6 @@ public class TaskConfig implements Serializable {
         return localAddresses.get(localAddrIndex++ % localAddresses.size());
     }
 
-    public static TaskConfig newInstance(TaskConfig origin) {
-        TaskConfig newConfig = new TaskConfig();
-        try {
-            BeanUtils.copyProperties(newConfig, origin);
-        } catch (Exception ignored) {
-        }
-        newConfig.taskId = RandomStringUtils.random(8, true, true) + "_" + System.currentTimeMillis();
-        return newConfig;
-    }
-
-    public enum TaskType {
-        CONN,
-        PUBSUB
-    }
-
-
     public MqttClientConfig getMqttClientConfig(int clientIndex, AtomicInteger subscribeCount) {
         MqttClientConfig mqttClientConfig = new MqttClientConfig();
         TaskBroker taskBroker = brokers.get(ThreadLocalRandom.current().nextInt(brokers.size()));
@@ -218,7 +182,6 @@ public class TaskConfig implements Serializable {
         mqttClientConfig.setPort(taskBroker.getPort());
         String clientId = String.format("Conn_%s_%d", UUID.randomUUID(), clientIndex);
         mqttClientConfig.setClientId(clientId);
-
 
         String thingId = "DevOnly";
 
@@ -262,4 +225,18 @@ public class TaskConfig implements Serializable {
         return mqttClientConfig;
     }
 
+    public static TaskConfig newInstance(TaskConfig origin) {
+        TaskConfig newConfig = new TaskConfig();
+        try {
+            BeanUtils.copyProperties(newConfig, origin);
+        } catch (Exception ignored) {
+        }
+        newConfig.taskId = RandomStringUtils.random(8, true, true) + "_" + System.currentTimeMillis();
+        return newConfig;
+    }
+
+    public enum TaskType {
+        CONN,
+        PUBSUB
+    }
 }

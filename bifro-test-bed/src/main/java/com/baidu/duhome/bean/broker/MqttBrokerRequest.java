@@ -16,16 +16,7 @@ public class MqttBrokerRequest {
 
     private String description;
 
+    private String group; // 分组/项目名称
+
     private Boolean enabled;
-
-    private String username;
-    private String password;
-
-    private Boolean sslEnabled = false;
-
-    private Integer keepAliveSeconds = 60;
-
-    private Integer connectionTimeoutSeconds = 30;
-
-    private Integer maxConnections = 100;
 }

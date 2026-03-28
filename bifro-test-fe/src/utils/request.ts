@@ -17,7 +17,7 @@ export const request = async <T>(
 
     // 处理查询参数（非路径参数）
     const searchParams = new URLSearchParams();
-    if (params && customConfig.method === 'GET') {
+    if (params) {
         Object.entries(params).forEach(([key, value]) => {
             if (!url.includes(`:${key}`)) {
                 searchParams.append(key, String(value));

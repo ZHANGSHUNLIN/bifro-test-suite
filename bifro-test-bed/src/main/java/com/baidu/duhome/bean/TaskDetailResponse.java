@@ -16,6 +16,7 @@ public class TaskDetailResponse {
     private String message;
     private String taskId;
     private String taskName;
+    private String group;
     private TaskConfig mainTask;
     List<MqttBroker> brokers;
     private Map<String, TaskConfig> subTasks;

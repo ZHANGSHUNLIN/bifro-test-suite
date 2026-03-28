@@ -5,13 +5,16 @@ import type { TaskListItem, TaskDetailResponse, TaskReport, TaskConfig, PageInfo
 // 任务管理 API
 export const taskApi = {
   // 获取所有任务列表
-  getAllTasks: (taskName?: string, taskType?: string, pageNum: number = 1, pageSize: number = 20) => {
+  getAllTasks: (taskName?: string, taskType?: string, group?: string, pageNum: number = 1, pageSize: number = 20) => {
     const params: Record<string, string | number | boolean> = { pageNum, pageSize };
     if (taskName) {
       params.taskName = taskName;
     }
     if (taskType) {
       params.taskType = taskType;
+    }
+    if (group) {
+      params.group = group;
     }
     return api.get<PageInfo<TaskListItem>>('/task/list', { params });
   },

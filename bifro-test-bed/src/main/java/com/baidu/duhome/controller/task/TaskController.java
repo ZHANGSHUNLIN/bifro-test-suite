@@ -17,6 +17,9 @@ import com.baidu.duhome.database.service.ReportService;
 import com.baidu.iot.test.suite.Constants;
 import com.baidu.iot.test.suite.TaskSchedule;
 import com.baidu.iot.test.suite.worker.TaskConfig;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import io.vertx.core.Vertx;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -34,12 +37,16 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.time.Duration;
+
 
 @Slf4j
+@Tag(name = "任务管理", description = "MQTT 测试任务管理接口")
 @RestController
 @RequestMapping("/api/task")
 public class TaskController implements ApiController {
@@ -59,38 +66,42 @@ public class TaskController implements ApiController {
     /**
      * 添加测试任务
      */
+    @Operation(summary = "创建测试任务", description = "创建新的 MQTT 压力测试任务")
     @PostMapping()
-    public ApiResponse<?> addTask(@RequestBody TaskRequest taskRequest) {
-        return ApiResponse.success(taskManager.addTask(taskRequest));
+    public Mono<ApiResponse<TaskInfoMetadata>> addTask(@RequestBody @Parameter(description = "任务配置请求") TaskRequest taskRequest) {
+        return taskManager.addTask(taskRequest)
+                .map(ApiResponse::success);
     }
 
     /**
      * 获取所有任务列表（简略信息）
      */
+    @Operation(summary = "获取任务列表", description = "分页查询任务列表，支持按任务名称和类型筛选")
     @GetMapping("/list")
-    public ApiResponse<PageInfo<TaskListVO>> getAllTasks(
-            @RequestParam(name = "pageNum", defaultValue = "1") Integer pageNum,
-            @RequestParam(name = "pageSize", defaultValue = "20") Integer pageSize,
-            @RequestParam(name = "taskName", required = false) String taskName,
-            @RequestParam(name = "taskType", required = false) String taskType
+    public Mono<ApiResponse<PageInfo<TaskListVO>>> getAllTasks(
+            @Parameter(description = "页码", example = "1") @RequestParam(name = "pageNum", defaultValue = "1") Integer pageNum,
+            @Parameter(description = "每页大小", example = "20") @RequestParam(name = "pageSize", defaultValue = "20") Integer pageSize,
+            @Parameter(description = "任务名称（模糊查询）") @RequestParam(name = "taskName", required = false) String taskName,
+            @Parameter(description = "任务类型") @RequestParam(name = "taskType", required = false) String taskType
     ) {
         Pageable pageable = PageRequest.of(pageNum - 1, pageSize, Sort.by(Sort.Direction.DESC, "createTime"));
-        Page<TaskInfoMetadata> allTask;
+        Mono<Page<TaskInfoMetadata>> allTaskMono;
         if (taskName != null && !taskName.isEmpty() || taskType != null && !taskType.isEmpty()) {
-            allTask = taskManager.getAllTask(taskName, taskType, pageable);
+            allTaskMono = taskManager.getAllTask(taskName, taskType, pageable);
         } else {
-            allTask = taskManager.getAllTask(pageable);
+            allTaskMono = taskManager.getAllTask(pageable);
         }
-        return ApiResponse.pageSuccess(allTask, TaskListVO::fromTaskConfig);
+        return ApiResponse.pageSuccessMono(allTaskMono, TaskListVO::fromTaskConfig);
     }
 
     /**
      * 通过taskId查询对应的集群任务和所有节点任务,todo 需要改为mongo存储
      */
+    @Operation(summary = "获取任务详情", description = "根据任务 ID 获取任务详细信息")
     @GetMapping("/{id}")
-    public ApiResponse<TaskDetailResponse> getTaskDetails(@PathVariable(name = "id") String id) {
+    public Mono<ApiResponse<TaskDetailResponse>> getTaskDetails(@PathVariable(name = "id") @Parameter(description = "任务ID") String id) {
         if (id == null || id.trim().isEmpty()) {
-            return ApiResponse.error("任务ID不能为空");
+            return Mono.just(ApiResponse.error("任务ID不能为空"));
         }
         return taskManager.getTaskDetails(id);
     }
@@ -98,57 +109,65 @@ public class TaskController implements ApiController {
     /**
      * 修改测试任务
      */
+    @Operation(summary = "修改测试任务", description = "更新任务配置")
     @PutMapping("/{id}")
-    public ApiResponse<TaskInfoMetadata> updateTask(@PathVariable(value = "id") String id, @RequestBody TaskRequest taskRequest) {
-        return ApiResponse.success(taskManager.modifyTask(id, taskRequest));
-//        return ret(taskManager.modifyTask(id, taskRequest)
-//                .thenApply(r -> r.orElseThrow(() -> new ApiException(id + "任务不存在")))
-//                .thenApply(TaskInfoMetadata::getTaskConfig));
+    public Mono<ApiResponse<TaskInfoMetadata>> updateTask(
+            @PathVariable(value = "id") @Parameter(description = "任务ID") String id,
+            @RequestBody @Parameter(description = "任务配置请求") TaskRequest taskRequest) {
+        return taskManager.modifyTask(id, taskRequest)
+                .map(ApiResponse::success);
     }
 
+    @Operation(summary = "停止任务", description = "手动停止正在执行的任务")
     @PostMapping("/stop/{id}")
-    public ApiResponse<String> stopTask(@PathVariable(value = "id") String id) {
+    public Mono<ApiResponse<String>> stopTask(@PathVariable(value = "id") @Parameter(description = "任务ID") String id) {
         TaskSchedule taskSchedule =
                 TaskSchedule.builder().op(TaskSchedule.Op.UN_REG).id(id).build();
         // 通知全部节点任务准备
         vertx.eventBus().publish(Constants.CLUSTER_TASK_MESSAGE, taskSchedule);
-        return ApiResponse.success("已提交任务");
+        return Mono.just(ApiResponse.success("已提交任务"));
     }
 
+    @Operation(summary = "删除任务", description = "删除指定任务")
     @DeleteMapping("/{id}")
-    public ApiResponse<TaskDetailResponse> del(@PathVariable(value = "id") String id) {
+    public Mono<ApiResponse<TaskDetailResponse>> del(@PathVariable(value = "id") @Parameter(description = "任务ID") String id) {
         return taskManager.delTask(id);
     }
 
+    @Operation(summary = "批量删除任务", description = "批量删除多个任务")
     @DeleteMapping("/batch")
-    public ApiResponse<String> batchDel(@RequestBody List<String> taskIds) {
+    public Mono<ApiResponse<String>> batchDel(@RequestBody @Parameter(description = "任务ID列表") List<String> taskIds) {
         return taskManager.batchDelTask(taskIds);
     }
 
+    @Operation(summary = "分配任务到节点", description = "将任务分配给指定的节点")
     @PostMapping("/assign/{id}")
-    public ApiResponse<TaskConfig> assign(@PathVariable(value = "id") String id,
-                                          @RequestBody NodeTaskAllocationRequest nodeTaskAllocationRequest) {
-        return taskManager.assignTask(id, nodeTaskAllocationRequest);
-//        return ret(taskManager.assignTask(id));
+    public Mono<ApiResponse<TaskConfig>> assign(@PathVariable(value = "id") @Parameter(description = "任务ID") String id,
+                                                @RequestBody @Parameter(description = "节点任务分配请求") NodeTaskAllocationRequest nodeTaskAllocationRequest) {
+        return taskManager.assignTask(id, nodeTaskAllocationRequest)
+                .timeout(Duration.ofSeconds(10))
+                .onErrorResume(java.util.concurrent.TimeoutException.class,
+                        e -> Mono.just(ApiResponse.error("任务分配超时，请稍后重试")));
     }
 
+    @Operation(summary = "计算节点任务分配", description = "基于权重计算各节点的任务分配方案")
     @PostMapping("/calculate/{id}")
-    public ApiResponse<NodeTaskAllocationVO> calculateNodeTaskAllocation(@PathVariable(value = "id") String id) {
+    public Mono<ApiResponse<NodeTaskAllocationVO>> calculateNodeTaskAllocation(@PathVariable(value = "id") @Parameter(description = "任务ID") String id) {
         return taskManager.calculateNodeTaskAllocation(id);
     }
 
     /**
      * 任务确认，将当前的配置应用到集群
      */
+    @Operation(summary = "确认任务", description = "确认任务并通知所有节点开始执行")
     @PostMapping("/{id}/confirmTask")
-    public ApiResponse<TaskDetailResponse> confirmTask(@PathVariable(value = "id") String id) {
-
+    public Mono<ApiResponse<Void>> confirmTask(@PathVariable(value = "id") @Parameter(description = "任务ID") String id) {
         TaskSchedule taskSchedule =
                 TaskSchedule.builder().op(TaskSchedule.Op.REG).id(id).build();
 
         // 通知全部节点任务准备
         vertx.eventBus().publish(Constants.CLUSTER_TASK_MESSAGE, taskSchedule);
-        return ApiResponse.success();
+        return Mono.just(ApiResponse.success());
     }
 
     @Async
@@ -169,13 +188,13 @@ public class TaskController implements ApiController {
     }
 
     @GetMapping("/taskReport")
-    public ApiResponse<PageInfo<Report>> taskReport(
+    public Mono<ApiResponse<PageInfo<Report>>> taskReport(
             @RequestParam(name = "taskId") String taskId,
             @RequestParam(name = "nodeId") String nodeId,
             @RequestParam(name = "pageNum", defaultValue = "1") Integer pageNum,
             @RequestParam(name = "pageSize", defaultValue = "20") Integer pageSize
     ) {
-        return ApiResponse.pageSuccess(reportService.taskReport(taskId, nodeId, pageNum, pageSize));
+        return ApiResponse.pageSuccessMono(reportService.taskReport(taskId, nodeId, pageNum, pageSize));
     }
 
 }

@@ -33,6 +33,8 @@ public class TaskInfoMetadata implements Serializable {
 
     private List<MqttBroker> brokers;
 
-    private LocalDateTime createTime;
+    @Builder.Default
+    private String group = "";
 
+    private LocalDateTime createTime;
 }

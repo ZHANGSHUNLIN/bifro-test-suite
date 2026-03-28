@@ -4,7 +4,7 @@ vertx:
   multicast: false
   members: "127.0.0.1"
 server:
-  port: 8081
+  port: 8080
 
 management:
   endpoints:
@@ -42,3 +42,13 @@ spring:
       host: "10.99.48.17"
       port: 8017
       database: "bifro-test-suite"
+  springdoc:
+    api-docs:
+      enabled: true
+      path: /v3/api-docs
+    swagger-ui:
+      enabled: true
+      path: /swagger-ui.html
+      tags-sorter: alpha
+      operations-sorter: alpha
+    packages-to-scan: com.baidu.duhome.controller

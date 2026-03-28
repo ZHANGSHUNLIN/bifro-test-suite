@@ -1,24 +1,28 @@
 package com.baidu.duhome.database.repository;
 
 import com.baidu.duhome.database.pojo.MqttBroker;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.mongodb.repository.MongoRepository;
-import org.springframework.data.mongodb.repository.Query;
-import org.springframework.data.mongodb.repository.Update;
+import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
-
+/**
+ * MQTT Broker 数据访问接口 - 响应式版本
+ */
 @Repository
-public interface MqttBrokerRepository extends MongoRepository<MqttBroker, String> {
+public interface MqttBrokerRepository extends ReactiveMongoRepository<MqttBroker, String> {
 
+    /**
+     * 根据 ID 查找第一个匹配的 Broker
+     */
+    default Mono<MqttBroker> findFirstById(String id) {
+        return findById(id);
+    }
 
-    @Query("{ '_id' : ?0 }")
-    @Update(value = "{ $set: { 'enabled': ?1 } }")
-    void updateEnabledById(String id, Boolean enabled);
-
-    MqttBroker findFirstById(String id);
-
-    Page<MqttBroker> findAllByEnabled(Boolean enabled, Pageable pageable);
+    /**
+     * 根据分组查询 Broker 列表
+     */
+    default Flux<MqttBroker> findByGroup(String group) {
+        return findAll().filter(b -> b.getGroup() != null && b.getGroup().equals(group));
+    }
 }

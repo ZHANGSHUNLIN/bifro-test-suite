@@ -179,6 +179,12 @@ export const protocolFields: FormFieldConfig[] = [
         type: 'switch',
         initialValue: true,
     },
+    {
+        name: 'wildcard',
+        label: '通配符主题',
+        type: 'switch',
+        initialValue: false,
+    },
 ];
 
 // 客户端ID配置字段

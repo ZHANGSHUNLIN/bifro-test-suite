@@ -130,7 +130,7 @@ public class TaskConnWorker extends BaseTaskWorker {
             clientTaskConfig.setType(ClientTaskType.CONN);
             ConfigHelper.fillCommonTaskConfig(clientTaskConfig, taskConfig);
             ConnClientTask connClientTask =
-                    new ConnClientTask(vertx, clientTaskConfig, mqttClientConfig, connStatsManager,taskStage);
+                    new ConnClientTask(vertx, clientTaskConfig, mqttClientConfig, connStatsManager, taskStage);
             connClients.put(mqttClientConfig.getClientId(), connClientTask);
         }
         connClientIds.addAll(connClients.keySet());
@@ -195,9 +195,9 @@ public class TaskConnWorker extends BaseTaskWorker {
     private void handleClientTaskEvent(Message<ClientTaskEvent> event) {
         ClientTaskEvent taskEvent = event.body();
         String clientId = taskEvent.getClientId();
-        if (Objects.requireNonNull(taskEvent.getEventType()) == ClientTaskEvent.EventType.CONNECT_RESULT) {
+        ClientTaskEvent.EventType eventType = taskEvent.getEventType();
+        if (eventType != null && eventType == ClientTaskEvent.EventType.CONNECT_RESULT) {
             connClientIds.remove(clientId);
-//            log.info("Remove client: {}, left clients: {}", clientId, connClientIds.size());
             if (connClientIds.isEmpty()) {
                 log.debug("Task collectTaskResults");
                 collectTaskResults();
@@ -208,12 +208,13 @@ public class TaskConnWorker extends BaseTaskWorker {
     }
 
     private void handleTaskFinishConsumer(Message<WorkerTaskEvent> event) {
-        if (Objects.requireNonNull(event.body().getEventType()) == WorkerTaskEvent.EventType.TOTAL_CONN_RESULT) {
+        WorkerTaskEvent.EventType eventType = event.body().getEventType();
+        if (eventType != null && eventType == WorkerTaskEvent.EventType.TOTAL_CONN_RESULT) {
             vertx.setTimer(TimeUnit.SECONDS.toMillis(taskConfig.getStressDurationInSec()),
                     t -> {
                         try {
                             log.info("Call Stop: conn task start time: {}", taskConfig.getStressDurationInSec());
-//                                this.stopTask().get();
+                            this.stopTask().get();
                         } catch (Exception e) {
                             log.error("Failed to stop connect task: {}",
                                     taskConfig.getTaskId(), e);

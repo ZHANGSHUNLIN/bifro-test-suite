@@ -32,6 +32,7 @@ public class TaskListVO implements Serializable {
     // 基础标识
     private String taskId;
     private String nodeId;
+    private String group;
     private TaskConfig.TaskType taskType;
     private String protocol;
 
@@ -99,6 +100,7 @@ public class TaskListVO implements Serializable {
         vo.setId(taskInfoMetadata.getTaskId());
         vo.setTaskName(taskInfoMetadata.getTaskName());
         vo.setCreateTime(taskInfoMetadata.getCreateTime());
+        vo.setGroup(taskInfoMetadata.getGroup());
         return vo;
     }
 }
