@@ -1,2 +1,0 @@
-aywlafy/demo,jLaHdKuGmeHrCzfi,PUB,test/topic,10,testclientId
-aywlafy/demo,jLaHdKuGmeHrCzfi,SUB,test/topic,10,testclientId

@@ -2,9 +2,10 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <modules>
-        <module>test-suite-core</module>
+        <module>test-suite-mqtt</module>
         <module>test-suite-worker</module>
         <module>test-suite-common</module>
+        <module>test-suite-extensions</module>
         <module>bifro-test-bed</module>
     </modules>
 
@@ -218,7 +219,7 @@
             </dependency>
             <dependency>
                 <groupId>com.baidu.iot</groupId>
-                <artifactId>test-suite-core</artifactId>
+                <artifactId>test-suite-mqtt</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

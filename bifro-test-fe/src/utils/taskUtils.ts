@@ -5,11 +5,12 @@ import {TaskStatusValues, TaskTypeValues} from '../types/task';
  */
 export const statusConfig: Record<string, {text: string; color: string}> = {
     [TaskStatusValues.INIT]: {text: '已创建', color: 'default'},
-    [TaskStatusValues.ASSIGNED]: {text: '已分配', color: 'default'},
-    [TaskStatusValues.COLLECTING]: {text: '结果收集中', color: 'processing'},
+    [TaskStatusValues.START]: {text: '启动中', color: 'processing'},
+    [TaskStatusValues.CONNECTING]: {text: '连接中', color: 'processing'},
+    [TaskStatusValues.INIT_PUB_CLIENT]: {text: '初始化发布端', color: 'processing'},
+    [TaskStatusValues.INIT_SUB_CLIENT]: {text: '初始化订阅端', color: 'processing'},
     [TaskStatusValues.ONGOING]: {text: '运行中', color: 'processing'},
     [TaskStatusValues.SHUTDOWN]: {text: '已完成', color: 'success'},
-    [TaskStatusValues.SHUTDOWN_ING]: {text: '正在结束', color: 'warning'},
     [TaskStatusValues.STOPPED]: {text: '已停止', color: 'warning'},
 };
 
@@ -67,7 +68,7 @@ export const canAssignTask = (status: string): boolean => {
  * 判断任务是否可以确认
  */
 export const canConfirmTask = (status: string): boolean => {
-    return status === TaskStatusValues.INIT || status === TaskStatusValues.ASSIGNED;
+    return status === TaskStatusValues.INIT;
 };
 
 /**
@@ -83,10 +84,9 @@ export const canStopTask = (status: string): boolean => {
 export const canDeleteTask = (status: string): boolean => {
     return [
         TaskStatusValues.INIT,
-        TaskStatusValues.ASSIGNED,
         TaskStatusValues.STOPPED,
         TaskStatusValues.SHUTDOWN
-    ].includes(status as 'INIT' | 'ASSIGNED' | 'SHUTDOWN' | 'STOPPED');
+    ].includes(status as 'INIT' | 'STOPPED' | 'SHUTDOWN');
 };
 
 /**
@@ -94,7 +94,6 @@ export const canDeleteTask = (status: string): boolean => {
  */
 export const selectableStatuses = [
     TaskStatusValues.INIT,
-    TaskStatusValues.ASSIGNED,
     TaskStatusValues.STOPPED,
     TaskStatusValues.SHUTDOWN
 ];
@@ -103,7 +102,7 @@ export const selectableStatuses = [
  * 判断任务是否可以被选择（用于批量操作）
  */
 export const canSelectTask = (status: string): boolean => {
-    return selectableStatuses.includes(status as 'INIT' | 'ASSIGNED' | 'STOPPED' | 'SHUTDOWN');
+    return selectableStatuses.includes(status as 'INIT' | 'STOPPED' | 'SHUTDOWN');
 };
 
 /**

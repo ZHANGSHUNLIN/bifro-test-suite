@@ -32,8 +32,11 @@ public class VertxConfig {
         joinConfig.getTcpIpConfig()
                 .setEnabled(true)
                 .addMember(vertxProperties.getMembers());
-        HazelcastClusterManager hazelcastClusterManager = new HazelcastClusterManager(hazelcastConfig);
+
+        // 先注册序列化器，再创建 HazelcastClusterManager
         VertxCodecManager.registerStreamSerializerAll(hazelcastConfig);
+
+        HazelcastClusterManager hazelcastClusterManager = new HazelcastClusterManager(hazelcastConfig);
 
         return Vertx.builder()
                 .with(new VertxOptions(vertxProperties.getVertxOptions())

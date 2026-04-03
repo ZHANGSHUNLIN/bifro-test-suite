@@ -2,8 +2,8 @@ package com.baidu.duhome.local;
 
 import com.baidu.duhome.bean.NodeInfo;
 import com.baidu.duhome.cluster.ClusterDataManager;
-import com.baidu.iot.test.suite.ShareDataAddr;
-import com.baidu.iot.test.suite.ShareDataManager;
+
+import com.baidu.iot.test.suite.HazelcastDataManager;
 import io.vertx.core.Vertx;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -18,7 +18,7 @@ public class ScheduleTask {
     private Vertx vertx;
 
     @Resource
-    private ShareDataManager shareDataManager;
+    private HazelcastDataManager hazelcastDataManager;
 
     @Resource
     private ClusterDataManager clusterDataManager;
@@ -35,12 +35,17 @@ public class ScheduleTask {
         try {
             long l = System.currentTimeMillis();
             String currentNodeIdCache = clusterDataManager.getCurrentNodeIdCache();
-            ShareDataManager.ShareMap<String, NodeInfo> map = shareDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO);
+            HazelcastDataManager.IMapWrapper<String, NodeInfo> map =
+                    hazelcastDataManager.<String, NodeInfo>map(HazelcastDataManager.ShareDataAddr.CLUSTER_NODE_INFO);
             map.key(currentNodeIdCache)
                     .thenAccept((nodeInfo) -> {
                         nodeInfo.setNextPing(l + pingTimeOut);
                         map.key(currentNodeIdCache).
-                                replace(nodeInfo);
+                                replace(nodeInfo).future()
+                                .exceptionally(e -> {
+                                    log.error("更新节点信息失败", e);
+                                    return null;
+                                });
                     });
             log.debug("更新当前节点时间,{} , 更新时间:{}", currentNodeIdCache, l);
         } catch (Exception e) {

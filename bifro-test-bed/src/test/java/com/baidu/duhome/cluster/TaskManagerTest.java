@@ -23,6 +23,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -35,12 +40,14 @@ import reactor.core.publisher.Mono;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -74,6 +81,7 @@ class TaskManagerTest {
 
     private static final String TASK_ID = "test-task-123";
     private static final String BROKER_ID = "broker-001";
+    private static final String GROUP_ID = "group-001";
 
     @BeforeEach
     void setUp() {
@@ -448,5 +456,91 @@ class TaskManagerTest {
         request.setGroup("test-group");
 
         return request;
+    }
+
+    // ==================== 测试: getAllTask with group ====================
+
+    @Test
+    void testGetAllTask_withGroupFilter_shouldCallServiceWithGroup() {
+        // given
+        Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createTime"));
+        Page<TaskInfoMetadata> page = new PageImpl<>(Collections.emptyList(), pageable, 0);
+
+        when(taskInfoMetadataService.findByFilters(anyString(), anyString(), eq(GROUP_ID), any(Pageable.class)))
+                .thenReturn(Mono.just(page));
+
+        // when
+        Page<TaskInfoMetadata> result = taskManager.getAllTask("Test Task", "CONN", GROUP_ID, pageable).block();
+
+        // then
+        assertNotNull(result);
+        verify(taskInfoMetadataService).findByFilters(eq("Test Task"), eq("CONN"), eq(GROUP_ID), eq(pageable));
+    }
+
+    @Test
+    void testGetAllTask_withOnlyGroupFilter_shouldCallServiceWithGroup() {
+        // given
+        Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createTime"));
+        Page<TaskInfoMetadata> page = new PageImpl<>(Collections.emptyList(), pageable, 0);
+
+        when(taskInfoMetadataService.findByFilters(isNull(), isNull(), eq(GROUP_ID), any(Pageable.class)))
+                .thenReturn(Mono.just(page));
+
+        // when
+        Page<TaskInfoMetadata> result = taskManager.getAllTask(null, null, GROUP_ID, pageable).block();
+
+        // then
+        assertNotNull(result);
+        verify(taskInfoMetadataService).findByFilters(isNull(), isNull(), eq(GROUP_ID), eq(pageable));
+    }
+
+    @Test
+    void testGetAllTask_withTaskNameAndTaskTypeAndGroup_shouldCallServiceWithAllFilters() {
+        // given
+        Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createTime"));
+        Page<TaskInfoMetadata> page = new PageImpl<>(Collections.emptyList(), pageable, 0);
+
+        when(taskInfoMetadataService.findByFilters(anyString(), anyString(), anyString(), any(Pageable.class)))
+                .thenReturn(Mono.just(page));
+
+        // when
+        Page<TaskInfoMetadata> result = taskManager.getAllTask("Test", "PUBSUB", GROUP_ID, pageable).block();
+
+        // then
+        assertNotNull(result);
+        verify(taskInfoMetadataService).findByFilters(eq("Test"), eq("PUBSUB"), eq(GROUP_ID), eq(pageable));
+    }
+
+    @Test
+    void testGetAllTask_withEmptyFilters_shouldCallFindAll() {
+        // given
+        Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createTime"));
+        Page<TaskInfoMetadata> page = new PageImpl<>(Collections.emptyList(), pageable, 0);
+
+        when(taskInfoMetadataService.findAll(any(Pageable.class))).thenReturn(Mono.just(page));
+
+        // when
+        Page<TaskInfoMetadata> result = taskManager.getAllTask(pageable).block();
+
+        // then
+        assertNotNull(result);
+        verify(taskInfoMetadataService).findAll(eq(pageable));
+    }
+
+    @Test
+    void testGetAllTask_withTaskNameAndTypeOnly_shouldCallFindByFilters() {
+        // given
+        Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createTime"));
+        Page<TaskInfoMetadata> page = new PageImpl<>(Collections.emptyList(), pageable, 0);
+
+        when(taskInfoMetadataService.findByFilters(anyString(), anyString(), isNull(), any(Pageable.class)))
+                .thenReturn(Mono.just(page));
+
+        // when
+        Page<TaskInfoMetadata> result = taskManager.getAllTask("Test", "CONN", null, pageable).block();
+
+        // then
+        assertNotNull(result);
+        verify(taskInfoMetadataService).findByFilters(eq("Test"), eq("CONN"), isNull(), eq(pageable));
     }
 }

@@ -41,9 +41,9 @@ public class TaskInfoMetadataService {
     }
 
     /**
-     * 根据任务名称和任务类型分页查询
+     * 根据任务名称、任务类型和分组分页查询
      */
-    public Mono<Page<TaskInfoMetadata>> findByFilters(String taskName, String taskType, Pageable pageable) {
+    public Mono<Page<TaskInfoMetadata>> findByFilters(String taskName, String taskType, String group, Pageable pageable) {
         Query query = new Query();
         List<Criteria> criteriaList = new ArrayList<>();
 
@@ -55,6 +55,11 @@ public class TaskInfoMetadataService {
         // 任务类型精确匹配
         if (taskType != null && !taskType.isEmpty()) {
             criteriaList.add(Criteria.where("taskConfig.taskType").is(taskType));
+        }
+
+        // 分组精确匹配
+        if (group != null && !group.isEmpty()) {
+            criteriaList.add(Criteria.where("group").is(group));
         }
 
         if (!criteriaList.isEmpty()) {

@@ -1,6 +1,4 @@
-/*
- * Copyright (C) 2021 Baidu, Inc. All Rights Reserved.
- */
+
 package com.baidu.iot.test.suite.worker.utils;
 
 import com.baidu.iot.test.suite.configs.ClientTaskConfig;
@@ -8,7 +6,7 @@ import com.baidu.iot.test.suite.configs.MqttClientConfig;
 import com.baidu.iot.test.suite.worker.TaskConfig;
 
 /**
- * Created by mafei01 in 5/7/21 2:47 PM
+ * todo，换成构建模式
  */
 public class ConfigHelper {
 

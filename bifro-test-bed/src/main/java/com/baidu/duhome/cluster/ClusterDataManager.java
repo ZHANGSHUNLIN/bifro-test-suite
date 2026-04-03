@@ -1,26 +1,23 @@
 package com.baidu.duhome.cluster;
 
 import com.baidu.duhome.bean.ClusterNodeInfo;
-import com.baidu.duhome.bean.CommonResp;
 import com.baidu.duhome.bean.NodeInfo;
 import com.baidu.duhome.bean.dto.NodeTaskAllocationRequest;
 import com.baidu.duhome.bean.vo.NodeTaskAllocationVO;
 import com.baidu.duhome.database.pojo.NodeTask;
-import com.baidu.duhome.database.pojo.TaskInfoMetadata;
 import com.baidu.duhome.cluster.task.DefaultWeightCalculation;
 import com.baidu.duhome.cluster.task.NodeWeight;
 import com.baidu.duhome.database.repository.NodeTaskRepository;
 import com.baidu.duhome.exception.ApiException;
-import com.baidu.iot.test.suite.ShareDataAddr;
-import com.baidu.iot.test.suite.ShareDataManager;
+import com.baidu.iot.test.suite.HazelcastDataManager;
 import com.baidu.iot.test.suite.TaskStage;
 import com.baidu.iot.test.suite.worker.TaskConfig;
 import com.hazelcast.cluster.Member;
 import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.map.IMap;
 import io.vertx.core.Vertx;
 import jakarta.annotation.Resource;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -48,7 +45,7 @@ import static com.baidu.duhome.util.RuntimeUtil.getSystemLoadAverage;
 public class ClusterDataManager {
 
     @Resource
-    private ShareDataManager shareDataManager;
+    private HazelcastDataManager hazelcastDataManager;
 
     @Resource
     private Vertx vertx;
@@ -63,6 +60,20 @@ public class ClusterDataManager {
     private String nodeName;
 
     private final AtomicReference<String> currentNodeIdCache = new AtomicReference<>();
+
+    private IMap<String, NodeInfo> getClusterNodeInfoMap() {
+        try {
+            Set<HazelcastInstance> instances = Hazelcast.getAllHazelcastInstances();
+            if (instances.isEmpty()) {
+                throw new IllegalStateException("No Hazelcast instances found");
+            }
+            HazelcastInstance hazelcast = instances.iterator().next();
+            return hazelcast.getMap(HazelcastDataManager.ShareDataAddr.CLUSTER_NODE_INFO.getAddr());
+        } catch (Exception e) {
+            log.error("Failed to get Hazelcast map", e);
+            throw new RuntimeException(e);
+        }
+    }
 
     public Set<String> getCurrentNodeIds() {
         if (!vertx.isClustered()) {
@@ -213,63 +224,8 @@ public class ClusterDataManager {
         return allocatedClients;
     }
 
-    /**
-     * 异步获取总任务
-     */
-    public CompletableFuture<TaskInfoMetadata> getMainTask(String taskId) {
-        return shareDataManager.<String, TaskInfoMetadata>map(ShareDataAddr.CLUSTER_TASK_CONFIGS)
-                .key(taskId)
-                .future();
-
-    }
-
-    public CompletableFuture<List<TaskInfoMetadata>> getAllTask() {
-        return shareDataManager.<String, TaskInfoMetadata>map(ShareDataAddr.CLUSTER_TASK_CONFIGS).values();
-    }
-
-    /**
-     * 异步获取子任务
-     */
-    public CompletableFuture<Map<String, TaskConfig>> getSubTasks(String taskId) {
-        return shareDataManager.<String, Map<String, TaskConfig>>map(ShareDataAddr.NODE_TASK_CONFIGS)
-                .key(taskId)
-                .future();
-
-    }
-
-    public CompletableFuture<TaskConfig> getSubTasks(String taskId, String nodeId) {
-        return shareDataManager.<String, Map<String, TaskConfig>>map(ShareDataAddr.NODE_TASK_CONFIGS)
-                .key(taskId)
-                .future()
-                .thenApply(taskConfigMap ->
-                        taskConfigMap.get(nodeId)
-                );
-    }
-
-
-    public CompletableFuture<CommonResp> addTask(TaskInfoMetadata taskInfoMetadata) {
-        TaskConfig taskConfig = taskInfoMetadata.getTaskConfig();
-        String taskId = taskConfig.getTaskId();
-        return shareDataManager.<String, TaskInfoMetadata>map(ShareDataAddr.CLUSTER_TASK_CONFIGS)
-                .key(taskId)
-                .putIfAbsent(taskInfoMetadata)
-                .future()
-                .thenApply(r -> CommonResp.success());
-    }
-
-    public CompletableFuture<TaskInfoMetadata> replaceTask(String taskId, TaskInfoMetadata taskInfoMetadata) {
-        return shareDataManager.<String, TaskInfoMetadata>map(ShareDataAddr.CLUSTER_TASK_CONFIGS)
-                .key(taskId)
-                .replace(taskInfoMetadata)
-                .future()
-                .thenApply(r -> {
-                    log.info("replace task: {}", r);
-                    return r;
-                });
-    }
-
     private CompletableFuture<Void> distributeTasksToNodes2(String id, TaskConfig mainTaskConfig, NodeTaskAllocationRequest nodeTaskAllocationRequest) {
-        return shareDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO)
+        return hazelcastDataManager.<String, NodeInfo>map(HazelcastDataManager.ShareDataAddr.CLUSTER_NODE_INFO)
                 .entries()
                 .thenApplyAsync(nodeInfoMap -> {
                     Map<String, NodeInfo> newHash = new HashMap<>();
@@ -331,10 +287,9 @@ public class ClusterDataManager {
     }
 
 
-    @SneakyThrows
     public CompletableFuture<NodeTaskAllocationVO> calcuTasksToNodes(TaskConfig mainTaskConfig) {
         int totalClientCount = mainTaskConfig.getTotalClientCount();
-        return shareDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO)
+        return hazelcastDataManager.<String, NodeInfo>map(HazelcastDataManager.ShareDataAddr.CLUSTER_NODE_INFO)
                 .entries()
                 .thenApply(entries -> {
                     Map<String, NodeInfo> newHash = new HashMap<>();
@@ -358,27 +313,33 @@ public class ClusterDataManager {
                 });
     }
 
-    public void regClusterNodeInfo(String nodeName) {
-        shareDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO)
-                .key(getCurrentNodeIdCache())
-                .putIfAbsent(() -> {
-                    ClusterNodeInfo systemInfo = getSystemInfo();
-                    log.debug("add cluster node info: {}", systemInfo);
-                    return NodeInfo.builder()
-                            .nodeName(nodeName)
-                            .nextPing(System.currentTimeMillis())
-                            .clusterNodeInfo(systemInfo).build();
-                });
-
+    /**
+     * 使用 Hazelcast Map 直接存储节点信息，绕过 Vert.x AsyncMap 的序列化问题
+     */
+    public void regClusterNodeInfoDirect(String nodeName) {
+        try {
+            IMap<String, NodeInfo> map = getClusterNodeInfoMap();
+            ClusterNodeInfo systemInfo = getSystemInfo();
+            log.debug("add cluster node info using Hazelcast IMap: {}", systemInfo);
+            NodeInfo nodeInfo = NodeInfo.builder()
+                    .nodeName(nodeName)
+                    .nextPing(System.currentTimeMillis())
+                    .clusterNodeInfo(systemInfo).build();
+            map.put(getCurrentNodeIdCache(), nodeInfo);
+        } catch (Exception e) {
+            log.error("Failed to register cluster node info using Hazelcast IMap", e);
+        }
     }
+
 
     public void upgradeClusterNodeTaskStage(Map<String, TaskStage> stageMap) {
         String currentNodeId = getCurrentNodeIdCache();
-        ShareDataManager.ShareMap<String, NodeInfo> map = shareDataManager.map(ShareDataAddr.CLUSTER_NODE_INFO);
-        map.key(currentNodeId)
+        hazelcastDataManager.<String, NodeInfo>map(HazelcastDataManager.ShareDataAddr.CLUSTER_NODE_INFO)
+                .key(currentNodeId)
                 .thenAccept((nodeInfo) -> {
                     nodeInfo.setTaskStage(stageMap);
-                    map.key(currentNodeId).replace(nodeInfo);
+                    hazelcastDataManager.<String, NodeInfo>map(HazelcastDataManager.ShareDataAddr.CLUSTER_NODE_INFO)
+                            .key(currentNodeId).replace(nodeInfo);
                 });
     }
 
@@ -407,40 +368,14 @@ public class ClusterDataManager {
     }
 
     public CompletableFuture<Map<String, NodeInfo>> allNodes() {
-        return shareDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO)
+        return hazelcastDataManager.<String, NodeInfo>map(HazelcastDataManager.ShareDataAddr.CLUSTER_NODE_INFO)
                 .entries();
     }
 
     public CompletableFuture<NodeInfo> currentNode() {
-        return shareDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO)
+        return hazelcastDataManager.<String, NodeInfo>map(HazelcastDataManager.ShareDataAddr.CLUSTER_NODE_INFO)
                 .key(getCurrentNodeIdCache())
                 .future();
     }
 
-    public CompletableFuture<Map<Object, Object>> something(String key) {
-        return shareDataManager.map(ShareDataAddr.valueOf(key))
-                .entries();
-    }
-
-    public void upgradeSubTaskStage(TaskConfig taskConfig, TaskStage taskStage) {
-        String taskId = taskConfig.getTaskId();
-
-        ShareDataManager.ShareMap<String, Map<String, TaskConfig>> map = shareDataManager.<String, Map<String, TaskConfig>>map(ShareDataAddr.NODE_TASK_CONFIGS);
-        map.key(taskId)
-                .thenAccept((v) -> {
-                    v.values().forEach(r -> r.setTaskWorkStage(taskStage));
-                    map.key(taskId).putIfAbsent(v);
-                });
-    }
-
-    public void upgradeMainTaskStage(String taskId, TaskStage taskStage) {
-        ShareDataManager.ShareMap<String, TaskInfoMetadata> map = shareDataManager.<String, TaskInfoMetadata>map(ShareDataAddr.CLUSTER_TASK_CONFIGS);
-        map.key(taskId)
-                .thenAccept((metadata) -> {
-                    TaskConfig taskConfig = metadata.getTaskConfig();
-                    taskConfig.setTaskWorkStage(taskStage);
-                    map.key(taskId).replace(metadata);
-                });
-
-    }
 }

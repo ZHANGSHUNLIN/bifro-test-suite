@@ -48,12 +48,23 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
 }) => {
     const TaskStatus = TaskStatusValues;
 
-    // 按钮显示规则
+    // 运行中状态集合
+    const isRunning = status === TaskStatus.START
+        || status === TaskStatus.CONNECTING
+        || status === TaskStatus.INIT_PUB_CLIENT
+        || status === TaskStatus.INIT_SUB_CLIENT
+        || status === TaskStatus.ONGOING;
+
+    // 按钮显示规则：
+    // INIT(已创建): 编辑、分配、删除
+    // ASSIGNED(已分配): 重新分配、确认、删除
+    // 运行中(START/CONNECTING/INIT_PUB_CLIENT/INIT_SUB_CLIENT/ONGOING): 停止
+    // STOPPED/SHUTDOWN: 删除
     const showEdit = status === TaskStatus.INIT;
-    const showConfirm = status === TaskStatus.INIT || status === TaskStatus.ASSIGNED;
-    const showAssign = status === TaskStatus.INIT;
-    const showStop = status === TaskStatus.ONGOING;
-    const showDelete = status !== TaskStatus.ONGOING;
+    const showAssign = status === TaskStatus.INIT || status === TaskStatus.ASSIGNED;
+    const showConfirm = status === TaskStatus.ASSIGNED;
+    const showStop = isRunning;
+    const showDelete = !isRunning;
 
     return (
         <Space size={size}>
@@ -62,63 +73,28 @@ export const TaskActionButtons: React.FC<TaskActionButtonsProps> = ({
                     详情
                 </Button>
             )}
-            {onEdit && (
-                <Button
-                    type="link"
-                    icon={<EditOutlined/>}
-                    onClick={onEdit}
-                    disabled={!showEdit}
-                    hidden={!showEdit}
-                    title={!showEdit ? '只能在"已创建"状态编辑' : undefined}
-                >
+            {onEdit && showEdit && (
+                <Button type="link" icon={<EditOutlined/>} onClick={onEdit}>
                     编辑
                 </Button>
             )}
-            {onConfirm && (
-                <Button
-                    type="link"
-                    icon={<CheckCircleOutlined/>}
-                    onClick={onConfirm}
-                    disabled={!showConfirm}
-                    hidden={!showConfirm}
-                    title={!showConfirm ? '只能在"已创建"或"已分配"状态确认' : undefined}
-                >
+            {onAssign && showAssign && (
+                <Button type="link" icon={<DeploymentUnitOutlined/>} onClick={onAssign}>
+                    {status === TaskStatus.ASSIGNED ? '重新分配' : '分配'}
+                </Button>
+            )}
+            {onConfirm && showConfirm && (
+                <Button type="link" icon={<CheckCircleOutlined/>} onClick={onConfirm}>
                     确认
                 </Button>
             )}
-            {onAssign && (
-                <Button
-                    type="link"
-                    icon={<DeploymentUnitOutlined/>}
-                    onClick={onAssign}
-                    disabled={!showAssign}
-                    hidden={!showAssign}
-                    title={!showAssign ? '只能在"已创建"状态分配' : undefined}
-                >
-                    分配
-                </Button>
-            )}
-            {onStop && (
-                <Button
-                    type="link"
-                    icon={<StopOutlined/>}
-                    onClick={onStop}
-                    disabled={!showStop}
-                    hidden={!showStop}
-                    title={!showStop ? '只能在"运行中"状态停止' : undefined}
-                >
+            {onStop && showStop && (
+                <Button type="link" icon={<StopOutlined/>} onClick={onStop}>
                     停止
                 </Button>
             )}
-            {onDelete && (
-                <Button
-                    type="link"
-                    danger
-                    icon={<DeleteOutlined/>}
-                    onClick={onDelete}
-                    hidden={!showDelete}
-                    title={!showDelete ? '运行中的任务不能删除' : undefined}
-                >
+            {onDelete && showDelete && (
+                <Button type="link" danger icon={<DeleteOutlined/>} onClick={onDelete}>
                     删除
                 </Button>
             )}

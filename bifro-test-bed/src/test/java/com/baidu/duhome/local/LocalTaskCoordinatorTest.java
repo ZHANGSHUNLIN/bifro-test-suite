@@ -6,9 +6,7 @@ import com.baidu.duhome.database.pojo.TaskInfoMetadata;
 import com.baidu.duhome.database.repository.NodeTaskRepository;
 import com.baidu.duhome.database.repository.ReportRepository;
 import com.baidu.duhome.database.repository.TaskInfoMetadataRepository;
-import com.baidu.duhome.local.consumer.LocalConsumer;
-import com.baidu.iot.test.suite.ShareDataManager;
-import com.baidu.iot.test.suite.ShareDataAddr;
+import com.baidu.iot.test.suite.HazelcastDataManager;
 import com.baidu.iot.test.suite.TaskStage;
 import com.baidu.iot.test.suite.worker.TaskConfig;
 import io.vertx.core.Vertx;
@@ -66,10 +64,8 @@ class LocalTaskCoordinatorTest {
     private EventBus eventBus;
 
     @Mock
-    private ShareDataManager shareDataManager;
+    private HazelcastDataManager hazelcastDataManager;
 
-    @Mock
-    private LocalConsumer localConsumer;
 
     @InjectMocks
     private LocalTaskCoordinator localTaskCoordinator;
@@ -101,7 +97,7 @@ class LocalTaskCoordinatorTest {
                 .nodeId(NODE_ID)
                 .taskType(TaskConfig.TaskType.PUBSUB)
                 .totalClientCount(50)
-                .taskWorkStage(TaskStage.ASSIGNED)
+                .taskWorkStage(TaskStage.INIT)
                 .build();
 
         TaskInfoMetadata metadata = TaskInfoMetadata.builder()

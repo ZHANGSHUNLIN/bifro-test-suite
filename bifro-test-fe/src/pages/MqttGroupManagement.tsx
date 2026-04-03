@@ -109,6 +109,8 @@ const MqttGroupManagement: React.FC = () => {
     };
 
     const handleDelete = async (id: string) => {
+        console.log('Deleting group with id:', id);
+        console.log('Type of id:', typeof id);
         try {
             await groupApi.deleteGroup(id);
             message.success('删除成功');

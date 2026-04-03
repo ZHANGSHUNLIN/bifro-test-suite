@@ -72,7 +72,7 @@ public class BrokerController implements ApiController {
     @GetMapping("/list")
     public Mono<ApiResponse<PageInfo<BrokerListItem>>> list(
             @Parameter(description = "是否启用") @RequestParam(name = "enabled", required = false) Boolean enabled,
-            @Parameter(description = "分组/项目") @RequestParam(name = "group", required = false) String group,
+            @Parameter(description = "分组ID") @RequestParam(name = "group", required = false) String group,
             @Parameter(description = "页码", example = "1") @RequestParam(name = "pageNum", defaultValue = "1") Integer pageNum,
             @Parameter(description = "每页大小", example = "20") @RequestParam(name = "pageSize", defaultValue = "20") Integer pageSize
     ) {

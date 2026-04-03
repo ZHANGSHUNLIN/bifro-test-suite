@@ -20,9 +20,9 @@ public interface MqttBrokerRepository extends ReactiveMongoRepository<MqttBroker
     }
 
     /**
-     * 根据分组查询 Broker 列表
+     * 根据分组ID查询 Broker 列表
      */
-    default Flux<MqttBroker> findByGroup(String group) {
-        return findAll().filter(b -> b.getGroup() != null && b.getGroup().equals(group));
+    default Flux<MqttBroker> findByGroup(String groupId) {
+        return findAll().filter(b -> b.getGroup() != null && b.getGroup().equals(groupId));
     }
 }

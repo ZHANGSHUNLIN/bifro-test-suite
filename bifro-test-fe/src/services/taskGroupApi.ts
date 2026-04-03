@@ -25,6 +25,23 @@ export const taskGroupApi = {
         return api.get<TaskGroup[]>('/groups/all', { params: { type: GROUP_TYPE_TASK } });
     },
 
+    // 获取或创建默认分组
+    getOrCreateDefaultGroup: async () => {
+        try {
+            const allGroups = await taskGroupApi.getAllGroupsForSelect();
+            const defaultGroup = allGroups.find((g: TaskGroup) => g.name === '默认分组');
+            if (defaultGroup) {
+                return defaultGroup;
+            }
+            // 如果不存在，创建默认分组
+            const newGroup = await taskGroupApi.addGroup({ name: '默认分组', description: '系统默认分组' });
+            return newGroup;
+        } catch (error) {
+            console.error('获取或创建默认分组失败:', error);
+            throw error;
+        }
+    },
+
     // 获取分组详情
     getGroupDetail: (id: string) => {
         return api.get<TaskGroup>('/groups/:id', {
@@ -47,7 +64,7 @@ export const taskGroupApi = {
     // 删除分组
     deleteGroup: (id: string) => {
         return api.delete<void>('/groups/:id', {
-            params: { id }
+            params: { id, type: GROUP_TYPE_TASK }
         });
     }
 };

@@ -454,10 +454,12 @@ const ClusterManagement: React.FC = () => {
                                             <Tag
                                                 color={
                                                     status === 'ONGOING' ? 'blue' :
-                                                        status === 'COLLECTING' ? 'green' :
-                                                            status === 'INIT' ? 'orange' :
-                                                                status === 'SHUTDOWN_ING' ? 'red' :
-                                                                    status === 'SHUTDOWN' ? 'default' : 'gray'
+                                                        status === 'START' ? 'blue' :
+                                                            status === 'CONNECTING' ? 'blue' :
+                                                                status === 'INIT_PUB_CLIENT' ? 'blue' :
+                                                                    status === 'INIT_SUB_CLIENT' ? 'blue' :
+                                                                        status === 'INIT' ? 'orange' :
+                                                                            status === 'SHUTDOWN' ? 'default' : 'gray'
                                                 }
                                             >
                                                 {TaskStatusText[status as keyof typeof TaskStatusValues] || status}

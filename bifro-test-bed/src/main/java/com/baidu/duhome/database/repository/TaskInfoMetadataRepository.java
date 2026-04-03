@@ -17,7 +17,7 @@ public interface TaskInfoMetadataRepository extends ReactiveMongoRepository<Task
     Mono<Void> updateTaskConfigById(String id, TaskConfig taskConfig);
 
     /**
-     * 根据分组名称查询任务
+     * 根据分组ID查询任务
      */
-    Flux<TaskInfoMetadata> findByGroup(String groupName);
+    Flux<TaskInfoMetadata> findByGroup(String groupId);
 }

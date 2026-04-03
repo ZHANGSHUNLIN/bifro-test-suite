@@ -13,9 +13,8 @@ public class BrokerListItem {
     private int port;
     private String description;
     private String group;
-    private boolean enabled;
+    private Boolean enabled;
     private BrokerStatus status;
-    private Instant lastHealthCheck;
     private Instant createdAt;
     private Instant updatedAt;
 

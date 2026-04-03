@@ -1,6 +1,4 @@
-/*
- * Copyright (C) 2021 Baidu, Inc. All Rights Reserved.
- */
+
 package com.baidu.iot.test.suite.worker.models;
 
 import io.vertx.core.buffer.Buffer;

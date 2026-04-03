@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Table, Button, Space, Input, Modal, Form, Select, Tag, Popconfirm, Spin, Typography, InputNumber, Switch, message, Descriptions } from 'antd';
+import { Card, Table, Button, Space, Input, Modal, Form, Select, Tag, Popconfirm, Spin, Typography, InputNumber, message, Descriptions } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons';
 import mqttBrokerApi from '../services/mqttBrokerApi';
 import groupApi from '../services/groupApi';
@@ -19,6 +19,7 @@ const MqttBrokerManagement: React.FC = () => {
     const [form] = Form.useForm();
     const [selectedGroup, setSelectedGroup] = useState<string>('');
     const [groupSelectOptions, setGroupSelectOptions] = useState<{ label: string; value: string }[]>([]);
+    const [defaultGroupId, setDefaultGroupId] = useState<string>('');
     const [detailVisible, setDetailVisible] = useState(false);
     const [brokerDetail, setBrokerDetail] = useState<MqttBrokerConfig | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
@@ -39,12 +40,24 @@ const MqttBrokerManagement: React.FC = () => {
     // 加载分组选项（用于下拉选择）
     const loadGroupSelectOptions = async () => {
         try {
+            // 先确保默认分组存在
+            const defaultGroup = await groupApi.getOrCreateDefaultGroup();
+            setDefaultGroupId(defaultGroup.id);
+            setSelectedGroup(defaultGroup.id);
+
+            // 获取所有分组
             const allGroups = await groupApi.getAllGroupsForSelect();
-            const options = allGroups.map((g: MqttGroup) => ({
+
+            // 确保"默认分组"在列表第一位
+            const otherGroups = allGroups.filter((g: MqttGroup) => g.name !== '默认分组');
+            const sortedGroups = [defaultGroup, ...otherGroups];
+
+            const options = sortedGroups.map((g: MqttGroup) => ({
                 label: g.name,
-                value: g.name
+                value: g.id
             }));
-            setGroupSelectOptions([{ label: '所有分组', value: '' }, ...options]);
+            setGroupSelectOptions(options);
+            loadBrokers(defaultGroup.id);
         } catch (error) {
             console.error('加载分组选项失败:', error);
         }
@@ -52,7 +65,6 @@ const MqttBrokerManagement: React.FC = () => {
 
     // 初始化加载
     useEffect(() => {
-        loadBrokers();
         loadGroupSelectOptions();
     }, []);
 
@@ -69,7 +81,10 @@ const MqttBrokerManagement: React.FC = () => {
             dataIndex: 'group',
             key: 'group',
             width: 120,
-            render: (group: string) => group ? <Tag color="blue">{group}</Tag> : <span>-</span>,
+            render: (group: string) => {
+                const groupName = groupSelectOptions.find(opt => opt.value === group)?.label;
+                return group ? <Tag color="blue">{groupName || group}</Tag> : <span>-</span>;
+            },
         },
         {
             title: '主机地址',
@@ -104,13 +119,6 @@ const MqttBrokerManagement: React.FC = () => {
             ellipsis: true,
         },
         {
-            title: '最后检查',
-            dataIndex: 'lastHealthCheck',
-            key: 'lastHealthCheck',
-            width: 100,
-            render: (lastHealthCheck: string) => lastHealthCheck ? dayjs(lastHealthCheck).format('YYYY-MM-DD HH:mm:ss') : '-',
-        },
-        {
             title: '操作',
             key: 'action',
             width: 280,
@@ -130,6 +138,12 @@ const MqttBrokerManagement: React.FC = () => {
                     >
                         编辑
                     </Button>
+                    <Button
+                        type="link"
+                        onClick={() => handleToggleStatus(record.id, !record.enabled)}
+                    >
+                        {record.enabled ? '禁用' : '启用'}
+                    </Button>
                     <Popconfirm
                         title="确定要删除这个 Broker 吗？"
                         onConfirm={() => handleDelete(record.id)}
@@ -144,6 +158,7 @@ const MqttBrokerManagement: React.FC = () => {
                             删除
                         </Button>
                     </Popconfirm>
+
                 </Space.Compact>
             ),
         },
@@ -152,6 +167,10 @@ const MqttBrokerManagement: React.FC = () => {
     const handleAdd = () => {
         setEditingBroker(null);
         form.resetFields();
+        // 设置默认分组
+        if (defaultGroupId) {
+            form.setFieldValue('group', defaultGroupId);
+        }
         setIsModalVisible(true);
     };
 
@@ -162,7 +181,6 @@ const MqttBrokerManagement: React.FC = () => {
             host: broker.host,
             port: broker.port,
             description: broker.description || '',
-            enabled: broker.enabled,
             group: broker.group || '',
         });
         setIsModalVisible(true);
@@ -176,6 +194,17 @@ const MqttBrokerManagement: React.FC = () => {
             loadGroupSelectOptions();
         } catch (error) {
             message.error('删除失败');
+        }
+    };
+
+    const handleToggleStatus = async (id: string, enabled: boolean) => {
+        try {
+            await mqttBrokerApi.toggleBrokerStatus(id, enabled);
+            message.success(enabled ? '已启用' : '已禁用');
+            loadBrokers();
+        } catch (error) {
+            message.error('操作失败');
+            loadBrokers(); // 重新加载以恢复正确状态
         }
     };
 
@@ -202,7 +231,6 @@ const MqttBrokerManagement: React.FC = () => {
                 host: values.host,
                 port: values.port,
                 description: values.description || '',
-                enabled: values.enabled !== false,
                 group: values.group || '',
             };
 
@@ -308,15 +336,6 @@ const MqttBrokerManagement: React.FC = () => {
                     </Form.Item>
 
                     <Form.Item
-                        name="enabled"
-                        label="是否启用"
-                        valuePropName="checked"
-                        initialValue={true}
-                    >
-                        <Switch />
-                    </Form.Item>
-
-                    <Form.Item
                         name="group"
                         label="分组/项目"
                     >
@@ -330,7 +349,7 @@ const MqttBrokerManagement: React.FC = () => {
                                         type="link"
                                         icon={<SettingOutlined />}
                                         style={{ fontSize: 12, marginLeft: 8 }}
-                                        onClick={() => navigate('/mqtt-groups')}
+                                        onClick={() => navigate('/mqtt-instances?tab=groups')}
                                     >
                                         管理分组
                                     </Button>
@@ -371,7 +390,9 @@ const MqttBrokerManagement: React.FC = () => {
                         <Descriptions column={2} bordered size="small">
                             <Descriptions.Item label="名称" span={2}>{brokerDetail.name}</Descriptions.Item>
                             <Descriptions.Item label="分组" span={2}>
-                                {brokerDetail.group ? <Tag color="blue">{brokerDetail.group}</Tag> : '-'}
+                                {brokerDetail.group ? (
+                                    <Tag color="blue">{groupSelectOptions.find(opt => opt.value === brokerDetail.group)?.label || brokerDetail.group}</Tag>
+                                ) : '-'}
                             </Descriptions.Item>
                             <Descriptions.Item label="主机地址">{brokerDetail.host}</Descriptions.Item>
                             <Descriptions.Item label="端口">
@@ -383,11 +404,6 @@ const MqttBrokerManagement: React.FC = () => {
                                 </Tag>
                             </Descriptions.Item>
                             <Descriptions.Item label="备注" span={2}>{brokerDetail.description || '-'}</Descriptions.Item>
-                            <Descriptions.Item label="最后检查">
-                                {brokerDetail.lastHealthCheck
-                                    ? dayjs(brokerDetail.lastHealthCheck).format('YYYY-MM-DD HH:mm:ss')
-                                    : '-'}
-                            </Descriptions.Item>
                             <Descriptions.Item label="创建时间">
                                 {brokerDetail.createdAt
                                     ? dayjs(brokerDetail.createdAt).format('YYYY-MM-DD HH:mm:ss')

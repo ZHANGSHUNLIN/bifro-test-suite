@@ -92,11 +92,14 @@ const TaskList: React.FC<TaskListProps> = ({
     // 状态映射
     const statusMap: Record<string, { text: string; color: string }> = {
         [TaskStatusValues.INIT]: {text: '已创建', color: 'default'},
-        [TaskStatusValues.ASSIGNED]: {text: '已分配', color: 'default'},
-        [TaskStatusValues.COLLECTING]: {text: '结果收集中', color: 'processing'},
+        [TaskStatusValues.ASSIGNED]: {text: '已分配', color: 'cyan'},
+        [TaskStatusValues.START]: {text: '启动中', color: 'processing'},
+        [TaskStatusValues.CONNECTING]: {text: '连接中', color: 'processing'},
+        [TaskStatusValues.INIT_PUB_CLIENT]: {text: '初始化发布端', color: 'processing'},
+        [TaskStatusValues.INIT_SUB_CLIENT]: {text: '初始化订阅端', color: 'processing'},
         [TaskStatusValues.ONGOING]: {text: '运行中', color: 'processing'},
         [TaskStatusValues.SHUTDOWN]: {text: '已完成', color: 'success'},
-        [TaskStatusValues.SHUTDOWN_ING]: {text: '正在结束', color: 'warning'},
+        [TaskStatusValues.STOPPED]: {text: '已停止', color: 'warning'},
     };
 
     const taskTypeMap: Record<string, { text: string; color: string }> = {
@@ -125,7 +128,10 @@ const TaskList: React.FC<TaskListProps> = ({
             dataIndex: 'group',
             key: 'group',
             width: 100,
-            render: (group: string) => group ? <Tag color="blue">{group}</Tag> : <span>-</span>,
+            render: (group: string) => {
+                const groupName = groupSelectOptions.find(opt => opt.value === group)?.label || group;
+                return group ? <Tag color="blue">{groupName}</Tag> : <span>-</span>;
+            },
         },
         {
             title: '任务类型',
@@ -188,80 +194,84 @@ const TaskList: React.FC<TaskListProps> = ({
             title: '操作',
             key: 'action',
             width: 200,
-            render: (_: unknown, record: TaskListItem) => (
-                <Space.Compact size="small">
-                    <Button
-                        type="link"
-                        icon={<EyeOutlined/>}
-                        onClick={() => onViewDetail(record.id, record.taskId)}
-                    >
-                        详情
-                    </Button>
-                    <Button
-                        type="link"
-                        icon={<EditOutlined/>}
-                        onClick={() => onEdit(record)}
-                        disabled={record.status !== TaskStatusValues.INIT}
-                        hidden={record.status !== TaskStatusValues.INIT}
-                        title={record.status !== TaskStatusValues.INIT ? '只能在"已创建"状态编辑' : '编辑任务'}
-                    >
-                        编辑
-                    </Button>
+            render: (_: unknown, record: TaskListItem) => {
+                const status = record.status;
+                const isRunning = status === TaskStatusValues.START
+                    || status === TaskStatusValues.CONNECTING
+                    || status === TaskStatusValues.INIT_PUB_CLIENT
+                    || status === TaskStatusValues.INIT_SUB_CLIENT
+                    || status === TaskStatusValues.ONGOING;
 
-                    <Button
-                        type="link"
-                        icon={<DeploymentUnitOutlined/>}
-                        onClick={() => onAssign(record)}
-                        hidden={record.status !== TaskStatusValues.INIT && record.status !== TaskStatusValues.ASSIGNED}
-                        disabled={record.status !== TaskStatusValues.INIT && record.status !== TaskStatusValues.ASSIGNED}
-                        title={record.status === TaskStatusValues.ASSIGNED ? '重新分配任务到集群节点' : '分配任务到集群节点'}
-                    >
-                        {record.status === TaskStatusValues.ASSIGNED ? '重新分配' : '分配'}
-                    </Button>
-                    <Button
-                        type="link"
-                        icon={<CheckCircleOutlined/>}
-                        onClick={() => onConfirm(record.id)}
-                        disabled={record.status !== TaskStatusValues.ASSIGNED}
-                        hidden={record.status !== TaskStatusValues.ASSIGNED}
-                        title={record.status !== TaskStatusValues.INIT ? '只能在"已创建"状态确认' : '确认开始任务'}
-                    >
-                        确认
-                    </Button>
-                    <Button
-                        type="link"
-                        icon={<StopOutlined/>}
-                        onClick={() => onStop(record.id)}
-                        hidden={record.status !== TaskStatusValues.ONGOING}
-                        disabled={record.status !== TaskStatusValues.ONGOING}
-                        title={record.status !== TaskStatusValues.ONGOING ? '只能在"运行中"状态停止' : '停止任务'}
-                    >
-                        停止
-                    </Button>
-                    <Popconfirm
-                        title="确定要删除这个任务吗？"
-                        onConfirm={() => onDelete(record.id)}
-                        okText="确定"
-                        cancelText="取消"
-                    >
+                return (
+                    <Space.Compact size="small">
                         <Button
                             type="link"
-                            danger
-                            icon={<DeleteOutlined/>}
+                            icon={<EyeOutlined/>}
+                            onClick={() => onViewDetail(record.id, record.taskId)}
                         >
-                            删除
+                            详情
                         </Button>
-                    </Popconfirm>
-                </Space.Compact>
-            ),
+                        {status === TaskStatusValues.INIT && (
+                            <Button
+                                type="link"
+                                icon={<EditOutlined/>}
+                                onClick={() => onEdit(record)}
+                            >
+                                编辑
+                            </Button>
+                        )}
+                        {(status === TaskStatusValues.INIT || status === TaskStatusValues.ASSIGNED) && (
+                            <Button
+                                type="link"
+                                icon={<DeploymentUnitOutlined/>}
+                                onClick={() => onAssign(record)}
+                            >
+                                {status === TaskStatusValues.ASSIGNED ? '重新分配' : '分配'}
+                            </Button>
+                        )}
+                        {status === TaskStatusValues.ASSIGNED && (
+                            <Button
+                                type="link"
+                                icon={<CheckCircleOutlined/>}
+                                onClick={() => onConfirm(record.id)}
+                            >
+                                确认
+                            </Button>
+                        )}
+                        {isRunning && (
+                            <Popconfirm
+                                title="确定要停止这个任务吗？"
+                                onConfirm={() => onStop(record.id)}
+                                okText="确定"
+                                cancelText="取消"
+                            >
+                                <Button type="link" icon={<StopOutlined/>}>
+                                    停止
+                                </Button>
+                            </Popconfirm>
+                        )}
+                        {!isRunning && (
+                            <Popconfirm
+                                title="确定要删除这个任务吗？"
+                                onConfirm={() => onDelete(record.id)}
+                                okText="确定"
+                                cancelText="取消"
+                            >
+                                <Button type="link" danger icon={<DeleteOutlined/>}>
+                                    删除
+                                </Button>
+                            </Popconfirm>
+                        )}
+                    </Space.Compact>
+                );
+            },
         },
     ];
 
     // 表格行选择配置
-    // 允许选择的状态：INIT, ASSIGNED, STOPPED, SHUTDOWN
+    // 允许选择的状态：INIT, STOPPED, SHUTDOWN
     const canSelectStatuses = [
         TaskStatusValues.INIT,
-        TaskStatusValues.ASSIGNED,
         TaskStatusValues.STOPPED,
         TaskStatusValues.SHUTDOWN
     ];

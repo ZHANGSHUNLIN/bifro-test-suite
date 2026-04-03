@@ -32,7 +32,7 @@ public class MqttBroker implements Serializable {
 
     private String description;
 
-    private String group; // 分组/项目名称，用于 Broker 分类管理
+    private String group; // 分组ID，用于 Broker 分类管理
 
     private Boolean enabled;
 

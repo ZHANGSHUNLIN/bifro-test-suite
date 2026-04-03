@@ -1,8 +1,8 @@
 package com.baidu.duhome.config.vertx.codec;
 
 import com.hazelcast.config.Config;
+import com.hazelcast.config.GlobalSerializerConfig;
 import com.hazelcast.config.SerializationConfig;
-import com.hazelcast.config.SerializerConfig;
 import io.vertx.core.Vertx;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
@@ -53,15 +53,11 @@ public class VertxCodecManager {
     public static void registerStreamSerializerAll(@NonNull Config hazelcastConfig){
         SerializationConfig serializationConfig = hazelcastConfig.getSerializationConfig();
 
-        for (CodecType codecType : CodecType.values()) {
-            SerializerConfig serializerConfig = new SerializerConfig();
-            serializerConfig.setTypeClass(codecType.getMessageClass());
-            serializerConfig.setTypeClassName(codecType.getMessageClass().getName());
-            serializerConfig.setImplementation(codecType.getSerializer());
-            serializationConfig.addSerializerConfig(serializerConfig);
-        }
-
-
+        // 设置全局 JSON 序列化器，禁用 Java 序列化
+        GlobalSerializerConfig globalSerializerConfig = new GlobalSerializerConfig()
+                .setImplementation(new GlobalJsonStreamSerializer());
+        serializationConfig.setGlobalSerializerConfig(globalSerializerConfig);
+        log.info("Registered Global JSON StreamSerializer, type ID: {}", GlobalJsonStreamSerializer.TYPE_ID);
     }
 
 }

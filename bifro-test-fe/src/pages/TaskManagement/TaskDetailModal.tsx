@@ -2,7 +2,9 @@ import React, {useEffect, useState} from 'react';
 import {Modal, Descriptions, Tag, Row, Col, Statistic, Table, Alert, Tabs, Button, Space, Collapse} from 'antd';
 import {useTaskData} from './hooks';
 import {taskApi} from '../../services/taskApi';
+import taskGroupApi from '../../services/taskGroupApi';
 import type {TaskDetailResponse, TaskReport} from '../../types/task';
+import type {TaskGroup} from '../../types/taskGroup';
 
 const {TabPane} = Tabs;
 const {Panel} = Collapse;
@@ -24,6 +26,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                                          }) => {
     const [taskDetail, setTaskDetail] = useState<TaskDetailResponse | null>(null);
     const {loadTaskDetail} = useTaskData();
+    const [groupOptions, setGroupOptions] = useState<{ label: string; value: string }[]>([]);
 
     // 任务报告详情弹窗状态
     const [reportModalVisible, setReportModalVisible] = useState(false);
@@ -50,6 +53,21 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             });
         }
     }, [visible, id]);
+
+    // 加载分组选项
+    useEffect(() => {
+        if (visible) {
+            taskGroupApi.getAllGroupsForSelect().then(allGroups => {
+                const options = allGroups.map((g: TaskGroup) => ({
+                    label: g.name,
+                    value: g.id
+                }));
+                setGroupOptions(options);
+            }).catch(error => {
+                console.error('加载分组选项失败:', error);
+            });
+        }
+    }, [visible]);
 
     // 加载任务报告详情
     const loadTaskReport = async (nodeId: string, taskId: string, page: number = 1, pageSize: number = 10) => {
@@ -90,11 +108,13 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     const getStatusColor = (status: string) => {
         const statusColors: Record<string, string> = {
             'INIT': 'default',
-            'ASSIGNED': 'default',
-            'COLLECTING': 'processing',
+            'START': 'processing',
+            'CONNECTING': 'processing',
+            'INIT_PUB_CLIENT': 'processing',
+            'INIT_SUB_CLIENT': 'processing',
             'ONGOING': 'processing',
             'SHUTDOWN': 'success',
-            'SHUTDOWN_ING': 'warning',
+            'STOPPED': 'warning',
         };
         return statusColors[status] || 'default';
     };
@@ -102,11 +122,13 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     const getStatusText = (status: string) => {
         const statusTexts: Record<string, string> = {
             'INIT': '已创建',
-            'ASSIGNED': '已分配',
-            'COLLECTING': '结果收集中',
+            'START': '启动中',
+            'CONNECTING': '连接中',
+            'INIT_PUB_CLIENT': '初始化发布端',
+            'INIT_SUB_CLIENT': '初始化订阅端',
             'ONGOING': '运行中',
             'SHUTDOWN': '已完成',
-            'SHUTDOWN_ING': '正在结束',
+            'STOPPED': '已停止',
         };
         return statusTexts[status] || status;
     };
@@ -216,8 +238,9 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                     <Descriptions.Item label="服务器地址">
                                         {taskDetail.brokers?.map(b => `${b.host}:${b.port}`).join(', ') || '-'}
                                     </Descriptions.Item>
-                                    <Descriptions.Item
-                                        label="任务分组">{taskDetail.mainTask.group || '-'}</Descriptions.Item>
+                                    <Descriptions.Item label="任务分组">
+                                        {taskDetail.mainTask?.group ? groupOptions.find(opt => opt.value === taskDetail.mainTask?.group)?.label || taskDetail.mainTask?.group : '-'}
+                                    </Descriptions.Item>
                                     <Descriptions.Item
                                         label="客户端数量">{taskDetail.mainTask.totalClientCount}</Descriptions.Item>
                                     <Descriptions.Item

@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Form, Row, Col, Select, Card, Switch, Input, InputNumber, Button, Space, Tag, message } from 'antd';
-import { MinusCircleOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons';
+import { Modal, Form, Row, Col, Select, Switch, Input, InputNumber, Button, Tag, message, Tabs, Divider } from 'antd';
+import { SettingOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTaskData } from './hooks';
-import { formFieldGroups } from './form-schema';
-import { TaskTypeValues, MqttQoSValues } from '../../types/task';
+import { TaskTypeValues, MqttQoSValues, TaskTemplateValues } from '../../types/task';
 import type { TaskListItem, TaskRequest } from '../../types/task';
 import taskGroupApi from '../../services/taskGroupApi';
+import taskApi from '../../services/taskApi';
 import type { TaskGroup } from '../../types/taskGroup';
 import groupApi from '../../services/groupApi';
 import type { MqttGroup } from '../../types/mqttGroup';
-
-const { Option } = Select;
 
 interface TaskEditorProps {
   visible: boolean;
@@ -37,52 +35,77 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
   const [taskGroupSelectOptions, setTaskGroupSelectOptions] = useState<{ label: string; value: string }[]>([]);
   const [brokerGroupSelectOptions, setBrokerGroupSelectOptions] = useState<{ label: string; value: string }[]>([]);
   const [selectedBrokerGroup, setSelectedBrokerGroup] = useState<string>('');
+  const [templateOptions, setTemplateOptions] = useState<Array<{ value: string; label: string; type: string }>>([]);
+
+  // 加载任务模板选项
+  const loadTemplateOptions = async () => {
+    try {
+      const templates = await taskApi.getTemplates();
+      setTemplateOptions(templates);
+    } catch (error) {
+      console.error('加载任务模板选项失败:', error);
+    }
+  };
 
   // 加载任务分组选项
   const loadTaskGroupSelectOptions = async () => {
     try {
+      const defaultGroup = await taskGroupApi.getOrCreateDefaultGroup();
       const allGroups = await taskGroupApi.getAllGroupsForSelect();
-      const options = allGroups.map((g: TaskGroup) => ({
-        label: g.name,
-        value: g.name
-      }));
-      setTaskGroupSelectOptions([{ label: '所有分组', value: '' }, ...options]);
+      const otherGroups = allGroups.filter((g: TaskGroup) => g.name !== '默认分组');
+      const sortedGroups = [defaultGroup, ...otherGroups];
+      const options = sortedGroups.map((g: TaskGroup) => ({ label: g.name, value: g.id }));
+      setTaskGroupSelectOptions(options);
+      return defaultGroup.id;
     } catch (error) {
       console.error('加载任务分组选项失败:', error);
       message.error('加载任务分组选项失败');
+      return '';
     }
   };
 
   // 加载broker分组选项
   const loadBrokerGroupSelectOptions = async () => {
     try {
+      const defaultGroup = await groupApi.getOrCreateDefaultGroup();
       const allGroups = await groupApi.getAllGroupsForSelect();
-      const options = allGroups.map((g: MqttGroup) => ({
-        label: g.name,
-        value: g.name
-      }));
-      setBrokerGroupSelectOptions([{ label: '所有分组', value: '' }, ...options]);
+      const otherGroups = allGroups.filter((g: MqttGroup) => g.name !== '默认分组');
+      const sortedGroups = [defaultGroup, ...otherGroups];
+      const options = sortedGroups.map((g: MqttGroup) => ({ label: g.name, value: g.id }));
+      setBrokerGroupSelectOptions(options);
+      return defaultGroup.id;
     } catch (error) {
       console.error('加载broker分组选项失败:', error);
       message.error('加载broker分组选项失败');
+      return '';
     }
   };
 
   // 初始化表单
   useEffect(() => {
     if (visible) {
-      loadTaskGroupSelectOptions();
-      loadBrokerGroupSelectOptions();
-      if (editingTask) {
-        loadTaskData(editingTask.id);
-        loadBrokerList();
-      } else {
-        form.resetFields();
-        setCurrentTaskType(TaskTypeValues.CONN);
-        setWillEnabled(false);
-        setSelectedBrokerGroup('');
-        loadBrokerList();
-      }
+      const initForm = async () => {
+        const [defaultTaskGroupId, defaultBrokerGroupId] = await Promise.all([
+          loadTaskGroupSelectOptions(),
+          loadBrokerGroupSelectOptions()
+        ]);
+        loadTemplateOptions();
+        if (editingTask) {
+          loadTaskData(editingTask.id);
+          loadBrokerList();
+        } else {
+          form.resetFields();
+          form.setFieldsValue({
+            template: TaskTemplateValues.CONN_STANDARD,
+            group: defaultTaskGroupId || ''
+          });
+          setCurrentTaskType(TaskTypeValues.CONN);
+          setWillEnabled(false);
+          setSelectedBrokerGroup(defaultBrokerGroupId || '');
+          loadBrokerList();
+        }
+      };
+      initForm();
     }
   }, [visible, editingTask]);
 
@@ -101,10 +124,10 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
         form.setFieldsValue({
           ...detail.mainTask,
           taskName: detail.taskName,
-          group: detail.group || '', // 任务分组回显
-          brokers: detail.brokers?.map((broker: { host: string; port: number }) => `${broker.host}:${broker.port}`) || [],
+          group: detail.group || '',
+          template: detail.mainTask.template || (detail.mainTask.taskType === TaskTypeValues.CONN ? TaskTemplateValues.CONN_STANDARD : TaskTemplateValues.PUBSUB_STANDARD),
+          brokers: detail.brokers?.map((broker: { host: string; port: number; brokerId?: string }) => broker.brokerId || `${broker.host}:${broker.port}`) || [],
           willConfig: detail.mainTask.willConfig || { willFlag: false },
-          // 字段名映射：后端字段名 -> 前端字段名
           autoMultiAddress: detail.mainTask.enableAutoMultiAddress || false,
           wildcard: detail.mainTask.wildcard || false,
           mqtt5: detail.mainTask.mqtt5 || false,
@@ -113,8 +136,6 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
         setCurrentTaskType(detail.mainTask.taskType);
         setWillEnabled(detail.mainTask.willConfig?.willFlag || false);
         setAuthType(detail.mainTask.authType || 'normal');
-
-        // broker 分组回显：获取任务中的 brokers 对应的分组
         if (detail.brokers && detail.brokers.length > 0) {
           const brokerGroup = detail.brokers[0]?.group || '';
           setSelectedBrokerGroup(brokerGroup);
@@ -130,7 +151,6 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
     setBrokerLoading(true);
     try {
       const brokerData = await loadBrokers();
-      // 根据选中的分组过滤 broker
       const filtered = selectedBrokerGroup
         ? brokerData.filter((broker: any) => broker.group === selectedBrokerGroup)
         : brokerData;
@@ -146,18 +166,18 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
-
-      // 处理 brokers 数据结构
-      const brokers = values.brokers || ['10.99.48.7:8883'];
-      const brokerItems = brokers.map((b: string) => {
-        const [host, port] = b.split(':');
-        return { host, port: parseInt(port) };
+      const selectedBrokerIds: string[] = values.brokers || [];
+      const brokerItems = selectedBrokerIds.map((brokerId: string) => {
+        const found = brokers.find((b: any) => b.brokerId === brokerId);
+        return found
+          ? { brokerId: found.brokerId, host: found.host, port: found.port }
+          : { brokerId, host: brokerId, port: 1883 };
       });
 
-      // 构建任务请求
       const taskRequest: TaskRequest = {
         taskName: values.taskName,
         taskType: values.taskType,
+        template: values.template || (values.taskType === TaskTypeValues.CONN ? TaskTemplateValues.CONN_STANDARD : TaskTemplateValues.PUBSUB_STANDARD),
         group: values.group || '',
         autoMultiAddress: values.autoMultiAddress || false,
         brokers: brokerItems,
@@ -183,8 +203,6 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
         pubOnly: values.pubOnly || false,
         subOnly: values.subOnly || false,
         exceptionEnds: values.exceptionEnds !== false,
-        lifecycleActions: values.lifecycleActions || [],
-        lifecycleActionsConfig: values.lifecycleActionsConfig || {},
         willConfig: values.willConfig || { willFlag: false },
         thingIdStartAt: values.thingIdStartAt || 0,
         thingIdPrefix: values.thingIdPrefix || null,
@@ -219,134 +237,115 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
     onCancel();
   };
 
-  // 渲染表单字段
-  const renderFormField = (field: any) => {
-    const commonProps = {
-      placeholder: field.placeholder,
-      style: { width: '100%' },
-      onChange: field.onChange, // 添加onChange回调支持
-    };
-
-    switch (field.type) {
-      case 'input':
-        return <Input {...commonProps} />;
-      case 'inputNumber':
-        return <InputNumber {...commonProps} min={field.min} max={field.max} step={field.step} />;
-      case 'select':
-        return (
-          <Select {...commonProps} options={field.options}>
-            {field.options?.map((opt: any) => (
-              <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-            ))}
-          </Select>
-        );
-      case 'switch':
-        return <Switch onChange={field.onChange} />; // Switch组件单独的onChange属性
-      case 'password':
-        return <Input.Password {...commonProps} />;
-      case 'textarea':
-        return <Input.TextArea {...commonProps} rows={field.rows || 2} />;
-      default:
-        return <Input {...commonProps} />;
-    }
-  };
-
-  // 渲染表单组
-  const renderFormGroup = (title: string, fields: any[], grid = true) => (
-    <Card title={title} size="small" style={{ marginBottom: 16 }}>
-      {grid ? (
-        <Row gutter={16}>
-          {fields.map((field, index) => (
-            <Col span={8} key={index}>
-              <Form.Item
-                name={field.name}
-                label={field.label}
-                rules={field.rules || []}
-                valuePropName={field.type === 'switch' ? 'checked' : undefined}
-                initialValue={field.initialValue}
-              >
-                {renderFormField(field)}
+  const tabItems = [
+    {
+      key: 'basic',
+      label: '基本设置',
+      children: (
+        <>
+          {/* 任务基础信息 */}
+          <Row gutter={16}>
+            <Col span={10}>
+              <Form.Item name="taskName" label="任务名称" rules={[{ required: true, message: '请输入任务名称' }]}>
+                <Input placeholder="请输入任务名称" />
               </Form.Item>
             </Col>
-          ))}
-        </Row>
-      ) : (
-        fields.map((field, index) => (
-          <Form.Item
-            key={index}
-            name={field.name}
-            label={field.label}
-            rules={field.rules || []}
-            valuePropName={field.type === 'switch' ? 'checked' : undefined}
-            initialValue={field.initialValue}
-          >
-            {renderFormField(field)}
-          </Form.Item>
-        ))
-      )}
-    </Card>
-  );
-
-  return (
-    <Modal
-      title={editingTask ? '编辑任务' : '添加任务'}
-      open={visible}
-      onOk={handleOk}
-      onCancel={handleCancel}
-      width={800}
-    >
-      <Form form={form} layout="vertical">
-        {/* 基础配置 */}
-        {renderFormGroup('基础配置', formFieldGroups.basic.map(field => {
-          if (field.name === 'taskType') {
-            return {
-              ...field,
-              onChange: (value: string) => {
-                setCurrentTaskType(value);
-                // 确保表单值更新后重新渲染
-                form.setFieldsValue({ taskType: value });
-              }
-            };
-          }
-          return field;
-        }))}
-        {/* 任务分组 */}
-        <Form.Item
-          name="group"
-          label="任务分组"
-          initialValue={editingTask?.group || ''}
-        >
-          <Select
-            placeholder="选择任务分组（可选）"
-            allowClear
-            options={taskGroupSelectOptions}
-            dropdownRender={(menu) => (
-              <>
-                {menu}
-                <Button
-                  type="link"
-                  icon={<SettingOutlined />}
-                  style={{ fontSize: 12, marginLeft: 8 }}
-                  onClick={() => navigate('/task-groups')}
-                >
-                  管理任务分组
-                </Button>
-              </>
-            )}
-          />
-        </Form.Item>
-
-        {/* Broker选择 */}
-        <Card title="服务器配置" size="small" style={{ marginBottom: 16 }}>
-          <Row gutter={16} style={{ marginBottom: 16 }}>
-            <Col span={12}>
-              <Form.Item label="Broker分组（用于筛选）">
+            <Col span={7}>
+              <Form.Item name="taskType" label="任务类型" initialValue={TaskTypeValues.CONN} rules={[{ required: true }]}>
+                <Select options={[
+                  { label: '连接', value: TaskTypeValues.CONN },
+                  { label: '发布/订阅', value: TaskTypeValues.PUBSUB },
+                ]} />
+              </Form.Item>
+            </Col>
+            <Col span={7}>
+              <Form.Item name="template" label="任务模板" initialValue={TaskTemplateValues.CONN_STANDARD} rules={[{ required: true }]}>
+                <Select options={templateOptions.filter(t => t.type === currentTaskType).map(t => ({ label: t.label, value: t.value }))} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item name="group" label="任务分组">
                 <Select
-                  placeholder="选择Broker分组（可选）"
-                  value={selectedBrokerGroup}
+                  placeholder="选择任务分组（可选）"
+                  allowClear
+                  options={taskGroupSelectOptions}
+                  dropdownRender={(menu) => (
+                    <>
+                      {menu}
+                      <Button type="link" icon={<SettingOutlined />} style={{ fontSize: 12 }} onClick={() => navigate('/tasks?tab=groups')}>
+                        管理任务分组
+                      </Button>
+                    </>
+                  )}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="protocol" label="协议类型" initialValue="tcp" rules={[{ required: true }]}>
+                <Select options={[{ label: 'TCP', value: 'tcp' }]} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="authType" label="认证类型" initialValue="normal">
+                <Select
+                  onChange={(value) => setAuthType(value)}
+                  options={[
+                    { label: '普通', value: 'normal' },
+                    { label: 'BYOC', value: 'byoc' },
+                    { label: 'IoT Core（待实现）', value: 'iotCore', disabled: true },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {/* 认证详情 */}
+          {authType === 'normal' && (
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item name="username" label="用户名">
+                  <Input placeholder="用户名（可选）" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name="password" label="密码">
+                  <Input.Password placeholder="密码（可选）" />
+                </Form.Item>
+              </Col>
+            </Row>
+          )}
+          {authType === 'byoc' && (
+            <Row gutter={16}>
+              <Col span={8}>
+                <Form.Item name="tenantId" label="租户 ID" rules={[{ required: true, message: 'BYOC认证需要租户ID' }]}>
+                  <Input placeholder="租户ID" />
+                </Form.Item>
+              </Col>
+              <Col span={8}>
+                <Form.Item name="thingIdPrefix" label="Thing ID 前缀">
+                  <Input placeholder="默认为 demo_" />
+                </Form.Item>
+              </Col>
+              <Col span={8}>
+                <Form.Item name="thingIdStartAt" label="Thing ID 起始值" initialValue={0}>
+                  <InputNumber min={0} style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+            </Row>
+          )}
+
+          <Divider plain>Broker 配置</Divider>
+
+          <Row gutter={16}>
+            <Col span={10}>
+              <Form.Item label="Broker 分组（筛选用）">
+                <Select
+                  placeholder="选择 Broker 分组（可选）"
+                  value={selectedBrokerGroup || undefined}
                   onChange={(value) => {
-                    setSelectedBrokerGroup(value);
-                    // 清空已选择的 broker，因为分组改变了
+                    setSelectedBrokerGroup(value ?? '');
                     form.setFieldsValue({ brokers: [] });
                   }}
                   allowClear
@@ -354,315 +353,323 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
                   dropdownRender={(menu) => (
                     <>
                       {menu}
-                      <Button
-                        type="link"
-                        icon={<SettingOutlined />}
-                        style={{ fontSize: 12, marginLeft: 8 }}
-                        onClick={() => navigate('/mqtt-groups')}
-                      >
-                        管理Broker分组
+                      <Button type="link" icon={<SettingOutlined />} style={{ fontSize: 12 }} onClick={() => navigate('/mqtt-instances?tab=groups')}>
+                        管理 Broker 分组
                       </Button>
                     </>
                   )}
                 />
               </Form.Item>
             </Col>
-            <Col span={12}>
-              <span style={{ color: '#888', fontSize: '12px' }}>
-                提示：一个任务只能选择同一分组中的 Broker
-              </span>
+            <Col span={14} style={{ paddingTop: 30 }}>
+              <span style={{ color: '#8c8c8c', fontSize: 12 }}>同一任务只能使用同一分组内的 Broker</span>
             </Col>
           </Row>
           <Form.Item
             name="brokers"
-            label="选择Broker"
-            initialValue={editingTask?.brokers?.map((b: any) => `${b.host}:${b.port}`) || []}
-            rules={[{ required: true, message: '请选择至少一个Broker' }]}
+            label="选择 Broker"
+            rules={[{ required: true, message: '请选择至少一个 Broker' }]}
           >
             <Select
               mode="multiple"
-              placeholder="请选择Broker"
+              placeholder="请选择 Broker"
               loading={brokerLoading}
               options={brokers.map(broker => ({
-                value: `${broker.host}:${broker.port}`,
+                value: broker.brokerId,
                 label: (
-                  <div>
-                    <span>{broker.name} ({broker.host}:{broker.port})</span>
-                    {broker.group && (
-                      <Tag color="blue" style={{ marginLeft: 8 }}>{broker.group}</Tag>
+                  <span>
+                    {broker.name} ({broker.host}:{broker.port})
+                    {broker.group && brokerGroupSelectOptions.find(opt => opt.value === broker.group) && (
+                      <Tag color="blue" style={{ marginLeft: 8 }}>
+                        {brokerGroupSelectOptions.find(opt => opt.value === broker.group)?.label}
+                      </Tag>
                     )}
-                  </div>
+                  </span>
                 )
               }))}
             />
           </Form.Item>
-        </Card>
+        </>
+      )
+    },
+    {
+      key: 'stress',
+      label: '压测参数',
+      children: (
+        <>
+          <Divider plain>客户端配置</Divider>
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item name="totalClientCount" label="客户端数量" initialValue={100} rules={[{ required: true }]}>
+                <InputNumber min={1} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="connectRate" label="连接速率（个/秒）" initialValue={100}>
+                <InputNumber min={1} step={0.1} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="disconnectRate" label="断开速率（个/秒）" initialValue={2000}>
+                <InputNumber min={0.1} step={0.1} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
 
+          <Divider plain>时间参数</Divider>
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item name="stressDurationInSec" label="测试时长（秒）" initialValue={60}>
+                <InputNumber min={1} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="stageTimeoutInSec" label="阶段超时（秒）" initialValue={30}>
+                <InputNumber min={1} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="delayAfterReadyInSec" label="准备后延迟（秒）" initialValue={1}>
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
 
-        {/* 发布/订阅相关配置 - 仅在 PUBSUB 类型时显示 */}
-        {currentTaskType === TaskTypeValues.PUBSUB && (
+          {/* 发布/订阅参数 - 仅 PUBSUB 类型显示 */}
+          {currentTaskType === TaskTypeValues.PUBSUB && (
             <>
-              <Card title="发布/订阅配置" size="small" style={{marginBottom: 16}}>
-                <Form.Item
-                    name="topic"
-                    label="主题"
-                    rules={[{required: true, message: '请输入发布/订阅主题'}]}
-                >
-                  <Input placeholder="例如: /test/topic"/>
-                </Form.Item>
-
-                <Row gutter={16}>
-                  <Col span={8}>
-                    <Form.Item
-                        name="qos"
-                        label="QoS等级"
-                        initialValue={MqttQoSValues.AT_MOST_ONCE}
-                    >
-                      <Select>
-                        <Option value={MqttQoSValues.AT_MOST_ONCE}>QoS 0 (最多一次)</Option>
-                        <Option value={MqttQoSValues.AT_LEAST_ONCE}>QoS 1 (至少一次)</Option>
-                        <Option value={MqttQoSValues.EXACTLY_ONCE}>QoS 2 (恰好一次)</Option>
-                      </Select>
-                    </Form.Item>
-                  </Col>
-                  <Col span={8}>
-                    <Form.Item
-                        name="messageSize"
-                        label="消息大小(字节)"
-                        initialValue={32}
-                        rules={[{
-                          type: 'number',
-                          min: 1,
-                          max: 65536
-                        }]}
-                    >
-                      <InputNumber type="number" style={{width: '100%'}}/>
-                    </Form.Item>
-                  </Col>
-                  <Col span={8}>
-                    <Form.Item
-                        name="pubIntervalInMs"
-                        label="发布间隔(毫秒)"
-                        initialValue={10000}
-                        rules={[{
-                          type: 'number',
-                          min: 10,
-                          max: 60000
-                        }]}
-                    >
-                      <InputNumber type="number" style={{width: '100%'}}/>
-                    </Form.Item>
-                  </Col>
-                </Row>
-
-              </Card>
-
-              <Card title="Pub/Sub行为配置" size="small" style={{marginBottom: 16}}>
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <Form.Item
-                        name="pubOnly"
-                        label="仅发布模式"
-                        valuePropName="checked"
-                        initialValue={false}
-                    >
-                      <Switch/>
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    <Form.Item
-                        name="subOnly"
-                        label="仅订阅模式"
-                        valuePropName="checked"
-                        initialValue={false}
-                    >
-                      <Switch/>
-                    </Form.Item>
-                  </Col>
-                </Row>
-              </Card>
+              <Divider plain>发布/订阅</Divider>
+              <Form.Item name="topic" label="主题" rules={[{ required: true, message: '请输入发布/订阅主题' }]}>
+                <Input placeholder="例如: /test/topic" />
+              </Form.Item>
+              <Row gutter={16}>
+                <Col span={8}>
+                  <Form.Item name="qos" label="QoS 等级" initialValue={MqttQoSValues.AT_MOST_ONCE}>
+                    <Select options={[
+                      { label: 'QoS 0（最多一次）', value: MqttQoSValues.AT_MOST_ONCE },
+                      { label: 'QoS 1（至少一次）', value: MqttQoSValues.AT_LEAST_ONCE },
+                      { label: 'QoS 2（恰好一次）', value: MqttQoSValues.EXACTLY_ONCE },
+                    ]} />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item name="messageSize" label="消息大小（字节）" initialValue={32} rules={[{ type: 'number', min: 1, max: 65536 }]}>
+                    <InputNumber style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item name="pubIntervalInMs" label="发布间隔（毫秒）" initialValue={10000} rules={[{ type: 'number', min: 10, max: 60000 }]}>
+                    <InputNumber style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={16}>
+                <Col span={8}>
+                  <Form.Item name="pubOnly" label="仅发布模式" valuePropName="checked" initialValue={false}>
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item name="subOnly" label="仅订阅模式" valuePropName="checked" initialValue={false}>
+                    <Switch />
+                  </Form.Item>
+                </Col>
+              </Row>
             </>
-        )}
-
-
-        {/* 认证配置 */}
-        <Card title="认证配置" size="small" style={{ marginBottom: 16 }}>
-          <Form.Item
-            name="authType"
-            label="认证类型"
-            initialValue="normal"
-          >
-            <Select onChange={(value) => setAuthType(value)}>
-              <Option value="normal">普通</Option>
-              <Option value="byoc">BYOC</Option>
-              <Option value="iotCore" disabled>IoT Core (待实现)</Option>
-            </Select>
-          </Form.Item>
-
-          {authType === 'normal' && (
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item
-                  name="username"
-                  label="用户名"
-                >
-                  <Input placeholder="用户名（可选）" />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  name="password"
-                  label="密码"
-                >
-                  <Input.Password placeholder="密码（可选）" />
-                </Form.Item>
-              </Col>
-            </Row>
           )}
 
-          {authType === 'byoc' && (
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item
-                  name="tenantId"
-                  label="租户ID"
-                  rules={[{ required: true, message: 'BYOC认证需要租户ID' }]}
-                >
-                  <Input placeholder="租户ID" />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  name="thingIdPrefix"
-                  label="Thing ID前缀"
-                >
-                  <Input placeholder="默认为demo_" />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  name="thingIdStartAt"
-                  label="Thing ID起始值"
-                  initialValue={0}
-                >
-                  <InputNumber min={0} style={{ width: '100%' }} />
-                </Form.Item>
-              </Col>
-            </Row>
-          )}
-        </Card>
+          <Divider plain>统计配置</Divider>
+          <Row gutter={16}>
+            <Col span={6}>
+              <Form.Item name="fanOut" label="Fan Out" initialValue={1}>
+                <InputNumber min={1} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="fanIn" label="Fan In" initialValue={1}>
+                <InputNumber min={1} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="skipStatsPeriod" label="跳过统计周期" initialValue={0}>
+                <InputNumber min={0} max={100} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="tagPeriodIntervalInSec" label="标签周期（秒）" initialValue={30}>
+                <InputNumber min={1} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+        </>
+      )
+    },
+    {
+      key: 'advanced',
+      label: '高级配置',
+      children: (
+        <>
+          <Divider plain>协议选项</Divider>
+          <Row gutter={16}>
+            <Col span={6}>
+              <Form.Item name="cleanSession" label="Clean Session" valuePropName="checked" initialValue={true}>
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="mqtt5" label="MQTT 5.0" valuePropName="checked" initialValue={false}>
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="autoMultiAddress" label="自动多地址" valuePropName="checked" initialValue={true}>
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="wildcard" label="通配符主题" valuePropName="checked" initialValue={false}>
+                <Switch />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={6}>
+              <Form.Item name="emptyClientId" label="允许空 ClientID" valuePropName="checked" initialValue={false}>
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="retain" label="Retain 消息" valuePropName="checked" initialValue={false}>
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="fixedTopic" label="固定 Topic" valuePropName="checked" initialValue={false}>
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="exceptionEnds" label="异常时终止任务" valuePropName="checked" initialValue={true}>
+                <Switch />
+              </Form.Item>
+            </Col>
+          </Row>
 
-        {/* 连接通用配置 */}
-        {renderFormGroup('连接通用配置', formFieldGroups.connection)}
+          <Divider plain>连接参数</Divider>
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item name="keepAliveInSec" label="保活时间（秒）" initialValue={120}>
+                <InputNumber min={0} max={3600} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="expiryIntervalInSec" label="消息过期时间（秒）" initialValue={120}>
+                <InputNumber min={0} max={86400} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="maxInflightQueue" label="最大队列大小" initialValue={200}>
+                <InputNumber min={10} max={10000} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
 
-        {/* 协议配置 */}
-        {renderFormGroup('协议配置', formFieldGroups.protocol)}
+          <Divider plain>超时与重连</Divider>
+          <Row gutter={16}>
+            <Col span={6}>
+              <Form.Item name="connectTimeoutInMs" label="连接超时（毫秒）" initialValue={10000}>
+                <InputNumber min={100} max={60000} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="ackTimeoutInSec" label="ACK 超时（秒）" initialValue={120}>
+                <InputNumber min={1} max={3600} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="reconnectMaxAttempts" label="最大重连次数" initialValue={10}>
+                <InputNumber min={1} max={100} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="reconnectIntervalInMs" label="重连间隔（毫秒）" initialValue={5000}>
+                <InputNumber min={100} max={30000} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
 
-        {/* 客户端ID配置 - 仅显示空Client ID允许选项，其他字段已在认证配置中显示 */}
-        {renderFormGroup('客户端ID配置', formFieldGroups.clientId)}
-
-        {/* 连接超时与重连配置 */}
-        {renderFormGroup('连接超时与重连配置', formFieldGroups.timeout)}
-
-        {/* 生命周期动作 */}
-        <Card title="生命周期动作" size="small" style={{ marginBottom: 16 }}>
-          <Form.List name="lifecycleActions">
-            {(fields, { add, remove }) => (
-              <>
-                {fields.map(({ key, name, ...restField }) => (
-                  <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
-                    <Form.Item
-                      {...restField}
-                      name={[name, 'action']}
-                      rules={[{ required: true, message: '请选择动作' }]}
-                    >
-                      <Select placeholder="选择动作" style={{ width: 160 }}>
-                        <Option value="CONNECT">连接</Option>
-                        <Option value="DISCONNECT">断开</Option>
-                        <Option value="PUBLISH">发布</Option>
-                        <Option value="SUBSCRIBE">订阅</Option>
-                      </Select>
-                    </Form.Item>
-                    <Form.Item
-                      {...restField}
-                      name={[name, 'delayInMs']}
-                      rules={[{ required: true, message: '请输入延迟时间' }]}
-                    >
-                      <InputNumber type="number" style={{ width: '100%' }} placeholder="延迟(ms)" />
-                    </Form.Item>
-                    <MinusCircleOutlined onClick={() => remove(name)} />
-                  </Space>
-                ))}
-                <Form.Item>
-                  <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
-                    添加动作
-                  </Button>
-                </Form.Item>
-              </>
-            )}
-          </Form.List>
-        </Card>
-
-        {/* Will配置 */}
-        <Card title="Will配置" size="small" style={{ marginBottom: 16 }}>
-          <Form.Item
-            name={['willConfig', 'willFlag']}
-            label="启用Will"
-            valuePropName="checked"
-            initialValue={false}
-          >
-            <Switch onChange={(checked) => setWillEnabled(checked)} />
-          </Form.Item>
+          <Divider plain>Will 配置</Divider>
+          <Row gutter={16}>
+            <Col span={6}>
+              <Form.Item name={['willConfig', 'willFlag']} label="启用 Will" valuePropName="checked" initialValue={false}>
+                <Switch onChange={(checked) => setWillEnabled(checked)} />
+              </Form.Item>
+            </Col>
+          </Row>
           {willEnabled && (
             <>
               <Row gutter={16}>
                 <Col span={16}>
-                  <Form.Item
-                    name={['willConfig', 'willTopic']}
-                    label="Will Topic"
-                    initialValue="last/{clientId}"
-                    rules={[{ required: true, message: '请输入Will Topic' }]}
-                  >
+                  <Form.Item name={['willConfig', 'willTopic']} label="Will Topic" initialValue="last/{clientId}" rules={[{ required: true, message: '请输入 Will Topic' }]}>
                     <Input placeholder="例如: last/{clientId}" />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item name={['willConfig', 'willQos']} label="Will QoS" initialValue={1}>
+                    <Select options={[
+                      { label: 'QoS 0', value: 0 },
+                      { label: 'QoS 1', value: 1 },
+                      { label: 'QoS 2', value: 2 },
+                    ]} />
                   </Form.Item>
                 </Col>
               </Row>
               <Row gutter={16}>
                 <Col span={16}>
-                  <Form.Item
-                    name={['willConfig', 'willMessage']}
-                    label="Will Message"
-                    initialValue="last xxxxx"
-                    rules={[{ required: true, message: '请输入Will消息内容' }]}
-                  >
-                    <Input placeholder="Will消息内容" />
+                  <Form.Item name={['willConfig', 'willMessage']} label="Will Message" initialValue="last xxxxx" rules={[{ required: true, message: '请输入 Will 消息内容' }]}>
+                    <Input placeholder="Will 消息内容" />
                   </Form.Item>
                 </Col>
                 <Col span={8}>
-                  <Form.Item
-                    name={['willConfig', 'willQos']}
-                    label="Will QoS"
-                    initialValue={1}
-                  >
-                    <Select>
-                      <Option value={0}>QoS 0</Option>
-                      <Option value={1}>QoS 1</Option>
-                      <Option value={2}>QoS 2</Option>
-                    </Select>
+                  <Form.Item name={['willConfig', 'willRetain']} label="Will Retain" valuePropName="checked" initialValue={false}>
+                    <Switch />
                   </Form.Item>
                 </Col>
               </Row>
-              <Form.Item
-                name={['willConfig', 'willRetain']}
-                label="Will Retain"
-                valuePropName="checked"
-                initialValue={false}
-              >
-                <Switch />
-              </Form.Item>
             </>
           )}
-        </Card>
+        </>
+      )
+    }
+  ];
+
+  return (
+    <Modal
+      title={editingTask ? '编辑任务' : '添加任务'}
+      open={visible}
+      onOk={handleOk}
+      onCancel={handleCancel}
+      width={900}
+      styles={{ body: { maxHeight: '72vh', overflowY: 'auto', padding: '8px 24px 16px' } }}
+    >
+      <Form
+        form={form}
+        layout="vertical"
+        onValuesChange={(changedValues) => {
+          if ('taskType' in changedValues) {
+            const newType = changedValues.taskType;
+            setCurrentTaskType(newType);
+            const defaultTemplate = newType === TaskTypeValues.CONN
+              ? TaskTemplateValues.CONN_STANDARD
+              : TaskTemplateValues.PUBSUB_STANDARD;
+            form.setFieldsValue({ template: defaultTemplate });
+          }
+          if ('willConfig' in changedValues && changedValues.willConfig?.willFlag !== undefined) {
+            setWillEnabled(changedValues.willConfig.willFlag);
+          }
+        }}
+      >
+        <Tabs defaultActiveKey="basic" size="small" items={tabItems} />
       </Form>
     </Modal>
   );

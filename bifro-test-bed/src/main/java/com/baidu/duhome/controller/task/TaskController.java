@@ -39,10 +39,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.time.Duration;
+
+import com.baidu.iot.test.suite.TaskTemplate;
 
 
 @Slf4j
@@ -76,18 +79,19 @@ public class TaskController implements ApiController {
     /**
      * 获取所有任务列表（简略信息）
      */
-    @Operation(summary = "获取任务列表", description = "分页查询任务列表，支持按任务名称和类型筛选")
+    @Operation(summary = "获取任务列表", description = "分页查询任务列表，支持按任务名称、类型和分组筛选")
     @GetMapping("/list")
     public Mono<ApiResponse<PageInfo<TaskListVO>>> getAllTasks(
             @Parameter(description = "页码", example = "1") @RequestParam(name = "pageNum", defaultValue = "1") Integer pageNum,
             @Parameter(description = "每页大小", example = "20") @RequestParam(name = "pageSize", defaultValue = "20") Integer pageSize,
             @Parameter(description = "任务名称（模糊查询）") @RequestParam(name = "taskName", required = false) String taskName,
-            @Parameter(description = "任务类型") @RequestParam(name = "taskType", required = false) String taskType
+            @Parameter(description = "任务类型") @RequestParam(name = "taskType", required = false) String taskType,
+            @Parameter(description = "分组ID") @RequestParam(name = "group", required = false) String group
     ) {
         Pageable pageable = PageRequest.of(pageNum - 1, pageSize, Sort.by(Sort.Direction.DESC, "createTime"));
         Mono<Page<TaskInfoMetadata>> allTaskMono;
-        if (taskName != null && !taskName.isEmpty() || taskType != null && !taskType.isEmpty()) {
-            allTaskMono = taskManager.getAllTask(taskName, taskType, pageable);
+        if (taskName != null && !taskName.isEmpty() || taskType != null && !taskType.isEmpty() || group != null && !group.isEmpty()) {
+            allTaskMono = taskManager.getAllTask(taskName, taskType, group, pageable);
         } else {
             allTaskMono = taskManager.getAllTask(pageable);
         }
@@ -95,7 +99,7 @@ public class TaskController implements ApiController {
     }
 
     /**
-     * 通过taskId查询对应的集群任务和所有节点任务,todo 需要改为mongo存储
+     * 通过taskId查询对应的集群任务和所有节点任务
      */
     @Operation(summary = "获取任务详情", description = "根据任务 ID 获取任务详细信息")
     @GetMapping("/{id}")
@@ -176,12 +180,6 @@ public class TaskController implements ApiController {
         return clusterDataManager.allNodes();
     }
 
-    @Async
-    @GetMapping("/something")
-    public CompletableFuture<Map<Object, Object>> something(@RequestParam(name = "key") String key) {
-        return clusterDataManager.something(key);
-    }
-
     @GetMapping("/stop")
     public Boolean stop(@RequestParam(name = "id") Long id) {
         return vertx.cancelTimer(id);
@@ -195,6 +193,22 @@ public class TaskController implements ApiController {
             @RequestParam(name = "pageSize", defaultValue = "20") Integer pageSize
     ) {
         return ApiResponse.pageSuccessMono(reportService.taskReport(taskId, nodeId, pageNum, pageSize));
+    }
+
+    /**
+     * 获取所有可用的任务模板列表
+     */
+    @Operation(summary = "获取任务模板列表", description = "返回所有可用的任务模板类型")
+    @GetMapping("/templates")
+    public ApiResponse<List<Map<String, String>>> getTemplates() {
+        List<Map<String, String>> templates = Arrays.stream(TaskTemplate.values())
+                .map(t -> {
+                    String type = t.name().startsWith("CONN") ? "CONN"
+                            : t.name().startsWith("PUBSUB") ? "PUBSUB" : "OTHER";
+                    return Map.of("value", t.name(), "label", t.getLabel(), "type", type);
+                })
+                .toList();
+        return ApiResponse.success(templates);
     }
 
 }

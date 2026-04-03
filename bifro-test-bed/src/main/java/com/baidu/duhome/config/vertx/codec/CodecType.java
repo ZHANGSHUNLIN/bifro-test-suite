@@ -6,6 +6,7 @@ import com.baidu.duhome.bean.NodeInfo;
 import com.baidu.duhome.database.pojo.TaskInfoMetadata;
 import com.baidu.duhome.database.pojo.MqttBroker;
 import com.baidu.iot.test.suite.TaskSchedule;
+import com.baidu.iot.test.suite.TaskStage;
 import com.baidu.iot.test.suite.WillConfig;
 import com.baidu.iot.test.suite.models.ClientTaskEvent;
 import com.baidu.iot.test.suite.worker.TaskConfig;
@@ -28,6 +29,8 @@ public enum CodecType {
     NodeInfo(new GenericCodecSupplier<>(1008, NodeInfo.class)),
     MemoryInfo(new GenericCodecSupplier<>(1009, ClusterNodeInfo.MemoryInfo.class)),
     CpuInfo(new GenericCodecSupplier<>(1010, ClusterNodeInfo.CpuInfo.class)),
+    TaskStage(new GenericCodecSupplier<>(1011, TaskStage.class)),
+
 
 
     ;

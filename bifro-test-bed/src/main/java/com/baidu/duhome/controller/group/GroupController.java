@@ -84,8 +84,10 @@ public class GroupController implements ApiController {
      */
     @Operation(summary = "删除分组", description = "根据 ID 删除分组")
     @DeleteMapping("/{id}")
-    public Mono<ApiResponse<Void>> delete(@PathVariable(name = "id") @Parameter(description = "分组ID") String id) {
-        return groupManager.delete(id, null);
+    public Mono<ApiResponse<Void>> delete(
+            @PathVariable(name = "id") @Parameter(description = "分组ID") String id,
+            @Parameter(description = "分组类型：BROKER 或 TASK") @RequestParam(name = "type") String type) {
+        return groupManager.delete(id, type);
     }
 
     /**

@@ -19,7 +19,6 @@ import com.baidu.duhome.exception.ApiException;
 import com.baidu.iot.test.suite.TaskStage;
 import com.baidu.iot.test.suite.worker.TaskConfig;
 import io.netty.util.internal.StringUtil;
-import io.vertx.core.Vertx;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.RandomStringUtils;
@@ -46,9 +45,6 @@ import reactor.core.publisher.Mono;
 @Component
 @Slf4j
 public class TaskManager {
-
-    @Resource
-    private Vertx vertx;
 
     @Resource
     private ClusterDataManager clusterDataManager;
@@ -113,8 +109,7 @@ public class TaskManager {
                     TaskConfig taskConfig = taskInfoMetadata.getTaskConfig();
                     TaskStage currentStage = taskConfig.getTaskWorkStage();
 
-                    if (currentStage == TaskStage.ONGOING || currentStage == TaskStage.START
-                            || currentStage == TaskStage.COLLECTING || currentStage == TaskStage.SHUTDOWN_ING) {
+                    if (currentStage == TaskStage.ONGOING || currentStage == TaskStage.START) {
                         return Mono.just(ApiResponse.<TaskConfig>error("当前状态不允许分配任务: " + currentStage));
                     }
 
@@ -191,7 +186,7 @@ public class TaskManager {
                 .flatMap(taskInfoMetadata -> {
                     TaskConfig taskConfig = taskInfoMetadata.getTaskConfig();
                     TaskStage taskWorkStage = taskConfig.getTaskWorkStage();
-                    if (taskWorkStage == TaskStage.ONGOING || taskWorkStage == TaskStage.START || taskWorkStage == TaskStage.COLLECTING) {
+                    if (taskWorkStage == TaskStage.ONGOING || taskWorkStage == TaskStage.START) {
                         return Mono.just(ApiResponse.<TaskDetailResponse>error("任务已开始无法删除"));
                     }
                     return Mono.zip(
@@ -199,7 +194,7 @@ public class TaskManager {
                             nodeTaskRepository.deleteByTaskId(taskId)
                     ).thenReturn(ApiResponse.<TaskDetailResponse>success());
                 })
-                .switchIfEmpty(Mono.just(ApiResponse.<TaskDetailResponse>error("任务不存在")));
+                .switchIfEmpty(Mono.just(ApiResponse.error("任务不存在")));
     }
 
     public Mono<ApiResponse<String>> batchDelTask(List<String> taskIds) {
@@ -215,7 +210,7 @@ public class TaskManager {
                         .flatMap(taskInfoMetadata -> {
                             TaskConfig taskConfig = taskInfoMetadata.getTaskConfig();
                             TaskStage taskWorkStage = taskConfig.getTaskWorkStage();
-                            if (taskWorkStage == TaskStage.ONGOING || taskWorkStage == TaskStage.START || taskWorkStage == TaskStage.COLLECTING) {
+                            if (taskWorkStage == TaskStage.ONGOING || taskWorkStage == TaskStage.START) {
                                 failedIds.add(taskId + "(任务已开始无法删除)");
                                 return Mono.empty();
                             }
@@ -240,10 +235,10 @@ public class TaskManager {
     }
 
     /**
-     * 根据任务名称和任务类型分页查询
+     * 根据任务名称、任务类型和分组分页查询
      */
-    public Mono<Page<TaskInfoMetadata>> getAllTask(String taskName, String taskType, Pageable pageable) {
-        return taskInfoMetadataService.findByFilters(taskName, taskType, pageable);
+    public Mono<Page<TaskInfoMetadata>> getAllTask(String taskName, String taskType, String group, Pageable pageable) {
+        return taskInfoMetadataService.findByFilters(taskName, taskType, group, pageable);
     }
 
     public Mono<ApiResponse<TaskDetailResponse>> getTaskDetails(String taskId) {
@@ -277,7 +272,7 @@ public class TaskManager {
                                 return ApiResponse.success(response);
                             });
                 })
-                .switchIfEmpty(Mono.just(ApiResponse.<TaskDetailResponse>error("任务不存在")));
+                .switchIfEmpty(Mono.just(ApiResponse.error("任务不存在")));
     }
 
     /**
@@ -316,6 +311,7 @@ public class TaskManager {
      * 规则：
      * 1. 有分组的 Broker 必须属于同一分组
      * 2. 所有选中的 Broker 必须要么全有分组，要么全没有分组
+     *
      * @param brokerIds Broker ID 列表
      * @return 校验通过返回 true，否则返回 false
      */

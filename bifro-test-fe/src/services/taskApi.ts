@@ -69,14 +69,14 @@ export const taskApi = {
 
   // 删除任务
   deleteTask: (id: string) => {
-    return api.delete<TaskDetailResponse>('/task/:id', undefined, {
+    return api.delete<TaskDetailResponse>('/task/:id', {
       params: { id }
     });
   },
 
   // 批量删除任务
   batchDeleteTask: (ids: string[]) => {
-    return api.delete<string>('/task/batch', ids);
+    return api.deleteWithBody<string>('/task/batch', ids);
   },
 
   // 停止任务
@@ -89,6 +89,11 @@ export const taskApi = {
   // 获取所有节点信息
   getAllNodes: () => {
     return api.get<Record<string, any>>('/task/allNodes');
+  },
+
+  // 获取可用的任务模板列表
+  getTemplates: () => {
+    return api.get<Array<{ value: string; label: string; type: string }>>('/task/templates');
   },
 };
 

@@ -1,5 +1,6 @@
 package com.baidu.duhome.bean.dto;
 
+import com.baidu.iot.test.suite.TaskTemplate;
 import com.baidu.iot.test.suite.WillConfig;
 import com.baidu.iot.test.suite.worker.TaskBroker;
 import com.baidu.iot.test.suite.worker.TaskConfig;
@@ -13,9 +14,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 任务请求对象，用于接收外部传入的配置参数
@@ -30,6 +29,11 @@ public class TaskRequest {
      */
     @NotNull(message = "任务类型不能为空")
     private TaskType taskType;
+
+    /**
+     * 任务模板类型
+     */
+    private String template;
 
     /**
      * 任务分组（用于任务分类管理）
@@ -256,16 +260,6 @@ public class TaskRequest {
     @Min(value = 0, message = "断开连接速率必须大于0")
     private int disconnectRate = 500;
 
-    /**
-     * 生命周期动作，例如在连接后立即发送一个消息
-     * 动作列表：
-     *   pubPostConn
-     */
-    private String[] lifecycleActions;
-
-    private Map<String, Object> lifecycleActionsConfig = new HashMap<>();
-
-
     private WillConfig willConfig = new WillConfig();
 
     private Boolean exceptionEnds = false;
@@ -276,6 +270,9 @@ public class TaskRequest {
     public TaskConfig toTaskConfig() {
         TaskConfig config = new TaskConfig();
         config.setTaskType(this.taskType);
+        if (this.template != null) {
+            config.setTemplate(TaskTemplate.valueOf(this.template));
+        }
         config.setProtocol(this.protocol);
         config.setBrokers(this.brokers.stream()
                 .map(r-> TaskBroker.builder().host(r.getHost()).port(r.getPort()).build()).toList());
@@ -317,8 +314,6 @@ public class TaskRequest {
         config.setTagPeriodIntervalInSec(this.tagPeriodIntervalInSec);
         config.setGroup(this.group);
         config.setWillConfig(willConfig);
-        config.setLifecycleActions(lifecycleActions);
-        config.setLifecycleActionsConfig(this.lifecycleActionsConfig);
         config.setExceptionEnds(this.exceptionEnds);
         config.setEnableAutoMultiAddress(this.autoMultiAddress);
         return config;

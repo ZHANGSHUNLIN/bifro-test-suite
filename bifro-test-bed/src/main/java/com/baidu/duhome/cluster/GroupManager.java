@@ -92,9 +92,15 @@ public class GroupManager {
         return groupRepository.findById(groupId)
                 .switchIfEmpty(Mono.error(new ApiException("分组不存在")))
                 .flatMap(group -> {
-                    if (TYPE_BROKER.equals(type)) {
-                        // Broker分组：查找使用该分组的 Broker
-                        return brokerRepository.findByGroup(group.getName())
+                    // 验证前端传的 type 与数据库中的 type 是否一致
+                    if (type != null && !type.equals(group.getType())) {
+                        return Mono.error(new ApiException("分组类型不匹配"));
+                    }
+                    // 使用 group 实际的类型
+                    String actualType = group.getType();
+                    if (TYPE_BROKER.equals(actualType)) {
+                        // Broker分组：查找使用该分组的 Broker（使用分组ID匹配）
+                        return brokerRepository.findByGroup(group.getId())
                                 .collectList()
                                 .flatMap(brokers -> {
                                     if (brokers.isEmpty()) {
@@ -109,9 +115,21 @@ public class GroupManager {
                                     return Mono.error(new ApiException("无法删除分组，以下 Broker 正在使用：" + brokerNames));
                                 });
                     } else {
-                        // 任务分组：直接删除（暂不检查任务关联）
-                        return groupRepository.deleteById(groupId)
-                                .then(Mono.just(ApiResponse.<Void>success()));
+                        // 任务分组：查找使用该分组的任务
+                        return taskInfoMetadataRepository.findByGroup(group.getName())
+                                .collectList()
+                                .flatMap(tasks -> {
+                                    if (tasks.isEmpty()) {
+                                        // 没有任务使用该分组，可以删除
+                                        return groupRepository.deleteById(groupId)
+                                                .then(Mono.just(ApiResponse.<Void>success()));
+                                    }
+                                    // 有任务使用该分组，返回错误
+                                    String taskNames = tasks.stream()
+                                            .map(TaskInfoMetadata::getTaskName)
+                                            .collect(Collectors.joining("、"));
+                                    return Mono.error(new ApiException("无法删除分组，以下任务正在使用：" + taskNames));
+                                });
                     }
                 });
     }
@@ -129,15 +147,15 @@ public class GroupManager {
                             item.setType(type);
 
                             if (TYPE_BROKER.equals(type)) {
-                                // Broker分组：统计 Broker 数量
-                                return brokerRepository.findByGroup(group.getName())
+                                // Broker分组：统计 Broker 数量（使用分组ID匹配）
+                                return brokerRepository.findByGroup(group.getId())
                                         .count()
                                         .map(count -> {
                                             item.setCount(count);
                                             return item;
                                         });
                             } else {
-                                // 任务分组：统计任务数量
+                                // 任务分组：统计任务数量（使用分组名称匹配）
                                 return taskInfoMetadataRepository.findByGroup(group.getName())
                                         .count()
                                         .map(count -> {

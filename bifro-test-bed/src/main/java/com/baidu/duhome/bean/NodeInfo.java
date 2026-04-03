@@ -7,17 +7,13 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.io.Serial;
-import java.io.Serializable;
 import java.util.Map;
 
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class NodeInfo  implements Serializable {
-
-    @Serial
-    private static final long serialVersionUID = 1L;
+public class NodeInfo {
 
     private String nodeName;
 
@@ -25,7 +21,8 @@ public class NodeInfo  implements Serializable {
 
     private Long nextPing;
 
-    private boolean alive = true;
+    @Builder.Default
+    private Boolean alive = true;
 
     private Map<String, TaskStage> taskStage;
 

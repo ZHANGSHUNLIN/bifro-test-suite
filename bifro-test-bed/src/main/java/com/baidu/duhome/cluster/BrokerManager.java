@@ -16,6 +16,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -42,7 +43,7 @@ public class BrokerManager {
 
         // 按条件过滤
         if (enabled != null) {
-            allBrokers = allBrokers.filter(b -> b.getEnabled().equals(enabled));
+            allBrokers = allBrokers.filter(b -> Objects.equals(b.getEnabled(), enabled));
         }
         if (group != null && !group.isEmpty()) {
             allBrokers = allBrokers.filter(b -> group.equals(b.getGroup()));
@@ -64,7 +65,7 @@ public class BrokerManager {
                                 BeanUtils.copyProperties(broker, item);
                                 return item;
                             })
-                            .collect(java.util.stream.Collectors.toList());
+                            .collect(Collectors.toList());
 
                     return ApiResponse.pageSuccess(resultList, total, pageNum, pageSize);
                 });

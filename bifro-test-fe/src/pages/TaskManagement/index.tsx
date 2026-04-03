@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, Tabs } from 'antd';
 import { ClusterOutlined, TeamOutlined } from '@ant-design/icons';
+import { useSearchParams } from 'react-router-dom';
 import TaskListPage from './TaskListPage';
 import TaskGroupManagement from '../TaskGroupManagement';
 
@@ -11,7 +12,23 @@ interface TabItem {
 }
 
 const TaskManagement: React.FC = () => {
-    const [activeTab, setActiveTab] = useState('tasks');
+    const [searchParams, setSearchParams] = useSearchParams();
+    const tabFromUrl = searchParams.get('tab');
+    const [activeTab, setActiveTab] = useState(tabFromUrl || 'tasks');
+
+    // 监听 URL 参数变化，同步更新 activeTab
+    useEffect(() => {
+        const tab = searchParams.get('tab');
+        if (tab && (tab === 'tasks' || tab === 'groups')) {
+            setActiveTab(tab);
+        }
+    }, [searchParams]);
+
+    // 切换 Tab 时更新 URL 参数
+    const handleTabChange = (key: string) => {
+        setActiveTab(key);
+        setSearchParams({ tab: key });
+    };
 
     const tabItems: TabItem[] = [
         {
@@ -32,7 +49,7 @@ const TaskManagement: React.FC = () => {
                 <Tabs
                     activeKey={activeTab}
                     items={tabItems}
-                    onChange={(key) => setActiveTab(key as string)}
+                    onChange={handleTabChange}
                 />
             </div>
             <Card>

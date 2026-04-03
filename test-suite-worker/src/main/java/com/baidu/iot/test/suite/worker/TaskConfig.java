@@ -1,11 +1,10 @@
-/*
- * Copyright (C) 2021 Baidu, Inc. All Rights Reserved.
- */
+
 
 package com.baidu.iot.test.suite.worker;
 
 import static com.baidu.iot.test.suite.client.MqttCloudHelper.generateUsername;
 import com.baidu.iot.test.suite.TaskStage;
+import com.baidu.iot.test.suite.TaskTemplate;
 import com.baidu.iot.test.suite.WillConfig;
 import com.baidu.iot.test.suite.client.MqttCloudHelper;
 import com.baidu.iot.test.suite.configs.MqttClientConfig;
@@ -13,8 +12,6 @@ import com.baidu.iot.test.suite.worker.utils.ConfigHelper;
 import com.google.common.util.concurrent.RateLimiter;
 import io.netty.handler.codec.mqtt.MqttQoS;
 import java.io.Serializable;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -44,6 +41,11 @@ public class TaskConfig implements Serializable {
 
     @Builder.Default
     private TaskStage taskWorkStage = TaskStage.INIT;
+    /**
+     * Task template for execution flow.
+     * Default is derived from taskType for backward compatibility.
+     */
+    private TaskTemplate template;
     private String taskId;
     @Builder.Default
     private String nodeId = "";
@@ -115,9 +117,6 @@ public class TaskConfig implements Serializable {
     private boolean enableAutoMultiAddress = false;
     @Builder.Default
     private String group = "";
-    private String[] lifecycleActions;
-    @Builder.Default
-    private Map<String, Object> lifecycleActionsConfig = new HashMap<>();
     @Builder.Default
     private WillConfig willConfig = new WillConfig();
     /**

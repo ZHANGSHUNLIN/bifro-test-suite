@@ -4,6 +4,17 @@
 export type TaskType = 'CONN' | 'PUBSUB';
 export const TaskTypeValues = {CONN: 'CONN', PUBSUB: 'PUBSUB'} as const;
 
+// 任务模板类型 (可扩展，不硬编码列表)
+export type TaskTemplate = string;
+export const TaskTemplateValues = {
+    CONN_STANDARD: 'CONN_STANDARD',
+    CONN_IMMEDIATE_DISCONNECT: 'CONN_IMMEDIATE_DISCONNECT',
+    PUBSUB_STANDARD: 'PUBSUB_STANDARD',
+    PUBSUB_SINGLE_MESSAGE: 'PUBSUB_SINGLE_MESSAGE',
+    PUBSUB_SINGLE_SUBSCRIBE: 'PUBSUB_SINGLE_SUBSCRIBE',
+    CUSTOM: 'CUSTOM',
+} as const;
+
 
 // 协议类型
 export type Protocol = 'tcp' | 'ssl' | 'ws' | 'wss';
@@ -47,7 +58,7 @@ export interface BrokerItem {
     name?: string;
     description?: string;
     enabled?: boolean;
-    group?: string; // 分组/项目名称
+    group?: string; // 分组ID
 }
 
 // 任务请求对象
@@ -55,7 +66,8 @@ export interface TaskRequest {
     taskName?: string;
     taskType: TaskType;
     protocol?: string;
-    group?: string; // 分组/项目名称
+    template?: TaskTemplate; // 任务模板类型
+    group?: string; // 分组ID
     autoMultiAddress?: boolean;
     localAddresses?: string[];
     brokers: BrokerItem[];
@@ -96,8 +108,6 @@ export interface TaskRequest {
     tagPeriodIntervalInSec?: number;
     connectRate?: number;
     disconnectRate?: number;
-    lifecycleActions?: string[];
-    lifecycleActionsConfig?: Record<string, any>;
     willConfig?: WillConfig;
     exceptionEnds?: boolean;
 }
@@ -106,8 +116,9 @@ export interface TaskRequest {
 export interface TaskConfig {
     taskId?: string;
     taskType: TaskType;
+    template?: TaskTemplate; // 任务模板类型
     protocol: string;
-    group?: string; // 分组/项目名称
+    group?: string; // 分组ID
     brokers: BrokerItem[];
     port: number;
     customSpecificParamList?: CustomSpecificParamRequest[];
@@ -149,8 +160,6 @@ export interface TaskConfig {
     tagPeriodIntervalInSec?: number;
     enableAutoMultiAddress?: boolean;
     willConfig?: WillConfig;
-    lifecycleActions?: string[];
-    lifecycleActionsConfig?: Record<string, any>;
     exceptionEnds?: boolean;
     taskWorkStage?: string;
     createdAt?: string;
@@ -173,7 +182,7 @@ export interface TaskDetailResponse {
     message?: string;
     taskId?: string;
     taskName?: string;
-    group?: string; // 分组/项目名称
+    group?: string; // 分组ID
     mainTask?: TaskConfig;
     brokers: BrokerItem[];
     subTasks?: Record<string, TaskConfig>;
@@ -199,7 +208,7 @@ export interface TaskListItem {
     taskName?: string;
     taskType: TaskType;
     protocol: string;
-    group?: string; // 分组/项目名称
+    group?: string; // 分组ID
     brokers: BrokerItem[];
     totalClientCount: number;
     status: string;
@@ -209,26 +218,30 @@ export interface TaskListItem {
 }
 
 // 任务状态枚举
-export type TaskStatus = 'INIT' | 'ASSIGNED' | 'ONGOING' | 'COLLECTING' | 'SHUTDOWN_ING' | 'SHUTDOWN' | 'STOPPED';
+export type TaskStatus = 'INIT' | 'ASSIGNED' | 'START' | 'CONNECTING' | 'INIT_PUB_CLIENT' | 'INIT_SUB_CLIENT' | 'ONGOING' | 'SHUTDOWN' | 'STOPPED';
 
 // 运行时常量（用于代码中引用，例如 TaskStatusValues.ONGOING）
 export const TaskStatusValues = {
     INIT: 'INIT',
-    ONGOING: 'ONGOING',
     ASSIGNED: 'ASSIGNED',
-    COLLECTING: 'COLLECTING',
-    SHUTDOWN_ING: 'SHUTDOWN_ING',
+    START: 'START',
+    CONNECTING: 'CONNECTING',
+    INIT_PUB_CLIENT: 'INIT_PUB_CLIENT',
+    INIT_SUB_CLIENT: 'INIT_SUB_CLIENT',
+    ONGOING: 'ONGOING',
     SHUTDOWN: 'SHUTDOWN',
     STOPPED: 'STOPPED',
 } as const;
 
 // 任务状态文本映射
 export const TaskStatusText = {
-    [TaskStatusValues.INIT]: '初始化',
+    [TaskStatusValues.INIT]: '已创建',
     [TaskStatusValues.ASSIGNED]: '已分配',
-    [TaskStatusValues.ONGOING]: '进行中',
-    [TaskStatusValues.COLLECTING]: '收集中',
-    [TaskStatusValues.SHUTDOWN_ING]: '关闭中',
+    [TaskStatusValues.START]: '启动中',
+    [TaskStatusValues.CONNECTING]: '连接中',
+    [TaskStatusValues.INIT_PUB_CLIENT]: '初始化发布端',
+    [TaskStatusValues.INIT_SUB_CLIENT]: '初始化订阅端',
+    [TaskStatusValues.ONGOING]: '运行中',
     [TaskStatusValues.SHUTDOWN]: '已关闭',
     [TaskStatusValues.STOPPED]: '已停止'
 }

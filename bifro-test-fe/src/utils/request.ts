@@ -7,13 +7,14 @@ export const request = async <T>(
 ): Promise<T> => {
     // 处理路径参数
     let url = endpoint;
-    console.log('params',params)
+    console.log('Original endpoint:', endpoint);
     // 如果有参数映射，替换URL中的占位符
     if (params) {
         Object.entries(params).forEach(([key, value]) => {
             url = url.replace(`:${key}`, encodeURIComponent(String(value)));
         });
     }
+    console.log('After path param replacement:', url);
 
     // 处理查询参数（非路径参数）
     const searchParams = new URLSearchParams();
@@ -63,7 +64,9 @@ export const request = async <T>(
             if (result.code === 200) {
                 return result.data as T;
             } else {
-                throw new Error(result.message || `API error! code: ${result.code}`);
+                // 支持 message 和 msg 两种字段名
+                const errorMessage = result.message || result.msg || `API error! code: ${result.code}`;
+                throw new Error(errorMessage);
             }
         }
 
@@ -98,8 +101,11 @@ export const api = {
         body: data ? JSON.stringify(data) : undefined
     }),
 
-    // DELETE 请求
-    delete: <T>(url: string, data?: any, options?: RequestOptions) => request<T>(url, {
+    // DELETE 请求（支持 query params）
+    delete: <T>(url: string, options?: RequestOptions) => request<T>(url, {...options, method: 'DELETE'}),
+
+    // DELETE 请求（带 body）
+    deleteWithBody: <T>(url: string, data?: any, options?: RequestOptions) => request<T>(url, {
         ...options,
         method: 'DELETE',
         body: data ? JSON.stringify(data) : undefined

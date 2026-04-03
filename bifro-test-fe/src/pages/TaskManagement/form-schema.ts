@@ -1,4 +1,4 @@
-import {TaskTypeValues} from '../../types/task';
+import {TaskTypeValues, TaskTemplateValues} from '../../types/task';
 
 // 任务表单字段配置接口
 export interface FormFieldConfig {
@@ -34,6 +34,14 @@ export const basicFields: FormFieldConfig[] = [
             {label: '连接', value: TaskTypeValues.CONN},
             {label: '发布/订阅', value: TaskTypeValues.PUBSUB},
         ],
+    },
+    {
+        name: 'template',
+        label: '任务模板',
+        type: 'select',
+        required: true,
+        initialValue: TaskTemplateValues.CONN_STANDARD,
+        options: [],
     },
     {
         name: 'protocol',
@@ -149,7 +157,7 @@ export const connectionFields: FormFieldConfig[] = [
         type: 'inputNumber',
         initialValue: 60,
         min: 1,
-        max: 86400,
+        max: 1000000000,
     },
 ];
 

@@ -34,12 +34,23 @@ const TaskListPage: React.FC = () => {
     // 加载分组选项（用于下拉选择）
     const loadGroupSelectOptions = async () => {
         try {
+            // 先确保默认分组存在
+            const defaultGroup = await taskGroupApi.getOrCreateDefaultGroup();
+            setSelectedGroup(defaultGroup.id);
+
+            // 获取所有分组
             const allGroups = await taskGroupApi.getAllGroupsForSelect();
-            const options = allGroups.map((g: TaskGroup) => ({
+
+            // 确保"默认分组"在列表第一位
+            const otherGroups = allGroups.filter((g: TaskGroup) => g.name !== '默认分组');
+            const sortedGroups = [defaultGroup, ...otherGroups];
+
+            const options = sortedGroups.map((g: TaskGroup) => ({
                 label: g.name,
-                value: g.name
+                value: g.id
             }));
-            setGroupSelectOptions([{ label: '所有分组', value: '' }, ...options]);
+            setGroupSelectOptions(options);
+            loadTasks(undefined, undefined, defaultGroup.id);
         } catch (error) {
             console.error('加载分组选项失败:', error);
         }
@@ -47,7 +58,6 @@ const TaskListPage: React.FC = () => {
 
     // 初始化加载
     useEffect(() => {
-        loadTasks();
         loadGroupSelectOptions();
     }, [loadTasks]);
 

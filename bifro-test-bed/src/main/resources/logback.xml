@@ -59,7 +59,7 @@
             <pattern>${logPattern}</pattern>
         </encoder>
         <filter class="ch.qos.logback.classic.filter.ThresholdFilter"><!-- 控制台只打印INFO及以上日志 -->
-            <level>INFO</level>
+            <level>DEBUG</level>
         </filter>
     </appender>
 
@@ -155,8 +155,6 @@
         <appender-ref ref="errorLogFile"/>
     </logger>
 
-    <!--    todo  info level to 『info』-->
-
     <logger name="tagLogger" level="TRACE" additivity="false">
         <appender-ref ref="tagLogFile"/>
     </logger>
@@ -173,9 +171,17 @@
         <appender-ref ref="connLogFile"/>
     </logger>
 
+    <logger name="com.baidu.duhome" level="DEBUG" additivity="false">
+        <appender-ref ref="stdout"/>
+    </logger>
 
     <root level="INFO">
         <appender-ref ref="stdout"/>
+        <appender-ref ref="traceLogFile"/>
+        <appender-ref ref="debugLogFile"/>
+        <appender-ref ref="infoLogFile"/>
+        <appender-ref ref="warnLogFile"/>
+        <appender-ref ref="errorLogFile"/>
     </root>
 
 </configuration>
