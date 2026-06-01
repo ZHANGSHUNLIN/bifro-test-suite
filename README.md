@@ -17,52 +17,83 @@
 
 # bifro-test-suite
 
-[Simplified Chinese](./README.zh-CN.md)
+[![CI](https://github.com/ZHANGSHUNLIN/bifro-test-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/ZHANGSHUNLIN/bifro-test-suite/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
+[![Java](https://img.shields.io/badge/Java-17%2B-orange.svg)](https://openjdk.org/)
+[![MQTT](https://img.shields.io/badge/MQTT-3.1.1%20%7C%205.0-green.svg)](https://mqtt.org/)
 
-bifro-test-suite is a distributed MQTT stress testing platform for running large-scale connection,
-publish, subscribe, and mixed workload tests across multiple worker nodes.
+[简体中文](./README.zh-CN.md)
 
-## Features
+bifro-test-suite is a distributed MQTT stress testing platform for validating brokers, IoT platforms, and
+message-oriented systems under high connection counts, publish/subscribe traffic, and mixed workload scenarios.
 
-- MQTT 3.1.1 and MQTT 5.0 workload support
-- Connection, publish/subscribe, publish-only, subscribe-only, and single-message scenarios
-- Distributed worker execution with cluster node status and heartbeat tracking
-- Broker and task group management
-- Multiple authentication modes, including no-auth, username/password, BYOC, IoT Core, and mTLS certificates
-- Runtime metrics, task reports, throughput, latency, connection success rate, and client-level statistics
-- React-based administration UI with internationalization support
+It provides a Spring Boot backend, a React administration console, multi-node worker execution, task orchestration,
+runtime metrics, and report management in one project.
+
+## Why bifro-test-suite
+
+- Run MQTT 3.1.1 and MQTT 5.0 workload tests from a browser-based administration console.
+- Model connection, publish-only, subscribe-only, publish/subscribe, and single-message scenarios.
+- Distribute large-scale workloads across multiple worker nodes with node status and heartbeat tracking.
+- Manage broker targets, task groups, test profiles, certificates, and execution reports.
+- Observe throughput, latency, connection success rate, client state, and runtime metrics while tasks are running.
+- Use built-in authentication support for no-auth, username/password, BYOC, IoT Core, and mTLS certificate cases.
+
+## Architecture
+
+```text
+                  +-----------------------------+
+                  | React Administration Console |
+                  +--------------+--------------+
+                                 |
+                                 v
+                  +-----------------------------+
+                  | Spring Boot Test Bed         |
+                  | REST API, task orchestration |
+                  +------+------------+---------+
+                         |            |
+               metadata  |            | cluster events
+                         v            v
+                  +-----------+   +------------------+
+                  | MongoDB   |   | Hazelcast/Vert.x |
+                  +-----------+   +--------+---------+
+                                            |
+                                            v
+                             +-----------------------------+
+                             | Distributed Worker Runtime   |
+                             | MQTT clients and pipelines   |
+                             +---------------+-------------+
+                                             |
+                                             v
+                                  +--------------------+
+                                  | MQTT Broker Targets |
+                                  +--------------------+
+```
+
+## Feature Highlights
+
+| Area | Capabilities |
+| --- | --- |
+| MQTT workloads | Connection, pub/sub, publish-only, subscribe-only, single-message, and immediate-disconnect scenarios |
+| Protocol support | MQTT 3.1.1 and MQTT 5.0 |
+| Authentication | None, username/password, BYOC, IoT Core, and mTLS certificate based authentication |
+| Distributed execution | Worker nodes, node heartbeat, cluster membership, and per-node task assignment |
+| Resource management | Broker groups, task groups, profiles, certificates, and reusable task configuration |
+| Observability | Runtime metrics, reports, latency, throughput, connection success rate, and client-level statistics |
+| Administration | React, TypeScript, Ant Design, internationalized UI, role-based system user management, and audit logs |
 
 ## Technology Stack
 
 | Layer | Technology |
 | --- | --- |
-| Backend | Java 17, Spring Boot 3.5.14 |
-| Reactive runtime | Vert.x 5.0.12 |
-| Cluster coordination | Hazelcast 5.3.5 |
+| Backend | Java 17, Spring Boot 3.5.x |
+| Reactive runtime | Vert.x 5.x |
+| Cluster coordination | Hazelcast 5.x |
 | Database | MongoDB Reactive |
 | Frontend | React, Vite, TypeScript, Ant Design |
+| Build | Maven, pnpm |
 
-## Repository Layout
-
-```text
-bifro-test-suite/
-├── bifro-test-bed/              # Spring Boot application
-├── bifro-test-fe/               # React administration UI
-├── test-suite-framework/        # Pipeline and state-machine framework
-├── test-suite-common/           # Shared enums, stages, events, and metrics
-├── test-suite-mqtt-client/      # MQTT client wrappers and authentication strategies
-├── test-suite-mqtt/             # MQTT task implementations
-├── test-suite-worker-api/       # Worker API contracts
-├── test-suite-worker/           # Worker runtime and pipeline stages
-├── test-suite-certificates/     # Certificate management
-├── test-suite-task-management/  # Task metadata, reports, and APIs
-├── test-suite-cluster-management/ # Cluster node management
-├── test-suite-resource-management/ # Broker, group, profile, and certificate APIs
-├── test-suite-security/         # Authentication and user management
-└── test-suite-audit/            # Audit log support
-```
-
-## Build
+## Getting Started
 
 ### Prerequisites
 
@@ -72,19 +103,21 @@ bifro-test-suite/
 - pnpm
 - MongoDB 4.4+
 
-### Backend
+### Build from Source
+
+Build all backend modules:
 
 ```bash
 mvn clean install
 ```
 
-To build backend modules without running the frontend build:
+Build backend modules and skip frontend packaging:
 
 ```bash
 mvn -U clean install -DskipFrontend=true
 ```
 
-### Frontend
+Build the frontend:
 
 ```bash
 cd bifro-test-fe
@@ -92,62 +125,114 @@ pnpm install
 pnpm build
 ```
 
-## Run Locally
+### Run Locally
 
-Start the backend:
+Start MongoDB first, then run the backend application:
 
 ```bash
 mvn spring-boot:run -pl bifro-test-bed
 ```
 
-Start the frontend development server:
+The backend uses `bifro-test-bed/src/main/resources/application.yml` by default:
+
+- Server port: `8081`
+- MongoDB: `localhost:27017`, database `bifro-test-suite`
+- Admin UI path: `http://localhost:8081/admin`
+- Swagger UI: `http://localhost:8081/swagger-ui.html`
+
+For frontend development:
 
 ```bash
 cd bifro-test-fe
+pnpm install
 pnpm dev
 ```
 
-Default local endpoints:
+## Release Artifacts
 
-- Admin UI: `http://localhost:8081/admin`
-- Swagger UI: `http://localhost:8081/swagger-ui.html`
+Manual GitHub releases publish multiple assets for different deployment models:
+
+| Artifact | Description |
+| --- | --- |
+| `bifro-test-bed-<version>-all.tar.gz` | Full package with backend runtime and the built administration UI |
+| `bifro-test-suite-<version>-backend.tar.gz` | Backend-only package without frontend static assets |
+| `bifro-test-suite-<version>-frontend.zip` | Frontend-only package containing the built `dist` output |
+| `bifro-test-suite-<version>-sbom.json` | CycloneDX software bill of materials |
+| `SHA256SUMS` | Checksums for release assets |
 
 ## Task Templates
 
-| Template | Type | Description |
-| --- | --- | --- |
-| `CONN_STANDARD` | Connection | Standard connection test |
-| `CONN_IMMEDIATE_DISCONNECT` | Connection | Connect and immediately disconnect |
-| `PUBSUB_STANDARD` | Publish/Subscribe | Standard publish and subscribe test |
-| `PUBSUB_PUB_ONLY` | Publish/Subscribe | Publish-only test |
-| `PUBSUB_SUB_ONLY` | Publish/Subscribe | Subscribe-only test |
-| `PUBSUB_SINGLE_MESSAGE` | Publish/Subscribe | Single-message publish test |
-| `PUBSUB_SINGLE_SUBSCRIBE` | Publish/Subscribe | Single subscribe test |
+| Template | Purpose |
+| --- | --- |
+| `CONN_STANDARD` | Establish and hold standard MQTT connections |
+| `CONN_IMMEDIATE_DISCONNECT` | Connect and immediately disconnect clients |
+| `PUBSUB_STANDARD` | Run coordinated publish and subscribe traffic |
+| `PUBSUB_PUB_ONLY` | Run publish-only traffic |
+| `PUBSUB_SUB_ONLY` | Run subscribe-only traffic |
+| `PUBSUB_SINGLE_MESSAGE` | Publish a single-message workload |
+| `PUBSUB_SINGLE_SUBSCRIBE` | Run a single subscribe workload |
 
-## Development Checks
+## Repository Layout
+
+```text
+bifro-test-suite/
+├── bifro-test-bed/                 # Spring Boot application and release assembly
+├── bifro-test-fe/                  # React administration console
+├── test-suite-framework/           # Pipeline and state-machine framework
+├── test-suite-common/              # Shared domain objects, stages, events, and metrics
+├── test-suite-mqtt-client/         # MQTT client wrappers and authentication strategies
+├── test-suite-mqtt/                # MQTT workload implementations
+├── test-suite-worker-api/          # Worker API contracts
+├── test-suite-worker/              # Worker runtime and pipeline stages
+├── test-suite-certificates/        # Certificate domain and certificate services
+├── test-suite-task-management/     # Task metadata, reports, runtime state, and APIs
+├── test-suite-cluster-management/  # Cluster membership and scheduling support
+├── test-suite-resource-management/ # Broker, group, profile, and certificate APIs
+├── test-suite-security/            # Authentication and system user management
+└── test-suite-audit/               # Audit log support
+```
+
+## Development
+
+Run backend tests:
+
+```bash
+mvn test
+```
+
+Run Java style checks:
 
 ```bash
 mvn checkstyle:check
-mvn test
-
-cd bifro-test-fe
-pnpm lint
-pnpm test
 ```
 
-Run the Apache RAT license header check:
+Run Apache RAT license checks:
 
 ```bash
 mvn apache-rat:check -DskipTests -DskipFrontend=true
 ```
 
-## Security Notes
+Run frontend checks:
 
-This project does not ship with a fixed default password. If security is enabled and no users are configured
-when the user store is empty, the service creates an `admin` user with a random password and writes the password
-once to `conf/initial-admin-password`. Protect this file and rotate the password after the first login.
+```bash
+cd bifro-test-fe
+pnpm lint
+pnpm test
+```
 
-For production deployments, you can also configure explicit initial users under `bifro.security.users`:
+## Security
+
+The project does not ship with a fixed default password. If security is enabled, no users are configured, and the
+user store is empty, the service creates an `admin` user with a random password and writes that password once to:
+
+```text
+conf/initial-admin-password
+```
+
+Protect this file and rotate the password after the first login.
+
+Production deployments should configure explicit users under `bifro.security.users` and use a MongoDB deployment
+appropriate for the target environment:
 
 ```yaml
 bifro:
@@ -160,15 +245,17 @@ bifro:
           - ADMIN
 ```
 
-Do not run this service on an exposed network with local development settings. Production deployments should
-provide explicit authentication configuration and a MongoDB deployment appropriate for the target environment.
+Do not expose a local development configuration directly on an untrusted network.
+
+## Contributing
+
+Contributions are welcome. Before submitting a change, run the relevant backend and frontend checks and keep commits
+focused on a single module or behavior change.
+
+- [Contributing Guide](./CONTRIBUTING.md)
+- [Security Policy](./SECURITY.md)
+- [Code of Conduct](./CODE_OF_CONDUCT.md)
 
 ## License
 
-This project is licensed under the Apache License, Version 2.0. See [LICENSE](./LICENSE) for details.
-
-## Community
-
-- [Contributing](./CONTRIBUTING.md)
-- [Security Policy](./SECURITY.md)
-- [Code of Conduct](./CODE_OF_CONDUCT.md)
+bifro-test-suite is licensed under the Apache License, Version 2.0. See [LICENSE](./LICENSE) for details.
