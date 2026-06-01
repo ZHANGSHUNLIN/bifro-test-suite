@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<Configuration status="WARN" monitorInterval="30">
+
+    <Properties>
+        <Property name="projectName">bifro-test-suite</Property>
+        <Property name="logPattern">%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${sys:PID:- } [%t] --- %-40.40c{1.}[%F:%L] %m%n
+        </Property>
+        <Property name="logDir">${sys:LOG_DIR:-${sys:user.dir}/logs}</Property>
+    </Properties>
+
+    <Appenders>
+        <!-- Console -->
+        <Console name="stdout" target="SYSTEM_OUT">
+            <PatternLayout pattern="${logPattern}"/>
+            <ThresholdFilter level="INFO" onMatch="ACCEPT" onMismatch="DENY"/>
+        </Console>
+
+        <!-- tag.log -->
+        <RollingFile name="tagLogFile" fileName="${logDir}/tag.log"
+                     filePattern="${logDir}/tag.%d{yyyy-MM-dd_HH}.log">
+            <PatternLayout pattern="${logPattern}"/>
+            <TimeBasedTriggeringPolicy/>
+            <DefaultRolloverStrategy max="7"/>
+        </RollingFile>
+
+        <!-- conn.log -->
+        <RollingFile name="connLogFile" fileName="${logDir}/conn.log"
+                     filePattern="${logDir}/conn.%d{yyyy-MM-dd_HH}.log">
+            <PatternLayout pattern="${logPattern}"/>
+            <TimeBasedTriggeringPolicy/>
+            <DefaultRolloverStrategy max="7"/>
+        </RollingFile>
+
+        <!-- pub.log -->
+        <RollingFile name="pubLogFile" fileName="${logDir}/pub.log"
+                     filePattern="${logDir}/pub.%d{yyyy-MM-dd_HH}.log">
+            <PatternLayout pattern="${logPattern}"/>
+            <TimeBasedTriggeringPolicy/>
+            <DefaultRolloverStrategy max="7"/>
+        </RollingFile>
+
+        <!-- sub.log -->
+        <RollingFile name="subLogFile" fileName="${logDir}/sub.log"
+                     filePattern="${logDir}/sub.%d{yyyy-MM-dd_HH}.log">
+            <PatternLayout pattern="${logPattern}"/>
+            <TimeBasedTriggeringPolicy/>
+            <DefaultRolloverStrategy max="7"/>
+        </RollingFile>
+
+        <!-- trace.log -->
+        <RollingFile name="traceLogFile" fileName="${logDir}/trace.log"
+                     filePattern="${logDir}/trace.%d{yyyy-MM-dd_HH}.log">
+            <PatternLayout pattern="${logPattern}"/>
+            <LevelMatchFilter level="TRACE" onMatch="ACCEPT" onMismatch="DENY"/>
+            <TimeBasedTriggeringPolicy/>
+            <DefaultRolloverStrategy max="7"/>
+        </RollingFile>
+
+        <!-- debug.log -->
+        <RollingFile name="debugLogFile" fileName="${logDir}/debug.log"
+                     filePattern="${logDir}/debug.%d{yyyy-MM-dd_HH}.log">
+            <PatternLayout pattern="${logPattern}"/>
+            <LevelMatchFilter level="DEBUG" onMatch="ACCEPT" onMismatch="DENY"/>
+            <TimeBasedTriggeringPolicy/>
+            <DefaultRolloverStrategy max="7"/>
+        </RollingFile>
+
+        <!-- info.log -->
+        <RollingFile name="infoLogFile" fileName="${logDir}/info.log"
+                     filePattern="${logDir}/info.%d{yyyy-MM-dd_HH}.log">
+            <PatternLayout pattern="${logPattern}"/>
+            <LevelMatchFilter level="INFO" onMatch="ACCEPT" onMismatch="DENY"/>
+            <TimeBasedTriggeringPolicy/>
+            <DefaultRolloverStrategy max="7"/>
+        </RollingFile>
+
+        <!-- warn.log -->
+        <RollingFile name="warnLogFile" fileName="${logDir}/warn.log"
+                     filePattern="${logDir}/warn.%d{yyyy-MM-dd_HH}.log">
+            <PatternLayout pattern="${logPattern}"/>
+            <LevelMatchFilter level="WARN" onMatch="ACCEPT" onMismatch="DENY"/>
+            <TimeBasedTriggeringPolicy/>
+            <DefaultRolloverStrategy max="7"/>
+        </RollingFile>
+
+        <!-- error.log -->
+        <RollingFile name="errorLogFile" fileName="${logDir}/error.log"
+                     filePattern="${logDir}/error.%d{yyyy-MM-dd_HH}.log">
+            <PatternLayout pattern="${logPattern}"/>
+            <ThresholdFilter level="ERROR" onMatch="ACCEPT" onMismatch="DENY"/>
+            <TimeBasedTriggeringPolicy/>
+            <DefaultRolloverStrategy max="7"/>
+        </RollingFile>
+
+        <!-- heartbeat.log -->
+        <RollingFile name="HEARTBEAT_FILE" fileName="${logDir}/heartbeat.log"
+                     filePattern="${logDir}/heartbeat.%d{yyyy-MM-dd}.log">
+            <PatternLayout pattern="${logPattern}"/>
+            <TimeBasedTriggeringPolicy/>
+            <DefaultRolloverStrategy max="7"/>
+        </RollingFile>
+
+        <!-- task-pipeline.log -->
+        <RollingFile name="TASK_PIPELINE_FILE" fileName="${logDir}/task-pipeline.log"
+                     filePattern="${logDir}/task-pipeline.%d{yyyy-MM-dd}.log">
+            <PatternLayout pattern="${logPattern}"/>
+            <TimeBasedTriggeringPolicy/>
+            <DefaultRolloverStrategy max="7"/>
+        </RollingFile>
+
+        <!-- task-state-machine.log -->
+        <RollingFile name="TASK_STATE_MACHINE_FILE" fileName="${logDir}/task-state-machine.log"
+                     filePattern="${logDir}/task-state-machine.%d{yyyy-MM-dd}.log">
+            <PatternLayout pattern="${logPattern}"/>
+            <TimeBasedTriggeringPolicy/>
+            <DefaultRolloverStrategy max="7"/>
+        </RollingFile>
+    </Appenders>
+
+    <Loggers>
+        <!-- Quiet noisy Vert.x MQTT client -->
+        <Logger name="io.vertx.mqtt.impl.MqttClientImpl" level="WARN" additivity="false">
+            <AppenderRef ref="stdout"/>
+        </Logger>
+
+        <!-- Default is INFO and above. Change level to TRACE/DEBUG temporarily when detailed logs are needed. -->
+        <Logger name="org.apache.bifromq.testsuite.app" level="INFO" additivity="false">
+            <AppenderRef ref="traceLogFile"/>
+            <AppenderRef ref="debugLogFile"/>
+            <AppenderRef ref="infoLogFile"/>
+            <AppenderRef ref="warnLogFile"/>
+            <AppenderRef ref="errorLogFile"/>
+            <AppenderRef ref="stdout"/>
+        </Logger>
+
+        <!-- Named loggers (additivity=false) -->
+        <Logger name="tagLogger" level="INFO" additivity="false">
+            <AppenderRef ref="tagLogFile"/>
+        </Logger>
+        <Logger name="pubLogger" level="INFO" additivity="false">
+            <AppenderRef ref="pubLogFile"/>
+        </Logger>
+        <Logger name="subLogger" level="INFO" additivity="false">
+            <AppenderRef ref="subLogFile"/>
+        </Logger>
+        <Logger name="connLogger" level="WARN" additivity="false">
+            <AppenderRef ref="connLogFile"/>
+        </Logger>
+        <Logger name="HEARTBEAT" level="INFO" additivity="false">
+            <AppenderRef ref="HEARTBEAT_FILE"/>
+        </Logger>
+        <Logger name="TASK_PIPELINE" level="INFO" additivity="false">
+            <AppenderRef ref="TASK_PIPELINE_FILE"/>
+        </Logger>
+        <Logger name="TASK_STATE_MACHINE" level="INFO" additivity="false">
+            <AppenderRef ref="TASK_STATE_MACHINE_FILE"/>
+        </Logger>
+
+        <Root level="INFO">
+            <AppenderRef ref="traceLogFile"/>
+            <AppenderRef ref="debugLogFile"/>
+            <AppenderRef ref="infoLogFile"/>
+            <AppenderRef ref="warnLogFile"/>
+            <AppenderRef ref="errorLogFile"/>
+            <AppenderRef ref="stdout"/>
+        </Root>
+    </Loggers>
+
+</Configuration>

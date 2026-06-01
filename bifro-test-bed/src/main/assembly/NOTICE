@@ -1,0 +1,127 @@
+bifro-test-suite
+Copyright 2026 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (https://www.apache.org/).
+
+This binary distribution includes third-party runtime libraries in the lib/
+directory and frontend production assets under static/admin/. See LICENSE for
+the third-party license categories. Third-party JAR files retain their own
+META-INF/LICENSE and META-INF/NOTICE files where provided by the upstream
+projects.
+
+Apache Commons Lang
+Copyright 2001-2025 The Apache Software Foundation
+
+Apache Log4j API
+Copyright 1999-2024 The Apache Software Foundation
+
+Apache Log4j Core
+Copyright 1999-2012 Apache Software Foundation
+
+ResolverUtil.java
+Copyright 2005-2006 Tim Fennell
+
+Apache Log4j JUL Adapter
+Copyright 1999-2024 The Apache Software Foundation
+
+SLF4J 2 Provider for Log4j API
+Copyright 1999-2024 The Apache Software Foundation
+
+Apache Tomcat
+Copyright 1999-2025 The Apache Software Foundation
+
+ClassMate
+Copyright 2007-, Tatu Saloranta (tatu.saloranta@iki.fi)
+
+Java ClassMate library was originally written by Tatu Saloranta
+(tatu.saloranta@iki.fi). Other developers who have contributed code include
+Brian Langel.
+
+Hazelcast
+
+Objenesis
+Copyright 2006-2022 Joe Walnes, Henri Tremblay, Leonardo Mesquita
+
+Hazelcast includes code originating from:
+
+- Agrona project (https://github.com/real-logic/Agrona)
+- Koloboke project (https://github.com/OpenHFT/Koloboke)
+- Tomcat project (https://github.com/apache/tomcat)
+- Akka project (https://github.com/akka/akka/)
+- minimal-json project (https://github.com/ralfstx/minimal-json)
+- The Moby Project (https://github.com/moby/moby)
+- The JGraphT Project (https://github.com/jgrapht/jgrapht)
+- Apache Calcite (https://github.com/apache/calcite)
+- Apache Flink project
+- WildFly project (https://github.com/wildfly/wildfly)
+- MicroRaft project (https://github.com/MicroRaft/MicroRaft)
+
+Jackson JSON processor
+
+Jackson is a high-performance, Free/Open Source JSON processing library. It was
+originally written by Tatu Saloranta (tatu.saloranta@iki.fi), and has been in
+development since 2007. It is currently developed by a community of developers.
+
+Copyright 2007-, Tatu Saloranta (tatu.saloranta@iki.fi)
+
+jackson-core bundles a shaded copy of FastDoubleParser
+(https://github.com/wrandelshofer/FastDoubleParser).
+
+Copyright 2023 Werner Randelshofer, Switzerland.
+
+Jakarta Activation
+
+This content is produced and maintained by the Jakarta Activation project.
+Project home: https://projects.eclipse.org/projects/ee4j.jaf
+
+Jakarta Activation is a trademark of the Eclipse Foundation.
+
+Jakarta Annotations
+
+This content is produced and maintained by the Jakarta Annotations project.
+Project home: https://projects.eclipse.org/projects/ee4j.ca
+
+Jakarta Annotations is a trademark of the Eclipse Foundation.
+
+Jakarta XML Binding
+
+This content is produced and maintained by the Jakarta XML Binding project.
+Project home: https://projects.eclipse.org/projects/ee4j.jaxb
+
+Jakarta XML Binding is a trademark of the Eclipse Foundation.
+
+Jakarta components may contain encryption software. The country in which you are
+currently located may have restrictions on the import, possession, use, and/or
+re-export to another country of encryption software. Before using any encryption
+software, please check the country's laws, regulations, and policies concerning
+the import, possession, use, and re-export of encryption software.
+
+Micrometer
+Copyright (c) 2017-Present VMware, Inc. All Rights Reserved.
+
+Micrometer contains modified portions of:
+
+- io.netty.util.internal.logging from the Netty/Common library distributed by
+  The Netty Project; Copyright 2013 The Netty Project.
+- StringUtils.isBlank() from Commons Lang distributed by The Apache Software
+  Foundation; Copyright 2001-2019 The Apache Software Foundation.
+- JsonUtf8Writer from Moshi distributed by Square, Inc.; Copyright 2010 Google
+  Inc.
+- org.springframework.lang from the Spring Framework library distributed by
+  VMware, Inc.; Copyright 2002-2019 the original author or authors.
+
+Spring Framework 6.2.18
+Copyright (c) 2002-2025 Pivotal, Inc.
+
+Spring Boot 3.5.14
+Copyright (c) 2012-2025 VMware, Inc.
+
+Swagger Core - swagger-annotations
+Copyright (c) 2015. SmartBear Software Inc.
+
+Swagger Core - swagger-core
+Copyright (c) 2015. SmartBear Software Inc.
+
+Swagger Core - swagger-models
+Copyright (c) 2015. SmartBear Software Inc.

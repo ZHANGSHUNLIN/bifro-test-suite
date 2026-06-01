@@ -1,0 +1,433 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-size: 13px;
+}
+
+#root {
+    min-height: 100vh;
+}
+
+::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.25);
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme='dark'] .ant-modal-content,
+[data-theme='dark'] .ant-drawer-content {
+    background: #1d2535;
+}
+
+[data-theme='dark'] .ant-modal-header,
+[data-theme='dark'] .ant-drawer-header {
+    background: #1d2535;
+    border-bottom-color: #2d3a50;
+}
+
+.ant-table-thead > tr > th {
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.ant-card-head {
+    min-height: 42px;
+}
+
+.ant-card-head-title {
+    padding: 10px 0;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.ant-card-body {
+    padding: 16px;
+}
+
+/* ── Statistic ── */
+.ant-statistic-title {
+    font-size: 11px;
+    margin-bottom: 4px;
+}
+
+.ant-statistic-content-value {
+    font-size: 22px;
+    font-weight: 700;
+}
+
+.ant-tag {
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 3px;
+}
+
+.subtask-summary-row td {
+    background: rgba(0, 177, 115, 0.05) !important;
+    font-weight: 500;
+    border-bottom: 1px solid rgba(0, 177, 115, 0.15) !important;
+}
+
+[data-theme='dark'] .subtask-summary-row td {
+    background: rgba(0, 177, 115, 0.08) !important;
+}
+
+.status-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+.status-dot.online {
+    background: #00b173;
+    box-shadow: 0 0 0 2px rgba(0, 177, 115, 0.2);
+}
+
+.status-dot.offline {
+    background: #ff4d4f;
+}
+
+.status-dot.pending {
+    background: #faad14;
+}
+
+/* ── Task report ── */
+.task-report-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 12px 0;
+}
+
+.task-report-hero,
+.task-report-section {
+    border: 1px solid #edf0f5;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.task-report-hero {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.85fr) minmax(420px, 1.6fr);
+    gap: 20px;
+    padding: 18px;
+}
+
+.task-report-hero-main {
+    min-width: 0;
+}
+
+.task-report-title.ant-typography {
+    margin: 10px 0 8px;
+    font-size: 18px;
+    line-height: 1.35;
+}
+
+.task-report-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    color: #667085;
+    font-size: 12px;
+}
+
+.task-report-hero-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
+    gap: 10px;
+}
+
+.task-report-metric {
+    min-height: 86px;
+    padding: 12px;
+    border: 1px solid #eef1f5;
+    border-radius: 6px;
+    background: #fafbfc;
+}
+
+.task-report-metric-label,
+.task-report-detail-item span,
+.task-report-qos-row span {
+    color: #667085;
+    font-size: 12px;
+}
+
+.task-report-metric-value {
+    margin-top: 8px;
+    color: #1f2937;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.task-report-metric-success .task-report-metric-value,
+.task-report-detail-success strong {
+    color: #00875a;
+}
+
+.task-report-metric-danger .task-report-metric-value,
+.task-report-detail-danger strong {
+    color: #cf1322;
+}
+
+.task-report-metric-warning .task-report-metric-value,
+.task-report-detail-warning strong {
+    color: #ad6800;
+}
+
+.task-report-metric-accent .task-report-metric-value {
+    color: #0958d9;
+}
+
+.task-report-section-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.task-report-section {
+    padding: 14px;
+}
+
+.task-report-section-title {
+    margin-bottom: 12px;
+    color: #1f2937;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.task-report-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    overflow: hidden;
+    border: 1px solid #eef1f5;
+    border-radius: 6px;
+    background: #eef1f5;
+}
+
+.task-report-detail-item {
+    display: flex;
+    min-height: 48px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    background: #fff;
+}
+
+.task-report-detail-item strong {
+    color: #1f2937;
+    font-size: 13px;
+    font-weight: 650;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+.task-report-qos-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.task-report-qos-item {
+    padding: 12px;
+    border: 1px solid #eef1f5;
+    border-radius: 6px;
+}
+
+.task-report-qos-row,
+.task-report-error-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.task-report-qos-row {
+    margin-bottom: 8px;
+}
+
+.task-report-qos-row strong {
+    color: #1f2937;
+    font-size: 12px;
+}
+
+.task-report-tags,
+.task-report-chaos-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.task-report-error-item,
+.task-report-chaos-item {
+    padding: 10px 12px;
+    border: 1px solid #fee2e2;
+    border-radius: 6px;
+    background: #fff7f7;
+}
+
+.task-report-chaos-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-color: #ffe7ba;
+    background: #fffaf0;
+}
+
+.task-report-node-title {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.task-report-node-id,
+.task-report-muted {
+    color: #98a2b3;
+    font-size: 11px;
+}
+
+.node-metrics-panel {
+    padding-top: 0;
+}
+
+.node-metrics-hero {
+    grid-template-columns: minmax(180px, 0.7fr) minmax(520px, 1.8fr);
+}
+
+.node-metrics-panel-compact {
+    min-width: 1040px;
+}
+
+.node-metrics-panel-compact .task-report-hero {
+    grid-template-columns: minmax(160px, 0.45fr) minmax(760px, 1.8fr);
+    gap: 12px;
+    padding: 12px;
+}
+
+.node-metrics-panel-compact .task-report-hero-metrics {
+    grid-template-columns: repeat(5, minmax(120px, 1fr));
+}
+
+.node-metrics-panel-compact .task-report-metric {
+    min-height: 70px;
+    padding: 10px;
+}
+
+.node-metrics-panel-compact .task-report-metric-value {
+    font-size: 16px;
+}
+
+.node-metrics-panel-compact .task-report-section {
+    padding: 12px;
+}
+
+.node-metrics-tags {
+    color: #667085;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+}
+
+[data-theme='dark'] .task-report-hero,
+[data-theme='dark'] .task-report-section {
+    border-color: #2d3a50;
+    background: #1d2535;
+}
+
+[data-theme='dark'] .task-report-metric,
+[data-theme='dark'] .task-report-detail-item,
+[data-theme='dark'] .task-report-qos-item {
+    border-color: #2d3a50;
+    background: #202b3d;
+}
+
+[data-theme='dark'] .task-report-detail-grid {
+    border-color: #2d3a50;
+    background: #2d3a50;
+}
+
+[data-theme='dark'] .task-report-title.ant-typography,
+[data-theme='dark'] .task-report-section-title,
+[data-theme='dark'] .task-report-metric-value,
+[data-theme='dark'] .task-report-detail-item strong,
+[data-theme='dark'] .task-report-qos-row strong {
+    color: #f2f4f7;
+}
+
+[data-theme='dark'] .task-report-meta,
+[data-theme='dark'] .task-report-metric-label,
+[data-theme='dark'] .task-report-detail-item span,
+[data-theme='dark'] .task-report-qos-row span {
+    color: #98a2b3;
+}
+
+[data-theme='dark'] .node-metrics-tags {
+    color: #98a2b3;
+}
+
+@media (max-width: 960px) {
+    .task-report-hero,
+    .task-report-section-grid,
+    .task-report-qos-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .task-report-detail-grid,
+    .task-report-hero-metrics {
+        grid-template-columns: 1fr;
+    }
+}

@@ -1,0 +1,9 @@
+{
+  "properties": [
+    {
+      "name": "bifro.mqtt.default.clusterMembers",
+      "type": "java.util.List<org.apache.bifromq.testsuite.app.database.pojo.MqttBroker>",
+      "description": "Description for bifro.mqtt.default."
+    }
+  ]
+}
