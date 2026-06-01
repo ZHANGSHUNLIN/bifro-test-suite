@@ -147,6 +147,7 @@ jobs:
           scan-args: |-
             scan
             source
+            --no-resolve
             --recursive
             .
 
