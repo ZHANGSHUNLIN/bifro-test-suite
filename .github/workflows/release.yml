@@ -1,0 +1,129 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version without the leading v, for example 1.0.24
+        required: true
+        type: string
+      prerelease:
+        description: Mark the GitHub release as a prerelease
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.version }}
+  cancel-in-progress: false
+
+env:
+  JAVA_VERSION: "17"
+  MAVEN_ARGS: -B -ntp
+  PNPM_VERSION: "10"
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Validate release tag
+        run: |
+          set -euo pipefail
+          version="${{ inputs.version }}"
+          tag="v${version}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            echo "Release tag ${tag} already exists." >&2
+            exit 1
+          fi
+          echo "RELEASE_VERSION=${version}" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=${tag}" >> "$GITHUB_ENV"
+
+      - name: Check Apache RAT
+        run: mvn $MAVEN_ARGS apache-rat:check -DskipTests -DskipFrontend=true
+
+      - name: Install frontend dependencies
+        working-directory: bifro-test-fe
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        working-directory: bifro-test-fe
+        run: pnpm build
+
+      - name: Build release artifacts
+        run: mvn $MAVEN_ARGS -U clean package -DskipFrontend=true -Drevision="${RELEASE_VERSION}"
+
+      - name: Generate Maven SBOM
+        run: >
+          mvn $MAVEN_ARGS
+          org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom
+          -DskipTests
+          -DskipFrontend=true
+          -Drevision="${RELEASE_VERSION}"
+          -DoutputFormat=json
+          -DoutputName=bom
+
+      - name: Prepare release assets
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          cp bifro-test-bed/target/bifro-test-bed-${RELEASE_VERSION}.jar release-assets/
+          cp bifro-test-bed/target/bifro-test-bed-${RELEASE_VERSION}-all.tar.gz release-assets/
+          cp target/bom.json release-assets/bifro-test-suite-${RELEASE_VERSION}-sbom.json
+          (cd release-assets && sha256sum * > SHA256SUMS)
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          prerelease_flag=""
+          if [ "${{ inputs.prerelease }}" = "true" ]; then
+            prerelease_flag="--prerelease"
+          fi
+          gh release create "${RELEASE_TAG}" \
+            release-assets/* \
+            --title "bifro-test-suite ${RELEASE_VERSION}" \
+            --notes "Release ${RELEASE_VERSION}" \
+            ${prerelease_flag}
