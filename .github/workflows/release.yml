@@ -150,6 +150,8 @@ jobs:
           fi
           gh release create "${RELEASE_TAG}" \
             release-assets/* \
+            --target "${GITHUB_SHA}" \
             --title "bifro-test-suite ${RELEASE_VERSION}" \
-            --notes "Release ${RELEASE_VERSION}" \
+            --generate-notes \
+            --fail-on-no-commits \
             ${prerelease_flag}
