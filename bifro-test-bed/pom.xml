@@ -285,6 +285,7 @@
                             <goal>copy-resources</goal>
                         </goals>
                         <configuration>
+                            <skip>${skipFrontendResources}</skip>
                             <outputDirectory>${project.build.directory}/classes/static/admin</outputDirectory>
                             <resources>
                                 <resource>

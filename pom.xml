@@ -53,6 +53,7 @@
     <properties>
         <revision>1.0.24-SNAPSHOT</revision>
         <skipFrontend>false</skipFrontend>
+        <skipFrontendResources>false</skipFrontendResources>
         <os.plugin.version>1.7.1</os.plugin.version>
         <hazelcast.version>5.3.5</hazelcast.version>
         <vertx-hazelcast.version>5.0.12</vertx-hazelcast.version>
