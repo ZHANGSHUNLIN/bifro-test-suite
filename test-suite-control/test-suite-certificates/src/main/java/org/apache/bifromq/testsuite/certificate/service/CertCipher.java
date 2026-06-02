@@ -33,11 +33,13 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
+@ConditionalOnControlPlane
 public class CertCipher {
 
     private static final String ALGORITHM = "AES/GCM/NoPadding";

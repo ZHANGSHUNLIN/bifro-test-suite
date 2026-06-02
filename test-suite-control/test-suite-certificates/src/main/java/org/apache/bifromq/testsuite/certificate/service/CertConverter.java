@@ -30,10 +30,12 @@ import java.security.cert.CertificateFactory;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Base64;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
 import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
+@ConditionalOnControlPlane
 public class CertConverter {
 
     private static final String KEYSTORE_TYPE = "PKCS12";

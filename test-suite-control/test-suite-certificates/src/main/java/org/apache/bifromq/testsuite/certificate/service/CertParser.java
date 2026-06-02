@@ -28,10 +28,12 @@ import java.security.interfaces.RSAPrivateCrtKey;
 import java.time.ZoneId;
 import java.util.Base64;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
 import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
+@ConditionalOnControlPlane
 public class CertParser {
 
     

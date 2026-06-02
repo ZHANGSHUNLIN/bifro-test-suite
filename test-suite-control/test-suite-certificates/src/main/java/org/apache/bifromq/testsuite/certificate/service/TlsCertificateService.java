@@ -23,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.bifromq.testsuite.certificate.model.CertType;
 import org.apache.bifromq.testsuite.certificate.model.TlsCertificate;
 import org.apache.bifromq.testsuite.certificate.repository.TlsCertificateRepository;
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
 import org.apache.bifromq.testsuite.i18n.Messages;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -30,6 +31,7 @@ import reactor.core.publisher.Mono;
 
 @Slf4j
 @Service
+@ConditionalOnControlPlane
 @RequiredArgsConstructor
 public class TlsCertificateService {
 

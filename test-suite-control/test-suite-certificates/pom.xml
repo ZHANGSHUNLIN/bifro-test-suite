@@ -35,6 +35,10 @@
             <artifactId>test-suite-framework</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.apache.bifromq.testsuite</groupId>
+            <artifactId>test-suite-common</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-mongodb-reactive</artifactId>
             <exclusions>
