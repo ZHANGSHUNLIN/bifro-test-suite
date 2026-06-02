@@ -50,6 +50,24 @@ public class TaskMetricsSnapshotService {
     @Resource
     private NodeMetricsService nodeMetricsService;
 
+    public Mono<TaskMetricsSnapshot> collectAndSaveNodeSnapshot(
+        String taskId,
+        String taskName,
+        String taskStage,
+        String nodeId,
+        String nodeName,
+        LocalDateTime startTime,
+        LocalDateTime endTime) {
+        try {
+            NodeMetricsResponse response = nodeMetricsService.queryNodeMetrics(nodeId, taskId, null);
+            return saveNodeSnapshot(taskId, taskName, taskStage, nodeId, nodeName, startTime, endTime, response);
+        } catch (Exception e) {
+            log.warn("Failed to collect node metrics snapshot, taskId={}, nodeId={}, stage={}",
+                taskId, nodeId, taskStage, e);
+            return Mono.empty();
+        }
+    }
+
     public Mono<TaskMetricsSnapshot> saveNodeSnapshot(
         String taskId,
         String taskName,

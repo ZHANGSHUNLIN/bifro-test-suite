@@ -22,6 +22,8 @@ import io.vertx.core.Vertx;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -35,6 +37,7 @@ import org.apache.bifromq.testsuite.app.database.pojo.TaskStateHistory;
 import org.apache.bifromq.testsuite.app.database.repository.NodeTaskRepository;
 import org.apache.bifromq.testsuite.app.database.repository.TaskInfoMetadataRepository;
 import org.apache.bifromq.testsuite.app.database.repository.TaskStateHistoryRepository;
+import org.apache.bifromq.testsuite.app.database.service.TaskMetricsSnapshotService;
 import org.apache.bifromq.testsuite.app.task.runtime.TaskRuntimeStates;
 import org.apache.bifromq.testsuite.eventbus.EventBusAddresses;
 import org.apache.bifromq.testsuite.worker.pojo.TaskStateChangeEvent;
@@ -56,6 +59,8 @@ public class TaskStateEventHandler {
     private NodeTaskRepository nodeTaskRepository;
     @Resource
     private TaskInfoMetadataRepository taskInfoMetadataRepository;
+    @Resource
+    private TaskMetricsSnapshotService taskMetricsSnapshotService;
 
     private static String toExternalStageName(TaskStage stage) {
         if (stage == TaskStage.STARTING) {
@@ -93,6 +98,8 @@ public class TaskStateEventHandler {
                     saveStateHistoryBlocking(event);
 
                     updateNodeTaskStageBlocking(event);
+
+                    saveTerminalMetricsSnapshotBlocking(event);
 
                     maybeUpdateMainTaskBlocking(event);
 
@@ -161,6 +168,64 @@ public class TaskStateEventHandler {
         } catch (Exception e) {
             log.error("Failed to update NodeTask stage", e);
         }
+    }
+
+    private void saveTerminalMetricsSnapshotBlocking(TaskStateChangeEvent event) {
+        if (event.getNodeId() == null || !TaskRuntimeStates.isTerminal(event.getToStage())) {
+            return;
+        }
+        try {
+            NodeTask nodeTask = nodeTaskRepository.findByTaskIdAndNodeId(event.getTaskId(), event.getNodeId()).block();
+            if (nodeTask == null) {
+                log.warn("Skip terminal metrics snapshot because node task is missing, taskId={}, nodeId={}",
+                    event.getTaskId(), event.getNodeId());
+                return;
+            }
+            TaskInfoMetadata metadata = taskInfoMetadataRepository.findById(event.getTaskId()).block();
+            String taskName = metadata != null ? metadata.getTaskName() : null;
+            String nodeName = event.getNodeName() != null ? event.getNodeName() : nodeTask.getNodeName();
+            if (nodeName == null) {
+                nodeName = event.getNodeId();
+            }
+            LocalDateTime startTime = resolveNodeStartTime(event);
+            LocalDateTime endTime = toLocalDateTime(event.getTimestamp());
+
+            taskMetricsSnapshotService.collectAndSaveNodeSnapshot(
+                event.getTaskId(),
+                taskName,
+                event.getToStage().name(),
+                event.getNodeId(),
+                nodeName,
+                startTime,
+                endTime
+            ).block();
+        } catch (Exception e) {
+            log.warn("Failed to save terminal metrics snapshot, taskId={}, nodeId={}, stage={}",
+                event.getTaskId(), event.getNodeId(), event.getToStage(), e);
+        }
+    }
+
+    private LocalDateTime resolveNodeStartTime(TaskStateChangeEvent event) {
+        List<TaskStateHistory> histories = taskStateHistoryRepository
+            .findByTaskIdAndNodeIdOrderByTimestampDesc(event.getTaskId(), event.getNodeId())
+            .collectList()
+            .block();
+        if (histories == null || histories.isEmpty()) {
+            return toLocalDateTime(event.getTimestamp());
+        }
+        return histories.stream()
+            .map(TaskStateHistory::getTimestamp)
+            .filter(java.util.Objects::nonNull)
+            .min(Instant::compareTo)
+            .map(TaskStateEventHandler::toLocalDateTime)
+            .orElseGet(() -> toLocalDateTime(event.getTimestamp()));
+    }
+
+    private static LocalDateTime toLocalDateTime(Instant instant) {
+        if (instant == null) {
+            return null;
+        }
+        return LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
     }
 
     private void maybeUpdateMainTaskBlocking(TaskStateChangeEvent event) {
