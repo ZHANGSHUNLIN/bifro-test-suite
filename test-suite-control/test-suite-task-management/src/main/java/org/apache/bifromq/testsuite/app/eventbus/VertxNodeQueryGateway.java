@@ -25,6 +25,8 @@ import org.apache.bifromq.testsuite.eventbus.EventBusRequestKind;
 import org.apache.bifromq.testsuite.eventbus.VertxEventBusClient;
 import org.apache.bifromq.testsuite.metric.NodeMetricsRequest;
 import org.apache.bifromq.testsuite.metric.NodeMetricsResponse;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskRequest;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskResult;
 import org.apache.bifromq.testsuite.worker.pojo.ClientQueryRequest;
 import org.apache.bifromq.testsuite.worker.pojo.ClientQueryResponse;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckRequest;
@@ -66,5 +68,10 @@ public class VertxNodeQueryGateway implements NodeQueryGateway {
         String nodeId, TaskMetricsCleanupRequest request) {
         return client.request(EventBusAddresses.taskMetricsCleanup(nodeId),
             request, EventBusRequestKind.TASK_METRICS_CLEANUP);
+    }
+
+    @Override
+    public CompletableFuture<ScheduledTaskResult> scheduleTask(String nodeId, ScheduledTaskRequest request) {
+        return client.request(EventBusAddresses.delayedTaskSchedule(nodeId), request, EventBusRequestKind.SCHEDULED_TASK);
     }
 }

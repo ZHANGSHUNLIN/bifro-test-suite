@@ -44,6 +44,8 @@ import org.apache.bifromq.testsuite.client.LocalPortUsage;
 import org.apache.bifromq.testsuite.eventbus.EventBusAddresses;
 import org.apache.bifromq.testsuite.metric.NodeMetricsRequest;
 import org.apache.bifromq.testsuite.metric.NodeMetricsResponse;
+import org.apache.bifromq.testsuite.scheduler.DelayedTaskScheduler;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskEventBusRegistrar;
 import org.apache.bifromq.testsuite.worker.BaseTaskWorker;
 import org.apache.bifromq.testsuite.worker.ClientQueryService;
 import org.apache.bifromq.testsuite.worker.MetricsQueryService;
@@ -91,6 +93,8 @@ public class LocalTaskCoordinator {
     private ClusterDataManager clusterDataManager;
     @Resource
     private LocalPortModeProperties localPortModeProperties;
+    @Resource
+    private DelayedTaskScheduler delayedTaskScheduler;
 
     public void startTask(String id) {
         log.warn("Ignore legacy task start by id on worker node: taskId={}", id);
@@ -207,6 +211,11 @@ public class LocalTaskCoordinator {
         });
         String metricsCleanupAddr = EventBusAddresses.taskMetricsCleanup(clusterDataManager.getCurrentNodeIdCache());
         vertx.eventBus().<TaskMetricsCleanupRequest>consumer(metricsCleanupAddr, this::handleTaskMetricsCleanupRequest);
+        new ScheduledTaskEventBusRegistrar(
+            vertx,
+            delayedTaskScheduler,
+            clusterDataManager.getCurrentNodeIdCache()
+        ).register();
         String clientsAddr = EventBusAddresses.nodeClients(clusterDataManager.getCurrentNodeIdCache());
         ClientQueryService clientQueryService = new ClientQueryService();
         vertx.eventBus().<ClientQueryRequest>consumer(clientsAddr, message -> {

@@ -20,6 +20,8 @@ package org.apache.bifromq.testsuite.app.eventbus;
 import java.util.concurrent.CompletableFuture;
 import org.apache.bifromq.testsuite.metric.NodeMetricsRequest;
 import org.apache.bifromq.testsuite.metric.NodeMetricsResponse;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskRequest;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskResult;
 import org.apache.bifromq.testsuite.worker.pojo.ClientQueryRequest;
 import org.apache.bifromq.testsuite.worker.pojo.ClientQueryResponse;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckRequest;
@@ -38,4 +40,6 @@ public interface NodeQueryGateway {
 
     CompletableFuture<TaskMetricsCleanupResponse> cleanupTaskMetrics(
         String nodeId, TaskMetricsCleanupRequest request);
+
+    CompletableFuture<ScheduledTaskResult> scheduleTask(String nodeId, ScheduledTaskRequest request);
 }

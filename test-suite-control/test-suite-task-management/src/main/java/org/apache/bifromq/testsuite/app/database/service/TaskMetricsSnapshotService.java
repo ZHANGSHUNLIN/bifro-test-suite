@@ -27,10 +27,13 @@ import org.apache.bifromq.testsuite.app.eventbus.NodeQueryGateway;
 import org.apache.bifromq.testsuite.metric.CounterMetricData;
 import org.apache.bifromq.testsuite.metric.NodeMetricsResponse;
 import org.apache.bifromq.testsuite.metric.TimerMetricData;
-import org.apache.bifromq.testsuite.worker.pojo.TaskMetricsCleanupRequest;
-import org.apache.bifromq.testsuite.worker.pojo.TaskMetricsCleanupResponse;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskKind;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskRequest;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskResult;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskScope;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -38,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -56,6 +60,9 @@ public class TaskMetricsSnapshotService {
     @Resource
     private NodeQueryGateway nodeQueryGateway;
 
+    @Value("${bifro.metrics.cleanup-delay:30s}")
+    private Duration metricsCleanupDelay;
+
     public Mono<TaskMetricsSnapshot> collectAndSaveNodeSnapshot(
         String taskId,
         String taskName,
@@ -67,7 +74,7 @@ public class TaskMetricsSnapshotService {
         try {
             NodeMetricsResponse response = nodeMetricsService.queryNodeMetrics(nodeId, taskId, null);
             return saveNodeSnapshot(taskId, taskName, taskStage, nodeId, nodeName, startTime, endTime, response)
-                .flatMap(snapshot -> cleanupTaskMetrics(taskId, nodeId).thenReturn(snapshot));
+                .flatMap(snapshot -> scheduleTaskMetricsCleanup(taskId, nodeId).thenReturn(snapshot));
         } catch (Exception e) {
             log.warn("Failed to collect node metrics snapshot, taskId={}, nodeId={}, stage={}",
                 taskId, nodeId, taskStage, e);
@@ -143,23 +150,29 @@ public class TaskMetricsSnapshotService {
                 taskId, nodeId, e));
     }
 
-    private Mono<TaskMetricsCleanupResponse> cleanupTaskMetrics(String taskId, String nodeId) {
-        TaskMetricsCleanupRequest request = TaskMetricsCleanupRequest.builder()
-            .taskId(taskId)
-            .nodeId(nodeId)
+    private Mono<ScheduledTaskResult> scheduleTaskMetricsCleanup(String taskId, String nodeId) {
+        long delayMs = metricsCleanupDelay == null ? Duration.ofSeconds(30).toMillis()
+            : Math.max(0L, metricsCleanupDelay.toMillis());
+        ScheduledTaskRequest request = ScheduledTaskRequest.builder()
+            .taskKey("metrics-cleanup:" + taskId + ":" + nodeId)
+            .scope(ScheduledTaskScope.LOCAL)
+            .kind(ScheduledTaskKind.TASK_METRICS_CLEANUP)
+            .targetNodeId(nodeId)
+            .delayMs(delayMs)
+            .payload(Map.of("taskId", taskId, "nodeId", nodeId))
             .build();
-        return Mono.defer(() -> Mono.fromFuture(nodeQueryGateway.cleanupTaskMetrics(nodeId, request)))
+        return Mono.defer(() -> Mono.fromFuture(nodeQueryGateway.scheduleTask(nodeId, request)))
             .doOnNext(response -> {
-                if (response != null && response.isSuccess()) {
-                    log.info("Task metrics cleanup completed, taskId={}, nodeId={}, removedMeterCount={}",
-                        taskId, nodeId, response.getRemovedMeterCount());
+                if (response != null && response.isAccepted()) {
+                    log.info("Task metrics cleanup scheduled, taskId={}, nodeId={}, delayMs={}",
+                        taskId, nodeId, delayMs);
                 } else {
-                    log.warn("Task metrics cleanup rejected, taskId={}, nodeId={}, errorMessage={}",
-                        taskId, nodeId, response == null ? "No cleanup response" : response.getErrorMessage());
+                    log.warn("Task metrics cleanup schedule rejected, taskId={}, nodeId={}, reason={}",
+                        taskId, nodeId, response == null ? "No schedule response" : response.getReason());
                 }
             })
             .onErrorResume(e -> {
-                log.warn("Task metrics cleanup failed, taskId={}, nodeId={}", taskId, nodeId, e);
+                log.warn("Task metrics cleanup schedule failed, taskId={}, nodeId={}", taskId, nodeId, e);
                 return Mono.empty();
             });
     }

@@ -43,6 +43,13 @@ management:
 bifro:
   node-role: all
   node-id: "default-broker-2"
+  scheduler:
+    enabled: true
+    max-pending-tasks: 10000
+    max-delay: 5m
+    default-timeout: 30s
+  metrics:
+    cleanup-delay: 30s
   security:
     enabled: true
     session-timeout: 8h

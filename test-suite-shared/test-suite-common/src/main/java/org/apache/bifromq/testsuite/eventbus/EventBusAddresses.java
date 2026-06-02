@@ -44,6 +44,18 @@ public final class EventBusAddresses {
         return Constants.NODE_METRICS_ADDRESS_PREFIX + nodeId + Constants.NODE_TASK_METRICS_CLEANUP_SUFFIX;
     }
 
+    public static String delayedTaskSchedule(String nodeId) {
+        return "node." + nodeId + ".delayed-task.schedule";
+    }
+
+    public static String delayedTaskCancel(String nodeId) {
+        return "node." + nodeId + ".delayed-task.cancel";
+    }
+
+    public static String delayedTaskQuery(String nodeId) {
+        return "node." + nodeId + ".delayed-task.query";
+    }
+
     public static String workerCommand(String nodeId) {
         return "worker." + nodeId + ".command";
     }

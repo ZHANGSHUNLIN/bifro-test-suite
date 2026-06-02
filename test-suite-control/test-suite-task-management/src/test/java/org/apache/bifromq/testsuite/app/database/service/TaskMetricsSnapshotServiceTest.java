@@ -36,8 +36,9 @@ import org.apache.bifromq.testsuite.app.eventbus.NodeQueryGateway;
 import org.apache.bifromq.testsuite.metric.CounterMetricData;
 import org.apache.bifromq.testsuite.metric.NodeMetricsResponse;
 import org.apache.bifromq.testsuite.metric.TimerMetricData;
-import org.apache.bifromq.testsuite.worker.pojo.TaskMetricsCleanupRequest;
-import org.apache.bifromq.testsuite.worker.pojo.TaskMetricsCleanupResponse;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskRequest;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskResult;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -86,26 +87,25 @@ class TaskMetricsSnapshotServiceTest {
     }
 
     @Test
-    void collectAndSaveNodeSnapshotShouldCleanupMetricsAfterSave() {
+    void collectAndSaveNodeSnapshotShouldScheduleMetricsCleanupAfterSave() {
         NodeMetricsResponse response = NodeMetricsResponse.builder()
             .success(true)
             .nodeId("node-1")
             .counterMetrics(List.of(counter("publish", 10)))
             .timerMetrics(List.of())
             .build();
-        TaskMetricsCleanupResponse cleanupResponse = TaskMetricsCleanupResponse.builder()
-            .success(true)
-            .taskId("task-1")
-            .nodeId("node-1")
-            .removedMeterCount(2)
+        ScheduledTaskResult scheduleResponse = ScheduledTaskResult.builder()
+            .accepted(true)
+            .taskKey("metrics-cleanup:task-1:node-1")
+            .state(ScheduledTaskState.PENDING)
             .build();
         when(nodeMetricsService.queryNodeMetrics("node-1", "task-1", null)).thenReturn(response);
         when(taskMetricsSnapshotRepository.findFirstByTaskIdAndNodeIdAndTaskWorkStageOrderByCreateTimeDesc(
             "task-1", "node-1", "SHUTDOWN")).thenReturn(reactor.core.publisher.Mono.empty());
         when(taskMetricsSnapshotRepository.save(any(TaskMetricsSnapshot.class)))
             .thenAnswer(invocation -> reactor.core.publisher.Mono.just(invocation.getArgument(0)));
-        when(nodeQueryGateway.cleanupTaskMetrics(eq("node-1"), any(TaskMetricsCleanupRequest.class)))
-            .thenReturn(CompletableFuture.completedFuture(cleanupResponse));
+        when(nodeQueryGateway.scheduleTask(eq("node-1"), any(ScheduledTaskRequest.class)))
+            .thenReturn(CompletableFuture.completedFuture(scheduleResponse));
 
         TaskMetricsSnapshot snapshot = taskMetricsSnapshotService.collectAndSaveNodeSnapshot(
             "task-1", "task", "SHUTDOWN", "node-1", "node-1",
@@ -114,7 +114,7 @@ class TaskMetricsSnapshotServiceTest {
 
         assertThat(snapshot).isNotNull();
         verify(taskMetricsSnapshotRepository).save(any(TaskMetricsSnapshot.class));
-        verify(nodeQueryGateway).cleanupTaskMetrics(eq("node-1"), any(TaskMetricsCleanupRequest.class));
+        verify(nodeQueryGateway).scheduleTask(eq("node-1"), any(ScheduledTaskRequest.class));
     }
 
     @Test
@@ -132,7 +132,7 @@ class TaskMetricsSnapshotServiceTest {
             LocalDateTime.of(2026, 1, 1, 0, 1)).block();
 
         assertThat(snapshot).isNull();
-        verify(nodeQueryGateway, never()).cleanupTaskMetrics(any(), any());
+        verify(nodeQueryGateway, never()).scheduleTask(any(), any());
     }
 
     private static TaskMetricsSnapshot nodeSnapshot(String nodeId, String nodeName, double publish, double received,

@@ -149,7 +149,6 @@ class TaskExecutorTest {
         assertThat(worker.getTaskState())
             .as("SPEC-LC-06: final state should be STOPPED after stopTask")
             .isEqualTo(TaskStage.STOPPED);
-        assertTaskGaugesRemoved();
     }
 
     @Test
@@ -168,7 +167,7 @@ class TaskExecutorTest {
         assertThat(worker.getTaskState())
             .as("SPEC-LC-07: state should be SHUTDOWN after SHUTTING completes")
             .isEqualTo(TaskStage.SHUTDOWN);
-        assertTaskGaugesRemoved();
+        assertTaskGaugesRetained();
     }
 
     @Test
@@ -238,16 +237,16 @@ class TaskExecutorTest {
             "taskId", TASK_ID, "nodeId", NODE_ID, "clientType", "conn");
     }
 
-    private void assertTaskGaugesRemoved() {
+    private void assertTaskGaugesRetained() {
         assertThat(registry.find(BifroTaskMetric.CLIENT_PLANNED_GAUGE.getName())
             .tag("taskId", TASK_ID)
-            .gauge()).isNull();
+            .gauge()).isNotNull();
         assertThat(registry.find(BifroTaskMetric.CLIENT_READY_GAUGE.getName())
             .tag("taskId", TASK_ID)
-            .gauge()).isNull();
+            .gauge()).isNotNull();
         assertThat(registry.find(BifroTaskMetric.CLIENT_ACTIVE_GAUGE.getName())
             .tag("taskId", TASK_ID)
-            .gauge()).isNull();
+            .gauge()).isNotNull();
     }
 
     private static final class ControlledCancelStage implements PipelineStage<TaskPipelineContext> {

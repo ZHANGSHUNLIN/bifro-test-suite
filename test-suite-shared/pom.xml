@@ -35,5 +35,6 @@
     <modules>
         <module>test-suite-framework</module>
         <module>test-suite-common</module>
+        <module>test-suite-scheduler</module>
     </modules>
 </project>

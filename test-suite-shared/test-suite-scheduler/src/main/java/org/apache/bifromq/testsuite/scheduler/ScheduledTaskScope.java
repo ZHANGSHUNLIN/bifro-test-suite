@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,13 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.bifromq.testsuite.eventbus;
+package org.apache.bifromq.testsuite.scheduler;
 
-public enum EventBusRequestKind {
-    NODE_METRICS,
-    CLIENT_QUERY,
-    LOCAL_PORT_CAPACITY,
-    TASK_METRICS_CLEANUP,
-    SCHEDULED_TASK,
-    TASK_COMMAND
+public enum ScheduledTaskScope {
+    LOCAL,
+    CLUSTER
 }
