@@ -896,6 +896,13 @@
       "yes": "Assignable",
       "no": "Not Assignable"
     },
+    "filters": {
+      "searchPlaceholder": "Search node name, ID, host, or role",
+      "allStatuses": "All Statuses",
+      "allRoles": "All Roles",
+      "allSchedulable": "All Scheduling",
+      "visibleNodes": "Showing {{filtered}} / {{total}} nodes"
+    },
     "msg": {
       "loadFailed": "Failed to load cluster data",
       "loadNodeFailed": "Failed to load node detail"
@@ -903,6 +910,7 @@
     "localPortMode": {
       "title": "Source Port Preallocation",
       "editTitle": "Configure Source Port Preallocation",
+      "configure": "Configure",
       "enabled": "Enabled",
       "startPort": "Start Port",
       "endPort": "End Port",

@@ -15,17 +15,20 @@
  * limitations under the License.
  */
 
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
+    Alert,
     Button,
     Card,
     Col,
+    Input,
     Form,
     InputNumber,
     message,
     Modal,
     Progress,
     Row,
+    Select,
     Space,
     Spin,
     Statistic,
@@ -40,6 +43,7 @@ import {
     ExclamationCircleOutlined,
     EyeOutlined,
     ReloadOutlined,
+    SearchOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import {useTranslation} from 'react-i18next';
@@ -53,10 +57,18 @@ import type {
     NodeTaskInfo
 } from '../../features/cluster';
 
+type NodeStatusFilter = NodeStatus | 'FILTER_ALL';
+type NodeRoleFilter = NodeRole | 'FILTER_ALL';
+type SchedulableFilter = 'FILTER_ALL' | 'YES' | 'NO';
+
 const ClusterManagement: React.FC = () => {
     const {t} = useTranslation();
     const [form] = Form.useForm<LocalPortModeConfig>();
     const [nodes, setNodes] = useState<NodeListVO[]>([]);
+    const [keywordFilter, setKeywordFilter] = useState('');
+    const [statusFilter, setStatusFilter] = useState<NodeStatusFilter>('FILTER_ALL');
+    const [roleFilter, setRoleFilter] = useState<NodeRoleFilter>('FILTER_ALL');
+    const [schedulableFilter, setSchedulableFilter] = useState<SchedulableFilter>('FILTER_ALL');
     const [clusterStats, setClusterStats] = useState<ClusterStatistics | null>(null);
     const [loading, setLoading] = useState(false);
     const [localPortLoading, setLocalPortLoading] = useState(false);
@@ -199,6 +211,51 @@ const ClusterManagement: React.FC = () => {
         form.setFieldsValue(localPortMode || {enabled: false, startPort: 10000, endPort: 65535});
         setLocalPortModalVisible(true);
     };
+
+    const resetFilters = () => {
+        setKeywordFilter('');
+        setStatusFilter('FILTER_ALL');
+        setRoleFilter('FILTER_ALL');
+        setSchedulableFilter('FILTER_ALL');
+        setCurrentPage(1);
+    };
+
+    const filteredNodes = useMemo(() => {
+        const normalizedKeyword = keywordFilter.trim().toLowerCase();
+        return nodes.filter(node => {
+            if (normalizedKeyword) {
+                const searchableText = [
+                    node.nodeName,
+                    node.nodeId,
+                    node.host,
+                    node.role || 'UNKNOWN',
+                ].join(' ').toLowerCase();
+                if (!searchableText.includes(normalizedKeyword)) {
+                    return false;
+                }
+            }
+
+            if (statusFilter !== 'FILTER_ALL' && getNodeStatus(node) !== statusFilter) {
+                return false;
+            }
+
+            if (roleFilter !== 'FILTER_ALL' && (node.role || 'UNKNOWN') !== roleFilter) {
+                return false;
+            }
+
+            if (schedulableFilter === 'YES' && !node.schedulable) {
+                return false;
+            }
+
+            if (schedulableFilter === 'NO' && node.schedulable) {
+                return false;
+            }
+
+            return true;
+        });
+    }, [keywordFilter, nodes, roleFilter, schedulableFilter, statusFilter]);
+
+    const localPortRange = `${localPortMode?.startPort ?? 10000}-${localPortMode?.endPort ?? 65535}`;
 
     const columns = [
         {
@@ -380,50 +437,100 @@ const ClusterManagement: React.FC = () => {
             )}
 
             <Card
-                title={t('cluster.localPortMode.title')}
-                style={{marginBottom: 24}}
+                title={t('cluster.title')}
                 extra={(
-                    <Space>
+                    <Space wrap>
+                        <span style={{color: '#666'}}>{t('cluster.localPortMode.title')}</span>
                         <Tag color={localPortMode?.enabled ? 'success' : 'default'}>
                             {localPortMode?.enabled ? t('task.enabled') : t('task.disabled')}
                         </Tag>
-                        <Button icon={<EditOutlined/>} onClick={openLocalPortModal}>
-                            {t('common.edit')}
+                        <Tag color="blue">{localPortRange}</Tag>
+                        <Button
+                            icon={<EditOutlined/>}
+                            loading={localPortLoading}
+                            onClick={openLocalPortModal}
+                        >
+                            {t('cluster.localPortMode.configure')}
                         </Button>
                     </Space>
                 )}
             >
-                <Spin spinning={localPortLoading}>
-                    <div className="task-report-detail-grid">
-                        <div className="task-report-detail-item">
-                            <span>{t('common.status')}</span>
-                            <Tag color={localPortMode?.enabled ? 'success' : 'default'}>
-                                {localPortMode?.enabled ? t('task.enabled') : t('task.disabled')}
-                            </Tag>
-                        </div>
-                        <div className="task-report-detail-item">
-                            <span>{t('cluster.localPortMode.startPort')}</span>
-                            <strong>{localPortMode?.startPort ?? 10000}</strong>
-                        </div>
-                        <div className="task-report-detail-item">
-                            <span>{t('cluster.localPortMode.endPort')}</span>
-                            <strong>{localPortMode?.endPort ?? 65535}</strong>
-                        </div>
-                    </div>
-                    <div style={{marginTop: 12, color: '#666'}}>
-                        {t('cluster.localPortMode.description')}
-                    </div>
-                </Spin>
-            </Card>
-
-            <Card>
-                <div style={{display: 'flex', justifyContent: 'flex-end', marginBottom: 16}}>
-                    <Button icon={<ReloadOutlined/>} onClick={loadClusterData}>{t('common.refresh')}</Button>
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                    marginBottom: 16,
+                }}>
+                    <Space wrap>
+                        <Input
+                            allowClear
+                            style={{width: 260}}
+                            prefix={<SearchOutlined style={{color: '#bfbfbf'}}/>}
+                            placeholder={t('cluster.filters.searchPlaceholder')}
+                            value={keywordFilter}
+                            onChange={(event) => {
+                                setKeywordFilter(event.target.value);
+                                setCurrentPage(1);
+                            }}
+                        />
+                        <Select<NodeStatusFilter>
+                            style={{width: 140}}
+                            value={statusFilter}
+                            onChange={(value) => {
+                                setStatusFilter(value);
+                                setCurrentPage(1);
+                            }}
+                            options={[
+                                {label: t('cluster.filters.allStatuses'), value: 'FILTER_ALL'},
+                                {label: t('cluster.status.ONLINE'), value: 'ONLINE'},
+                                {label: t('cluster.status.OFFLINE'), value: 'OFFLINE'},
+                            ]}
+                        />
+                        <Select<NodeRoleFilter>
+                            style={{width: 140}}
+                            value={roleFilter}
+                            onChange={(value) => {
+                                setRoleFilter(value);
+                                setCurrentPage(1);
+                            }}
+                            options={[
+                                {label: t('cluster.filters.allRoles'), value: 'FILTER_ALL'},
+                                {label: t('cluster.role.CONTROL'), value: 'CONTROL'},
+                                {label: t('cluster.role.WORKER'), value: 'WORKER'},
+                                {label: t('cluster.role.ALL'), value: 'ALL'},
+                                {label: t('cluster.role.UNKNOWN'), value: 'UNKNOWN'},
+                            ]}
+                        />
+                        <Select<SchedulableFilter>
+                            style={{width: 140}}
+                            value={schedulableFilter}
+                            onChange={(value) => {
+                                setSchedulableFilter(value);
+                                setCurrentPage(1);
+                            }}
+                            options={[
+                                {label: t('cluster.filters.allSchedulable'), value: 'FILTER_ALL'},
+                                {label: t('cluster.schedulable.yes'), value: 'YES'},
+                                {label: t('cluster.schedulable.no'), value: 'NO'},
+                            ]}
+                        />
+                        <Button onClick={resetFilters}>{t('common.reset')}</Button>
+                    </Space>
+                    <Space wrap>
+                        <span style={{color: '#666'}}>
+                            {t('cluster.filters.visibleNodes', {
+                                filtered: filteredNodes.length,
+                                total: nodes.length,
+                            })}
+                        </span>
+                        <Button icon={<ReloadOutlined/>} onClick={loadClusterData}>{t('common.refresh')}</Button>
+                    </Space>
                 </div>
                 <Spin spinning={loading}>
                     <Table
                         columns={columns}
-                        dataSource={nodes}
+                        dataSource={filteredNodes}
                         rowKey="nodeId"
                         scroll={{x: 1280}}
                         pagination={{
@@ -453,6 +560,12 @@ const ClusterManagement: React.FC = () => {
                 confirmLoading={localPortSaving}
                 destroyOnHidden
             >
+                <Alert
+                    type="info"
+                    showIcon
+                    style={{marginBottom: 16}}
+                    message={t('cluster.localPortMode.description')}
+                />
                 <Form
                     form={form}
                     layout="vertical"

@@ -896,6 +896,13 @@
       "yes": "可分配",
       "no": "不可分配"
     },
+    "filters": {
+      "searchPlaceholder": "搜索节点名称、ID、主机或角色",
+      "allStatuses": "全部状态",
+      "allRoles": "全部角色",
+      "allSchedulable": "全部调度",
+      "visibleNodes": "显示 {{filtered}} / {{total}} 个节点"
+    },
     "msg": {
       "loadFailed": "加载集群数据失败",
       "loadNodeFailed": "加载节点详情失败"
@@ -903,6 +910,7 @@
     "localPortMode": {
       "title": "源端口预分配",
       "editTitle": "配置源端口预分配",
+      "configure": "配置",
       "enabled": "启用",
       "startPort": "起始端口",
       "endPort": "结束端口",
