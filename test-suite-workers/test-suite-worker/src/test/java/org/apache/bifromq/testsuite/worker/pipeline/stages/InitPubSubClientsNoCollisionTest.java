@@ -160,7 +160,7 @@ class InitPubSubClientsNoCollisionTest {
         InitPubClientsStage pubStage = new InitPubClientsStage();
         pubStage.execute(context).get();
         for (int i = 0; i < PUB_COUNT; i++) {
-            String expectedId = String.format("%s_node_p_%07d", TASK_ID, i);
+            String expectedId = String.format("%s_node-7504_p_%07d", TASK_ID, i);
             assertThat(pubClients).as("pub clientId at index %d should exist", i)
                 .containsKey(expectedId);
         }
@@ -173,13 +173,13 @@ class InitPubSubClientsNoCollisionTest {
         InitSubClientsStage subStage = new InitSubClientsStage();
         subStage.execute(context).get();
         for (int i = 0; i < SUB_COUNT; i++) {
-            String expectedId = String.format("%s_node_s_%07d", TASK_ID, i);
+            String expectedId = String.format("%s_node-7504_s_%07d", TASK_ID, i);
             assertThat(subClients).as("sub clientId at index %d should exist", i)
                 .containsKey(expectedId);
         }
 
         for (int i = 0; i < PUB_COUNT; i++) {
-            String pubId = String.format("%s_node_p_%07d", TASK_ID, i);
+            String pubId = String.format("%s_node-7504_p_%07d", TASK_ID, i);
             assertThat(subClients).as("sub must not contain pub clientId %s", pubId)
                 .doesNotContainKey(pubId);
         }
@@ -194,8 +194,8 @@ class InitPubSubClientsNoCollisionTest {
         new InitPubClientsStage().execute(context).get();
         new InitSubClientsStage().execute(context).get();
 
-        MqttClientTask pubClient = pubClients.get(String.format("%s_node_p_%07d", TASK_ID, 0));
-        MqttClientTask subClient = subClients.get(String.format("%s_node_s_%07d", TASK_ID, 0));
+        MqttClientTask pubClient = pubClients.get(String.format("%s_node-7504_p_%07d", TASK_ID, 0));
+        MqttClientTask subClient = subClients.get(String.format("%s_node-7504_s_%07d", TASK_ID, 0));
         assertThat(taskConfigOf(pubClient).getPubTopics())
             .containsExactly(TASK_ID + "/0/0", TASK_ID + "/0/1", TASK_ID + "/0/2");
         assertThat(taskConfigOf(subClient).getTopicFilters())

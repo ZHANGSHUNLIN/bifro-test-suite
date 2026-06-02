@@ -18,6 +18,7 @@
 package org.apache.bifromq.testsuite.client;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
@@ -97,12 +98,24 @@ public class MqttClientConfigFactory {
     }
 
     private static String extractNodeIdPrefix(String nodeId) {
-        if (nodeId == null || nodeId.isEmpty()) {
+        if (nodeId == null || nodeId.isBlank()) {
             return "node";
         }
 
-        String prefix = nodeId.length() >= 4 ? nodeId.substring(0, 4) : String.format("%-4s", nodeId).replace(' ', '0');
-        return prefix.toLowerCase().replace("-", "").replace("_", "");
+        String normalized = nodeId.trim()
+            .toLowerCase(Locale.ROOT)
+            .replaceAll("[^a-z0-9-]", "-")
+            .replaceAll("-+", "-");
+        if (normalized.isBlank() || "-".equals(normalized)) {
+            return "node";
+        }
+        if (normalized.startsWith("-")) {
+            normalized = normalized.substring(1);
+        }
+        if (normalized.endsWith("-")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized.isBlank() ? "node" : normalized;
     }
 
     public static Builder builder() {

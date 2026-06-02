@@ -33,7 +33,7 @@ class MqttClientConfigFactoryTemplateTest {
 
         var config = factory.create("pub", 3, new AtomicInteger());
 
-        assertThat(config.getClientId()).isEqualTo("taskA_node_pub_0000003");
+        assertThat(config.getClientId()).isEqualTo("taskA_node-1_pub_0000003");
         assertThat(config.getWillConfig().getWillTopic()).isEqualTo("will/taskA/node-1/3/0000003");
     }
 
@@ -43,7 +43,7 @@ class MqttClientConfigFactoryTemplateTest {
 
         var config = factory.create(2, new AtomicInteger());
 
-        assertThat(config.getClientId()).isEqualTo("taskA_node_0000002");
+        assertThat(config.getClientId()).isEqualTo("taskA_node-1_0000002");
         assertThat(config.getWillConfig().getWillTopic()).isEqualTo("will/_0000002/_0000002");
     }
 
@@ -57,9 +57,23 @@ class MqttClientConfigFactoryTemplateTest {
 
         var config = factory.create("sub", 7, new AtomicInteger());
 
-        assertThat(config.getClientId()).isEqualTo("taskA_node_sub_0000007");
+        assertThat(config.getClientId()).isEqualTo("taskA_node-1_sub_0000007");
         assertThat(config.getUsername()).isEqualTo("u-0000007-7");
         assertThat(config.getPassword()).isEqualTo("p-taskA-node-1");
+    }
+
+    @Test
+    void create_withWorkerNodeId_includesFullNodeIdToAvoidCrossWorkerCollision() {
+        MqttClientConfigFactory factory = MqttClientConfigFactory.builder()
+            .taskId("ex2qnWPD")
+            .nodeId("worker-10-99-48-10")
+            .brokers(List.of(new MqttClientConfigFactory.TaskBrokerAddress("localhost", 1883)))
+            .authStrategy(new NormalAuthStrategy())
+            .build();
+
+        var config = factory.create(1, new AtomicInteger());
+
+        assertThat(config.getClientId()).isEqualTo("ex2qnWPD_worker-10-99-48-10_0000001");
     }
 
     private MqttClientConfigFactory factoryWithWillTopic(String willTopic) {
