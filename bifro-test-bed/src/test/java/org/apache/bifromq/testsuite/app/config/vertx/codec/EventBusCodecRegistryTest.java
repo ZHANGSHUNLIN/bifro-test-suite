@@ -27,6 +27,12 @@ import org.apache.bifromq.testsuite.app.bean.NodeInfo;
 import org.apache.bifromq.testsuite.metric.NodeMetricsRequest;
 import org.apache.bifromq.testsuite.metric.NodeMetricsResponse;
 import org.apache.bifromq.testsuite.pipeline.PipelineProgressEvent;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskCancelRequest;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskCancelResponse;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskQueryRequest;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskQueryResponse;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskRequest;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskResult;
 import org.apache.bifromq.testsuite.worker.TaskConfig;
 import org.apache.bifromq.testsuite.worker.WorkerTaskCommand;
 import org.apache.bifromq.testsuite.worker.pojo.ClientQueryRequest;
@@ -58,7 +64,13 @@ class EventBusCodecRegistryTest {
             LocalPortCapacityCheckResponse.class,
             WorkerTaskCommand.class,
             WorkerCommand.class,
-            WorkerCommandAck.class);
+            WorkerCommandAck.class,
+            ScheduledTaskRequest.class,
+            ScheduledTaskResult.class,
+            ScheduledTaskCancelRequest.class,
+            ScheduledTaskCancelResponse.class,
+            ScheduledTaskQueryRequest.class,
+            ScheduledTaskQueryResponse.class);
     }
 
     @Test

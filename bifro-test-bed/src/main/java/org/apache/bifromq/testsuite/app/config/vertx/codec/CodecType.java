@@ -22,6 +22,12 @@ import org.apache.bifromq.testsuite.TaskSchedule;
 import org.apache.bifromq.testsuite.metric.NodeMetricsRequest;
 import org.apache.bifromq.testsuite.metric.NodeMetricsResponse;
 import org.apache.bifromq.testsuite.pipeline.PipelineProgressEvent;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskCancelRequest;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskCancelResponse;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskQueryRequest;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskQueryResponse;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskRequest;
+import org.apache.bifromq.testsuite.scheduler.ScheduledTaskResult;
 import org.apache.bifromq.testsuite.worker.WorkerTaskCommand;
 import org.apache.bifromq.testsuite.worker.command.WorkerCommand;
 import org.apache.bifromq.testsuite.worker.command.WorkerCommandAck;
@@ -44,7 +50,13 @@ public enum CodecType {
     LocalPortCapacityCheckResponse(new GenericCodecSupplier<>(1022, LocalPortCapacityCheckResponse.class)),
     WorkerTaskCommand(new GenericCodecSupplier<>(1023, WorkerTaskCommand.class)),
     WorkerCommand(new GenericCodecSupplier<>(1024, WorkerCommand.class)),
-    WorkerCommandAck(new GenericCodecSupplier<>(1025, WorkerCommandAck.class));
+    WorkerCommandAck(new GenericCodecSupplier<>(1025, WorkerCommandAck.class)),
+    ScheduledTaskRequest(new GenericCodecSupplier<>(1026, ScheduledTaskRequest.class)),
+    ScheduledTaskResult(new GenericCodecSupplier<>(1027, ScheduledTaskResult.class)),
+    ScheduledTaskCancelRequest(new GenericCodecSupplier<>(1028, ScheduledTaskCancelRequest.class)),
+    ScheduledTaskCancelResponse(new GenericCodecSupplier<>(1029, ScheduledTaskCancelResponse.class)),
+    ScheduledTaskQueryRequest(new GenericCodecSupplier<>(1030, ScheduledTaskQueryRequest.class)),
+    ScheduledTaskQueryResponse(new GenericCodecSupplier<>(1031, ScheduledTaskQueryResponse.class));
     private final CodecSupplier<?> codecSupplier;
 
     <T> CodecType(CodecSupplier<T> codecSupplier) {
