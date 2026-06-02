@@ -17,7 +17,7 @@
 
 import {api} from '../../../utils/request';
 import type {
-    NodeTaskAllocationVO,
+    NodeTaskAllocationRequest,
     PageInfo,
     StateHistoryItem,
     TaskBasicInfoResponse,
@@ -64,11 +64,8 @@ export const taskApi = {
     confirmTask: (id: string) => {
         return api.post<TaskDetailResponse>('/task/:id/confirmTask', undefined, {params: {id}});
     },
-    assignTask: (taskId: string, allocationRequest?: NodeTaskAllocationVO) => {
+    assignTask: (taskId: string, allocationRequest?: NodeTaskAllocationRequest) => {
         return api.post<TaskConfig>('/task/assign/:taskId', allocationRequest, {params: {taskId}});
-    },
-    calculateNodeTaskAllocation: (taskId: string) => {
-        return api.post<NodeTaskAllocationVO>('/task/calculate/:taskId', null, {params: {taskId}});
     },
     deleteTask: (id: string) => {
         return api.delete<TaskDetailResponse>('/task/:id', {params: {id}});

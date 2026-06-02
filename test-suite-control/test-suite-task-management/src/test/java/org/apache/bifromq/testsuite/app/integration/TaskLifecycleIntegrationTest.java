@@ -27,7 +27,6 @@ import static org.mockito.Mockito.mock;
 import org.apache.bifromq.testsuite.app.bean.dto.BrokerEntry;
 import org.apache.bifromq.testsuite.app.bean.dto.NodeTaskAllocationRequest;
 import org.apache.bifromq.testsuite.app.bean.dto.TaskRequest;
-import org.apache.bifromq.testsuite.app.bean.vo.NodeTaskAllocationVO;
 import org.apache.bifromq.testsuite.app.cluster.core.ClusterDataManager;
 import org.apache.bifromq.testsuite.app.cluster.shared.HazelcastDataManager;
 import org.apache.bifromq.testsuite.app.cluster.shared.ShareDataAddr;
@@ -156,18 +155,6 @@ class TaskLifecycleIntegrationTest {
         lenient().when(clusterDataManager.getCurrentNodeIdCache()).thenReturn(NODE_ID);
         lenient().when(clusterDataManager.assignCheck(anyString(), any(TaskConfig.class), any()))
             .thenReturn(CompletableFuture.completedFuture(null));
-        lenient().when(clusterDataManager.calcuTasksToNodes(any(TaskConfig.class)))
-            .thenAnswer(inv -> {
-                NodeTaskAllocationVO vo = new NodeTaskAllocationVO();
-                vo.setTotalClientCount(100);
-                NodeTaskAllocationVO.NodeAllocation allocation = new NodeTaskAllocationVO.NodeAllocation();
-                allocation.setNodeId(NODE_ID);
-                allocation.setAllocatedClientCount(100);
-                vo.setNodeAllocationList(List.of(allocation));
-                return vo;
-            });
-
-        
         setupHazelcastMocks();
     }
 

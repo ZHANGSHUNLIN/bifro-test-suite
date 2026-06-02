@@ -17,7 +17,6 @@
 
 import type {
     NodeMetricsResponse,
-    NodeTaskAllocationVO,
     PageInfo,
     TaskConfig,
     TaskDetailResponse,
@@ -121,21 +120,6 @@ export const mockTaskDetailResponse: TaskDetailResponse = {
     timestamp: Date.now(),
     createTime: Date.now() - 30 * 1000, // created 30 seconds ago
 }
-// Mock task allocation result
-export const mockNodeTaskAllocationVO: NodeTaskAllocationVO = {
-    totalClientCount: 1000,
-    nodeAllocationList: [
-        {
-            nodeId: 'node1',
-            allocatedClientCount: 500,
-        },
-        {
-            nodeId: 'node2',
-            allocatedClientCount: 500,
-        },
-    ],
-}
-
 // Mock template list
 export const mockTemplates = [
     {value: 'CONN_STANDARD', label: 'Connection Standard Template', type: 'CONN'},

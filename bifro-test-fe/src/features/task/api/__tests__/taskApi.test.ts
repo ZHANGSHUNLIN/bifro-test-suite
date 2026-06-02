@@ -201,26 +201,6 @@ describe.skipIf(!runContract)('taskApi | contract tests', () => {
         })
     })
 
-    describe('calculateNodeTaskAllocation', () => {
-        it('calculateNodeTaskAllocation_withValidId_returnsAllocation', async () => {
-            // when
-            const response = await taskApi.calculateNodeTaskAllocation('task1234')
-
-            // then - verify response structure matches NodeTaskAllocationVO
-            expect(response).toHaveProperty('totalClientCount')
-            expect(response).toHaveProperty('nodeAllocationList')
-            expect(response.totalClientCount).toBe(1000)
-            expect(response.nodeAllocationList).toHaveLength(2)
-            expect(response.nodeAllocationList[0]).toHaveProperty('nodeId')
-            expect(response.nodeAllocationList[0]).toHaveProperty('allocatedClientCount')
-        })
-
-        it('calculateNodeTaskAllocation_withErrorId_throwsError', async () => {
-            // then
-            await expect(taskApi.calculateNodeTaskAllocation('error')).rejects.toThrow('500')
-        })
-    })
-
     describe('deleteTask', () => {
         it('deleteTask_withValidId_returnsTaskDetail', async () => {
             // when

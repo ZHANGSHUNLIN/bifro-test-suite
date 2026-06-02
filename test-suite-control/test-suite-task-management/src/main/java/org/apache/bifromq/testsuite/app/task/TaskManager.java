@@ -40,7 +40,6 @@ import org.apache.bifromq.testsuite.app.bean.TaskStatistics;
 import org.apache.bifromq.testsuite.app.bean.dto.BrokerEntry;
 import org.apache.bifromq.testsuite.app.bean.dto.NodeTaskAllocationRequest;
 import org.apache.bifromq.testsuite.app.bean.dto.TaskRequest;
-import org.apache.bifromq.testsuite.app.bean.vo.NodeTaskAllocationVO;
 import org.apache.bifromq.testsuite.app.bean.vo.SubTaskDetail;
 import org.apache.bifromq.testsuite.app.bean.vo.TaskBasicInfoResponse;
 import org.apache.bifromq.testsuite.app.bean.vo.TaskConfigView;
@@ -308,15 +307,6 @@ public class TaskManager {
                         log.warn("Task assignment rejected, taskId={}, reason={}", id, reason, e);
                         return Mono.just(ApiResponse.error(reason));
                     });
-            })
-            .switchIfEmpty(Mono.just(ApiResponse.error(Messages.get("error.task.notFound"))));
-    }
-
-    public Mono<ApiResponse<NodeTaskAllocationVO>> calculateNodeTaskAllocation(String id) {
-        return taskInfoMetadataRepository.findById(id)
-            .map(taskInfoMetadata -> {
-                TaskConfig taskConfig = taskInfoMetadata.getTaskConfig();
-                return ApiResponse.success(clusterDataManager.calcuTasksToNodes(taskConfig));
             })
             .switchIfEmpty(Mono.just(ApiResponse.error(Messages.get("error.task.notFound"))));
     }

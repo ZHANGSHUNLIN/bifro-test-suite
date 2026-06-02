@@ -41,7 +41,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.bifromq.testsuite.app.bean.ClusterNodeInfo;
 import org.apache.bifromq.testsuite.app.bean.NodeInfo;
 import org.apache.bifromq.testsuite.app.bean.dto.NodeTaskAllocationRequest;
-import org.apache.bifromq.testsuite.app.bean.vo.NodeTaskAllocationVO;
 import org.apache.bifromq.testsuite.app.cluster.shared.HazelcastDataManager;
 import org.apache.bifromq.testsuite.app.cluster.shared.ShareDataAddr;
 import org.apache.bifromq.testsuite.app.config.LocalPortModeProperties;
@@ -607,28 +606,6 @@ public class ClusterDataManager {
         return response.getOccupiedPorts().stream()
             .map(port -> port.getLocalAddress() + ":" + port.getPort() + "(" + port.getState() + ")")
             .collect(Collectors.joining(", ", "[", "]"));
-    }
-
-    public CompletableFuture<NodeTaskAllocationVO> calcuTasksToNodes(TaskConfig mainTaskConfig) {
-        int totalClientCount = mainTaskConfig.getTotalClientCount();
-        return hazelcastDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO)
-            .entries()
-            .thenApply(entries -> {
-                Map<String, NodeInfo> newHash = schedulableNodes(entries);
-                rejectIfNoSchedulableNodes(newHash);
-                List<NodeTaskAllocationVO.NodeAllocation> nodeAllocations =
-                    assignedAccordingToWeights(newHash, 1, 1, totalClientCount)
-                        .entrySet().stream().map(r -> {
-                            NodeTaskAllocationVO.NodeAllocation nodeAllocation = new NodeTaskAllocationVO.NodeAllocation();
-                            nodeAllocation.setNodeId(r.getKey());
-                            nodeAllocation.setAllocatedClientCount(r.getValue());
-                            return nodeAllocation;
-                        }).toList();
-                NodeTaskAllocationVO nodeTaskAllocationCalculationVO = new NodeTaskAllocationVO();
-                nodeTaskAllocationCalculationVO.setTotalClientCount(totalClientCount);
-                nodeTaskAllocationCalculationVO.setNodeAllocationList(nodeAllocations);
-                return nodeTaskAllocationCalculationVO;
-            });
     }
 
     private void requireControlPlanePersistence() {

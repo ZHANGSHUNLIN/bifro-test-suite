@@ -565,8 +565,8 @@ export interface NodeAllocation {
     allocatedClientCount: number;
 }
 
-// Task allocation calculation result
-export interface NodeTaskAllocationVO {
+// Task allocation request
+export interface NodeTaskAllocationRequest {
     totalClientCount: number;
     nodeAllocationList: NodeAllocation[];
 }

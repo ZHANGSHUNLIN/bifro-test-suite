@@ -38,7 +38,6 @@ import org.apache.bifromq.testsuite.app.bean.TaskDetailResponse;
 import org.apache.bifromq.testsuite.app.bean.dto.BrokerEntry;
 import org.apache.bifromq.testsuite.app.bean.dto.NodeTaskAllocationRequest;
 import org.apache.bifromq.testsuite.app.bean.dto.TaskRequest;
-import org.apache.bifromq.testsuite.app.bean.vo.NodeTaskAllocationVO;
 import org.apache.bifromq.testsuite.app.bean.vo.TaskBasicInfoResponse;
 import org.apache.bifromq.testsuite.app.bean.vo.TaskSubTasksResponse;
 import org.apache.bifromq.testsuite.app.cluster.core.ClusterDataManager;
@@ -595,46 +594,6 @@ class TaskManagerTest {
     }
 
     
-
-    @Test
-    void testCalculateNodeTaskAllocation_success_shouldCalculateAllocation() {
-        
-        TaskConfig taskConfig = TaskConfig.builder()
-            .taskId(TASK_ID)
-            .totalClientCount(100)
-            .build();
-
-        TaskInfoMetadata metadata = TaskInfoMetadata.builder()
-            .taskId(TASK_ID)
-            .taskConfig(taskConfig)
-            .build();
-
-        NodeTaskAllocationVO allocationVO = new NodeTaskAllocationVO();
-        allocationVO.setTotalClientCount(100);
-
-        when(taskInfoMetadataRepository.findById(TASK_ID)).thenReturn(Mono.just(metadata));
-        when(clusterDataManager.calcuTasksToNodes(any(TaskConfig.class)))
-            .thenReturn(CompletableFuture.completedFuture(allocationVO));
-
-        
-        ApiResponse<NodeTaskAllocationVO> result = taskManager.calculateNodeTaskAllocation(TASK_ID).block();
-
-        
-        assertTrue(result.isSuccess());
-    }
-
-    @Test
-    void testCalculateNodeTaskAllocation_taskNotFound_shouldReturnError() {
-        
-        when(taskInfoMetadataRepository.findById(TASK_ID)).thenReturn(Mono.empty());
-
-        
-        ApiResponse<NodeTaskAllocationVO> result = taskManager.calculateNodeTaskAllocation(TASK_ID).block();
-
-        
-        assertFalse(result.isSuccess());
-        assertEquals("error.task.notFound", result.getMessage());
-    }
 
     @Test
     void testPrepareTaskStart_shouldSetPlannedStartAtForMainAndNodeTasks() {

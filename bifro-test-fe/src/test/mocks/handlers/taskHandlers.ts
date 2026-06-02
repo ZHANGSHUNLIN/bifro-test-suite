@@ -18,7 +18,6 @@
 import {delay, http, HttpResponse} from 'msw'
 import type {TaskListItem} from '../../../features/task'
 import {
-    mockNodeTaskAllocationVO,
     mockTaskConfig,
     mockTaskDetailResponse,
     mockTaskListResponse,
@@ -206,21 +205,6 @@ export default [
         return HttpResponse.json({
             code: 200,
             data: mockTaskConfig,
-        })
-    }),
-
-    // POST /task/calculate/:taskId - calculate task allocation
-    http.post('/api/task/calculate/:taskId', async ({params}) => {
-        const {taskId} = params
-        await delay(100)
-
-        if (taskId === 'error') {
-            return HttpResponse.json({code: 500, message: 'Calculation failed'}, {status: 500})
-        }
-
-        return HttpResponse.json({
-            code: 200,
-            data: mockNodeTaskAllocationVO,
         })
     }),
 

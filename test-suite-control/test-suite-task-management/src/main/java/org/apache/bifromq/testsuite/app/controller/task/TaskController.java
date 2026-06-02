@@ -40,7 +40,6 @@ import org.apache.bifromq.testsuite.app.bean.diagnostics.TaskDiagnosticsResponse
 import org.apache.bifromq.testsuite.app.bean.diagnostics.TaskLogSummaryResponse;
 import org.apache.bifromq.testsuite.app.bean.dto.NodeTaskAllocationRequest;
 import org.apache.bifromq.testsuite.app.bean.dto.TaskRequest;
-import org.apache.bifromq.testsuite.app.bean.vo.NodeTaskAllocationVO;
 import org.apache.bifromq.testsuite.app.bean.vo.TaskBasicInfoResponse;
 import org.apache.bifromq.testsuite.app.bean.vo.TaskListVO;
 import org.apache.bifromq.testsuite.app.bean.vo.TaskReportResponse;
@@ -260,13 +259,6 @@ public class TaskController implements ApiController {
             .timeout(Duration.ofSeconds(10))
             .onErrorResume(java.util.concurrent.TimeoutException.class,
                 e -> Mono.just(ApiResponse.error(Messages.get("error.task.assignTimeout"))));
-    }
-
-    @Operation(summary = "Calculate Node Task Allocation", description = "Calculate node task allocation based on weights")
-    @PostMapping("/calculate/{id}")
-    public Mono<ApiResponse<NodeTaskAllocationVO>> calculateNodeTaskAllocation(
-        @PathVariable(value = "id") @Parameter(description = "Task ID") String id) {
-        return taskManager.calculateNodeTaskAllocation(id);
     }
 
     @Operation(summary = "Confirm Task", description = "Confirm the task and notify all nodes to start execution")

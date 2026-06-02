@@ -275,24 +275,6 @@ export const server = setupServer(
         })
     }),
 
-    // POST /api/task/calculate/:taskId
-    http.post('http://localhost:8081/api/task/calculate/:taskId', async ({params}) => {
-        await delay(100)
-        if (params.taskId === 'error') {
-            return HttpResponse.json({code: 500, message: '500'}, {status: 500})
-        }
-        return HttpResponse.json({
-            code: 200,
-            data: {
-                totalClientCount: 1000,
-                nodeAllocationList: [
-                    {nodeId: 'node1', allocatedClientCount: 500},
-                    {nodeId: 'node2', allocatedClientCount: 500},
-                ],
-            },
-        })
-    }),
-
     // DELETE /api/task/batch (must come before :id)
     http.delete('http://localhost:8081/api/task/batch', async ({request}) => {
         const body = await request.json() as unknown
