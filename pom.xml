@@ -18,19 +18,9 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <modules>
-        <module>test-suite-framework</module>
-        <module>test-suite-common</module>
-        <module>test-suite-web-common</module>
-        <module>test-suite-mqtt-client</module>
-        <module>test-suite-mqtt</module>
-        <module>test-suite-worker-api</module>
-        <module>test-suite-worker</module>
-        <module>test-suite-certificates</module>
-        <module>test-suite-audit</module>
-        <module>test-suite-security</module>
-        <module>test-suite-task-management</module>
-        <module>test-suite-cluster-management</module>
-        <module>test-suite-resource-management</module>
+        <module>test-suite-shared</module>
+        <module>test-suite-workers</module>
+        <module>test-suite-control</module>
         <module>bifro-test-bed</module>
     </modules>
 
@@ -506,8 +496,10 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-checkstyle-plugin</artifactId>
                 <configuration>
-                    <configLocation>checkstyle.xml</configLocation>
-                    <suppressionsLocation>checkstyle-suppressions.xml</suppressionsLocation>
+                    <configLocation>${maven.multiModuleProjectDirectory}/checkstyle.xml</configLocation>
+                    <suppressionsLocation>
+                        ${maven.multiModuleProjectDirectory}/checkstyle-suppressions.xml
+                    </suppressionsLocation>
                     <suppressionsFileExpression>
                         org.checkstyle.google.suppressionfilter.config
                     </suppressionsFileExpression>

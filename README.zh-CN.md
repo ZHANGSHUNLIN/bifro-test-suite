@@ -117,6 +117,12 @@ mvn clean install
 mvn -U clean install -DskipFrontend=true
 ```
 
+针对已经归档到聚合目录下的 Maven 模块，建议用 artifactId 选择模块，例如：
+
+```bash
+mvn -pl :test-suite-worker -am -DskipFrontend=true test
+```
+
 构建前端：
 
 ```bash
@@ -176,21 +182,27 @@ pnpm dev
 
 ```text
 bifro-test-suite/
-├── bifro-test-bed/                 # Spring Boot 应用和发布包组装
 ├── bifro-test-fe/                  # React 管理控制台
-├── test-suite-framework/           # Pipeline 与状态机框架
-├── test-suite-common/              # 公共领域对象、阶段、事件和指标
-├── test-suite-mqtt-client/         # MQTT 客户端封装与认证策略
-├── test-suite-mqtt/                # MQTT 负载实现
-├── test-suite-worker-api/          # Worker API 契约
-├── test-suite-worker/              # Worker 运行时与 Pipeline 阶段
-├── test-suite-certificates/        # 证书领域模型与证书服务
-├── test-suite-task-management/     # 任务元数据、报告、运行状态和 API
-├── test-suite-cluster-management/  # 集群成员与调度支持
-├── test-suite-resource-management/ # Broker、分组、画像和证书 API
-├── test-suite-security/            # 认证与系统用户管理
-└── test-suite-audit/               # 审计日志支持
+├── bifro-test-bed/                 # Spring Boot 应用和发布包组装
+├── test-suite-shared/              # shared foundation 模块的 Maven 聚合工程
+│   ├── test-suite-framework/       # Pipeline 与状态机框架
+│   └── test-suite-common/          # 公共领域对象、阶段、事件和指标
+├── test-suite-workers/             # worker 模块的 Maven 聚合工程
+│   ├── test-suite-mqtt-client/     # MQTT 客户端封装与认证策略
+│   ├── test-suite-mqtt/            # MQTT 负载实现
+│   ├── test-suite-worker-api/      # Worker API 契约
+│   └── test-suite-worker/          # Worker 运行时与 Pipeline 阶段
+└── test-suite-control/             # control 模块的 Maven 聚合工程
+    ├── test-suite-web-common/      # Web/API 响应与校验公共支持
+    ├── test-suite-certificates/    # 证书领域模型与证书服务
+    ├── test-suite-audit/           # 审计日志支持
+    ├── test-suite-security/        # 认证与系统用户管理
+    ├── test-suite-task-management/ # 任务元数据、报告、运行状态和 API
+    ├── test-suite-cluster-management/  # 集群成员与调度支持
+    └── test-suite-resource-management/ # Broker、分组、画像和证书 API
 ```
+
+根 Maven reactor 只直接引用三个聚合工程和 `bifro-test-bed`。源码模块已经物理归档到对应聚合工程目录下。
 
 ## 开发
 

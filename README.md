@@ -117,6 +117,12 @@ Build backend modules and skip frontend packaging:
 mvn -U clean install -DskipFrontend=true
 ```
 
+Select a moved Maven module by artifactId when running targeted builds, for example:
+
+```bash
+mvn -pl :test-suite-worker -am -DskipFrontend=true test
+```
+
 Build the frontend:
 
 ```bash
@@ -176,21 +182,28 @@ Manual GitHub releases publish multiple assets for different deployment models:
 
 ```text
 bifro-test-suite/
-├── bifro-test-bed/                 # Spring Boot application and release assembly
 ├── bifro-test-fe/                  # React administration console
-├── test-suite-framework/           # Pipeline and state-machine framework
-├── test-suite-common/              # Shared domain objects, stages, events, and metrics
-├── test-suite-mqtt-client/         # MQTT client wrappers and authentication strategies
-├── test-suite-mqtt/                # MQTT workload implementations
-├── test-suite-worker-api/          # Worker API contracts
-├── test-suite-worker/              # Worker runtime and pipeline stages
-├── test-suite-certificates/        # Certificate domain and certificate services
-├── test-suite-task-management/     # Task metadata, reports, runtime state, and APIs
-├── test-suite-cluster-management/  # Cluster membership and scheduling support
-├── test-suite-resource-management/ # Broker, group, profile, and certificate APIs
-├── test-suite-security/            # Authentication and system user management
-└── test-suite-audit/               # Audit log support
+├── bifro-test-bed/                 # Spring Boot application and release assembly
+├── test-suite-shared/              # Maven aggregator for shared foundation modules
+│   ├── test-suite-framework/       # Pipeline and state-machine framework
+│   └── test-suite-common/          # Shared domain objects, stages, events, and metrics
+├── test-suite-workers/             # Maven aggregator for worker modules
+│   ├── test-suite-mqtt-client/     # MQTT client wrappers and authentication strategies
+│   ├── test-suite-mqtt/            # MQTT workload implementations
+│   ├── test-suite-worker-api/      # Worker API contracts
+│   └── test-suite-worker/          # Worker runtime and pipeline stages
+└── test-suite-control/             # Maven aggregator for control modules
+    ├── test-suite-web-common/      # Shared Web/API response and validation support
+    ├── test-suite-certificates/    # Certificate domain and certificate services
+    ├── test-suite-audit/           # Audit log support
+    ├── test-suite-security/        # Authentication and system user management
+    ├── test-suite-task-management/ # Task metadata, reports, runtime state, and APIs
+    ├── test-suite-cluster-management/  # Cluster membership and scheduling support
+    └── test-suite-resource-management/ # Broker, group, profile, and certificate APIs
 ```
+
+The root Maven reactor references the three aggregator modules plus `bifro-test-bed`. Source modules are physically
+archived under the corresponding aggregator directory.
 
 ## Development
 
