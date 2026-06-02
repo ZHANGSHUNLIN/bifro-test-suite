@@ -45,6 +45,7 @@ import org.apache.bifromq.testsuite.app.bean.vo.NodeTaskAllocationVO;
 import org.apache.bifromq.testsuite.app.cluster.shared.HazelcastDataManager;
 import org.apache.bifromq.testsuite.app.cluster.shared.ShareDataAddr;
 import org.apache.bifromq.testsuite.app.config.LocalPortModeProperties;
+import org.apache.bifromq.testsuite.config.node.NodeIdentityProperties;
 import org.apache.bifromq.testsuite.config.role.NodeRoleProperties;
 import org.apache.bifromq.testsuite.app.database.pojo.NodeTask;
 import org.apache.bifromq.testsuite.app.database.pojo.TaskStateHistory;
@@ -62,7 +63,6 @@ import org.apache.bifromq.testsuite.worker.WorkerTaskCommand;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckRequest;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckResponse;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -92,8 +92,8 @@ public class ClusterDataManager {
     private NodeQueryGateway nodeQueryGateway;
     @Resource
     private NodeRoleProperties nodeRoleProperties;
-    @Value("${bifro.nodeName}")
-    private String nodeName;
+    @Resource
+    private NodeIdentityProperties nodeIdentityProperties;
 
     private static void checkClientCount(NodeTaskAllocationRequest nodeTaskAllocationRequest) {
         if (nodeTaskAllocationRequest == null) {
@@ -137,7 +137,7 @@ public class ClusterDataManager {
         }
         try {
             return hazelcastInstance.getCluster().getMembers().stream()
-                .map(member -> member.getUuid().toString())
+                .map(ClusterDataManager::resolveNodeId)
                 .collect(Collectors.toSet());
         } catch (Exception e) {
             log.error("Failed to get current node IDs", e);
@@ -147,7 +147,7 @@ public class ClusterDataManager {
 
     public String getCurrentNodeIdCache() {
         if (!vertx.isClustered()) {
-            return "local-node";
+            return nodeIdentityProperties.getNodeId();
         }
         String currentNodeId = currentNodeIdCache.get();
         if (currentNodeId != null) {
@@ -155,8 +155,7 @@ public class ClusterDataManager {
         }
 
         try {
-            Member localMember = hazelcastInstance.getCluster().getLocalMember();
-            currentNodeIdCache.set(localMember.getUuid().toString());
+            currentNodeIdCache.set(nodeIdentityProperties.getNodeId());
             return currentNodeIdCache.get();
 
         } catch (Exception e) {
@@ -638,13 +637,13 @@ public class ClusterDataManager {
         }
     }
 
-    public void regClusterNodeInfoDirect(String nodeName) {
+    public void regClusterNodeInfoDirect() {
         try {
             IMap<String, NodeInfo> map = getClusterNodeInfoMap();
             ClusterNodeInfo systemInfo = getSystemInfo();
             log.debug("add cluster node info using Hazelcast IMap: {}", systemInfo);
             NodeInfo nodeInfo = NodeInfo.builder()
-                .nodeName(nodeName)
+                .nodeName(nodeIdentityProperties.getNodeId())
                 .role(nodeRoleProperties.getNodeRole())
                 .nextPing(System.currentTimeMillis())
                 .clusterNodeInfo(systemInfo).build();
@@ -652,6 +651,11 @@ public class ClusterDataManager {
         } catch (Exception e) {
             log.error("Failed to register cluster node info using Hazelcast IMap", e);
         }
+    }
+
+    private static String resolveNodeId(Member member) {
+        String nodeId = member.getAttribute(NodeIdentityProperties.NODE_ID_MEMBER_ATTRIBUTE);
+        return nodeId == null || nodeId.isBlank() ? member.getUuid().toString() : nodeId;
     }
 
     private ClusterNodeInfo getSystemInfo() {

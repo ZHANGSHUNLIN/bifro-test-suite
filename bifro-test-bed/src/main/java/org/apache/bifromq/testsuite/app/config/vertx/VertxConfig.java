@@ -32,6 +32,7 @@ import io.vertx.spi.cluster.hazelcast.HazelcastClusterManager;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.bifromq.testsuite.app.config.vertx.codec.VertxCodecManager;
 import org.apache.bifromq.testsuite.client.PinnedLocalPortTransport;
+import org.apache.bifromq.testsuite.config.node.NodeIdentityProperties;
 import org.apache.bifromq.testsuite.diagnostics.AsyncDiagnosticContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -41,9 +42,12 @@ import org.springframework.context.annotation.Configuration;
 public class VertxConfig {
 
     @Bean
-    public HazelcastClusterManager hazelcastClusterManager(VertxProperties vertxProperties) {
+    public HazelcastClusterManager hazelcastClusterManager(VertxProperties vertxProperties,
+                                                           NodeIdentityProperties nodeIdentityProperties) {
         Config hazelcastConfig = new Config();
         hazelcastConfig.setClusterName(vertxProperties.getEnv());
+        hazelcastConfig.getMemberAttributeConfig()
+            .setAttribute(NodeIdentityProperties.NODE_ID_MEMBER_ATTRIBUTE, nodeIdentityProperties.getNodeId());
 
         NetworkConfig networkConfig = hazelcastConfig.getNetworkConfig()
             .setInterfaces(new InterfacesConfig().addInterface(vertxProperties.getHost()))

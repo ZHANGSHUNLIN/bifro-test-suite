@@ -51,6 +51,7 @@ import org.apache.bifromq.testsuite.app.database.repository.NodeTaskRepository;
 import org.apache.bifromq.testsuite.app.database.repository.TaskStateHistoryRepository;
 import org.apache.bifromq.testsuite.app.eventbus.NodeQueryGateway;
 import org.apache.bifromq.testsuite.client.LocalPortRangeConfig;
+import org.apache.bifromq.testsuite.config.node.NodeIdentityProperties;
 import org.apache.bifromq.testsuite.qps.ProfileQpsSpec;
 import org.apache.bifromq.testsuite.worker.TaskConfig;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckRequest;
@@ -89,6 +90,8 @@ class ClusterDataManagerTest {
     private NodeQueryGateway nodeQueryGateway;
     @Mock
     private NodeRoleProperties nodeRoleProperties;
+    @Mock
+    private NodeIdentityProperties nodeIdentityProperties;
     @InjectMocks
     private ClusterDataManager clusterDataManager;
 
@@ -98,6 +101,7 @@ class ClusterDataManagerTest {
         lenient().when(vertx.eventBus()).thenReturn(eventBus);
         lenient().when(localPortModeProperties.toConfig()).thenReturn(new LocalPortRangeConfig());
         lenient().when(nodeRoleProperties.getNodeRole()).thenReturn(NodeRole.ALL);
+        lenient().when(nodeIdentityProperties.getNodeId()).thenReturn("local-node");
     }
 
     

@@ -16,7 +16,7 @@
 # Import this file after application.yml on control-plane nodes.
 bifro:
   node-role: control
-  nodeName: "control-1"
+  node-id: "control-1"
   eventbus:
     request-timeout: 5s
     task-command-timeout: 5s

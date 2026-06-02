@@ -39,6 +39,7 @@ import org.apache.bifromq.testsuite.app.bean.ClusterNodeInfo;
 import org.apache.bifromq.testsuite.app.bean.NodeInfo;
 import org.apache.bifromq.testsuite.app.cluster.ClusterConfig;
 import org.apache.bifromq.testsuite.app.cluster.shared.ShareDataAddr;
+import org.apache.bifromq.testsuite.config.node.NodeIdentityProperties;
 import org.apache.bifromq.testsuite.config.role.NodeRoleProperties;
 import org.springframework.stereotype.Component;
 
@@ -55,16 +56,15 @@ public class MemberRegistry {
     private ClusterConfig clusterConfig;
     @Resource
     private NodeRoleProperties nodeRoleProperties;
+    @Resource
+    private NodeIdentityProperties nodeIdentityProperties;
 
     private volatile String localMemberId;
-
-    @org.springframework.beans.factory.annotation.Value("${bifro.nodeName:unknown}")
-    private String nodeName;
 
     public Future<Void> registerLocalMember() {
         long startTime = System.currentTimeMillis();
         HazelcastInstance hazelcast = getHazelcastInstance();
-        String memberId = hazelcast.getCluster().getLocalMember().getUuid().toString();
+        String memberId = nodeIdentityProperties.getNodeId();
         localMemberId = memberId;
 
         NodeInfo nodeInfo = collectNodeInfo();
@@ -76,7 +76,7 @@ public class MemberRegistry {
                 .thenAccept(v -> {
                     long elapsedTime = System.currentTimeMillis() - startTime;
                     log.info("Local member registered: id={}, name={}, elapsedMs={}",
-                        memberId, nodeName, elapsedTime);
+                        memberId, nodeIdentityProperties.getNodeId(), elapsedTime);
 
                     MemberInfo memberInfo = convertFromNodeInfo(nodeInfo, memberId);
                     localCache.put(memberId, memberInfo);
@@ -246,7 +246,7 @@ public class MemberRegistry {
         try {
             HazelcastInstance hazelcast = getHazelcastInstance();
             return hazelcast.getCluster().getMembers().stream()
-                .map(m -> m.getUuid().toString())
+                .map(MemberRegistry::resolveNodeId)
                 .collect(java.util.stream.Collectors.toSet());
         } catch (Exception e) {
             log.error("Failed to get alive cluster member IDs", e);
@@ -259,18 +259,8 @@ public class MemberRegistry {
             return localMemberId;
         }
 
-        if (!vertx.isClustered()) {
-            return "local-node";
-        }
-
-        try {
-            HazelcastInstance hazelcast = getHazelcastInstance();
-            localMemberId = hazelcast.getCluster().getLocalMember().getUuid().toString();
-            return localMemberId;
-        } catch (Exception e) {
-            log.error("Failed to get local member ID", e);
-            return "unknown";
-        }
+        localMemberId = nodeIdentityProperties.getNodeId();
+        return localMemberId;
     }
 
     private NodeInfo collectNodeInfo() {
@@ -287,13 +277,14 @@ public class MemberRegistry {
         cpu.setLoadAverage(getSystemLoadAverage());
 
         ClusterNodeInfo systemInfo = new ClusterNodeInfo();
+        systemInfo.setNodeId(nodeIdentityProperties.getNodeId());
         systemInfo.setHost(getHostName());
         systemInfo.setMemory(memory);
         systemInfo.setCpu(cpu);
         systemInfo.setTimestamp(System.currentTimeMillis());
 
         return NodeInfo.builder()
-            .nodeName(nodeName)
+            .nodeName(nodeIdentityProperties.getNodeId())
             .role(nodeRoleProperties.getNodeRole())
             .clusterNodeInfo(systemInfo)
             .nextPing(System.currentTimeMillis())
@@ -311,6 +302,11 @@ public class MemberRegistry {
             .lastHeartbeat(nodeInfo.getNextPing() != null ? nodeInfo.getNextPing() : 0)
             .registeredAt(Instant.now())
             .build();
+    }
+
+    private static String resolveNodeId(com.hazelcast.cluster.Member member) {
+        String nodeId = member.getAttribute(NodeIdentityProperties.NODE_ID_MEMBER_ATTRIBUTE);
+        return nodeId == null || nodeId.isBlank() ? member.getUuid().toString() : nodeId;
     }
 
     private HazelcastInstance getHazelcastInstance() {

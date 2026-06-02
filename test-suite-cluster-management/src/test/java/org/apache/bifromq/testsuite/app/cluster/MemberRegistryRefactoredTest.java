@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.apache.bifromq.testsuite.app.bean.NodeInfo;
 import org.apache.bifromq.testsuite.app.cluster.member.MemberInfo;
 import org.apache.bifromq.testsuite.app.cluster.member.MemberRegistry;
+import org.apache.bifromq.testsuite.config.node.NodeIdentityProperties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -37,19 +38,19 @@ class MemberRegistryRefactoredTest {
     @Mock
     private ClusterConfig clusterConfig;
 
+    @Mock
+    private NodeIdentityProperties nodeIdentityProperties;
+
     @InjectMocks
     private MemberRegistry memberRegistry;
 
     @Test
-    void getLocalMemberId_givenNotClustered_shouldReturnLocalNode() {
-        
-        org.mockito.Mockito.when(vertx.isClustered()).thenReturn(false);
+    void getLocalMemberId_givenConfiguredNodeId_shouldReturnStableNodeId() {
+        org.mockito.Mockito.when(nodeIdentityProperties.getNodeId()).thenReturn("worker-1");
 
-        
         String id = memberRegistry.getLocalMemberId();
 
-        
-        assertThat(id).isEqualTo("local-node");
+        assertThat(id).isEqualTo("worker-1");
     }
 
     @Test

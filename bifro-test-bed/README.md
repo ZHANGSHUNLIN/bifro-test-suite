@@ -28,6 +28,7 @@ The backend supports three runtime roles:
 - `worker`: task execution, node registration, metrics/client/local-port query consumers. It does not start control-plane APIs or MongoDB repositories.
 
 Default local development still uses `all`.
+Set `bifro.node-id` to a stable, unique node identity.
 
 ## Local Commands
 

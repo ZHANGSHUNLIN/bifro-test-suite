@@ -28,7 +28,8 @@ management:
         include: health,prometheus
 
 bifro:
-  nodeName: "node-sandbox"
+  node-role: all
+  node-id: "node-sandbox"
   security:
     enabled: true
     session-timeout: 8h

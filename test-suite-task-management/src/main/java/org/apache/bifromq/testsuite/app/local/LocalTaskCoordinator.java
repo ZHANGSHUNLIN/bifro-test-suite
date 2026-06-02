@@ -59,7 +59,6 @@ import org.apache.bifromq.testsuite.worker.pojo.ClientQueryRequest;
 import org.apache.bifromq.testsuite.worker.pojo.ClientQueryResponse;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckRequest;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckResponse;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
@@ -90,8 +89,6 @@ public class LocalTaskCoordinator {
     private ClusterDataManager clusterDataManager;
     @Resource
     private LocalPortModeProperties localPortModeProperties;
-    @Value("${bifro.nodeName}")
-    private String nodeName;
 
     public void startTask(String id) {
         log.warn("Ignore legacy task start by id on worker node: taskId={}", id);
@@ -231,7 +228,7 @@ public class LocalTaskCoordinator {
         String localPortCapacityAddr = EventBusAddresses.localPortCapacity(clusterDataManager.getCurrentNodeIdCache());
         vertx.eventBus().<LocalPortCapacityCheckRequest>consumer(localPortCapacityAddr,
             this::handleLocalPortCapacityRequest);
-        clusterDataManager.regClusterNodeInfoDirect(nodeName);
+        clusterDataManager.regClusterNodeInfoDirect();
 
     }
 

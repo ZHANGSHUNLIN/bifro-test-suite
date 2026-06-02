@@ -41,7 +41,8 @@ management:
         enabled: true
 
 bifro:
-  nodeName: "Default Broker2"
+  node-role: all
+  node-id: "default-broker-2"
   security:
     enabled: true
     session-timeout: 8h

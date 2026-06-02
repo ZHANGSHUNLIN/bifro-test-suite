@@ -17,7 +17,7 @@
 # Worker role excludes control-plane APIs, Mongo repositories, and Mongo auto-configuration.
 bifro:
   node-role: worker
-  nodeName: "worker-1"
+  node-id: "worker-1"
 
 server:
   port: 0

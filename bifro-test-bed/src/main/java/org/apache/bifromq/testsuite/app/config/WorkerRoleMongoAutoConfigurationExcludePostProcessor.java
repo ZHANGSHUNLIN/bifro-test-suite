@@ -21,7 +21,6 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import org.apache.bifromq.testsuite.cluster.NodeRole;
 import org.apache.bifromq.testsuite.config.role.NodeRoleCondition;
 import org.springframework.boot.SpringApplication;
@@ -63,7 +62,7 @@ public class WorkerRoleMongoAutoConfigurationExcludePostProcessor implements Env
         }
         excludes.addAll(MONGO_AUTO_CONFIGURATIONS);
         environment.getPropertySources().addFirst(new MapPropertySource(PROPERTY_SOURCE_NAME, Map.of(
-            AUTO_CONFIGURE_EXCLUDE_PROPERTY, excludes.stream().collect(Collectors.joining(","))
+            AUTO_CONFIGURE_EXCLUDE_PROPERTY, String.join(",", excludes)
         )));
     }
 
