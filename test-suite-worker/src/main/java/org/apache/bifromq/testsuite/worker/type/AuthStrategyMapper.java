@@ -19,8 +19,6 @@ package org.apache.bifromq.testsuite.worker.type;
 
 import org.apache.bifromq.testsuite.client.AuthStrategy;
 import org.apache.bifromq.testsuite.client.AuthType;
-import org.apache.bifromq.testsuite.client.ByocAuthStrategy;
-import org.apache.bifromq.testsuite.client.IotCoreAuthStrategy;
 import org.apache.bifromq.testsuite.client.NoneAuthStrategy;
 import org.apache.bifromq.testsuite.client.NormalAuthStrategy;
 import org.apache.bifromq.testsuite.worker.TaskConfig;
@@ -40,14 +38,6 @@ public final class AuthStrategyMapper {
         }
         return switch (authType) {
             case NONE -> new NoneAuthStrategy();
-            case BYOC -> new ByocAuthStrategy(
-                config.getTenantId(),
-                config.getPassword(),
-                config.getThingIdPrefix());
-            case IOT_CORE -> new IotCoreAuthStrategy(
-                config.getTenantId(),
-                config.getPassword(),
-                config.getThingIdPrefix());
             default -> new NormalAuthStrategy();
         };
     }
@@ -60,14 +50,6 @@ public final class AuthStrategyMapper {
         }
         return switch (authType) {
             case NONE -> new NoneAuthStrategy();
-            case BYOC -> new ByocAuthStrategy(
-                spec.getTenantId(),
-                spec.getPassword(),
-                spec.getThingIdPrefix());
-            case IOT_CORE -> new IotCoreAuthStrategy(
-                spec.getTenantId(),
-                spec.getPassword(),
-                spec.getThingIdPrefix());
             default -> new NormalAuthStrategy();
         };
     }

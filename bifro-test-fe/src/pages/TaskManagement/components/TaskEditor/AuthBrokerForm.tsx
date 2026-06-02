@@ -16,9 +16,10 @@
  */
 
 import React from 'react';
-import {Button, Col, Divider, Form, Input, InputNumber, Row, Select, Switch, Tag} from 'antd';
+import {Button, Col, Divider, Form, Input, Row, Select, Switch, Tag} from 'antd';
 import {SettingOutlined} from '@ant-design/icons';
 import {useTranslation} from 'react-i18next';
+import AuthPlaceholderGuide from './AuthPlaceholderGuide';
 
 interface GroupOption {
     label: string;
@@ -83,8 +84,6 @@ const AuthBrokerForm: React.FC<AuthBrokerFormProps> = ({
                             options={[
                                 {label: t('task.form.noAuth'), value: 'none'},
                                 {label: t('task.form.normalAuth'), value: 'normal'},
-                                {label: 'BYOC', value: 'byoc'},
-                                {label: t('task.form.iotCoreAuth'), value: 'iotCore', disabled: true},
                             ]}
                             onChange={onAuthTypeChange}
                         />
@@ -100,40 +99,22 @@ const AuthBrokerForm: React.FC<AuthBrokerFormProps> = ({
 
             {/* Auth details */}
             {authType === 'normal' && (
-                <Row gutter={16}>
-                    <Col span={12}>
-                        <Form.Item name="username" label={t('task.form.username')}>
-                            <Input placeholder={t('task.form.usernamePlaceholder')}/>
-                        </Form.Item>
-                    </Col>
-                    <Col span={12}>
-                        <Form.Item name="password" label={t('task.form.password')}>
-                            <Input.Password placeholder={t('task.form.passwordPlaceholder')}/>
-                        </Form.Item>
-                    </Col>
-                </Row>
+                <>
+                    <Row gutter={16}>
+                        <Col span={12}>
+                            <Form.Item name="username" label={t('task.form.username')}>
+                                <Input placeholder={t('task.form.usernamePlaceholder')}/>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item name="password" label={t('task.form.password')}>
+                                <Input.Password placeholder={t('task.form.passwordPlaceholder')}/>
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <AuthPlaceholderGuide/>
+                </>
             )}
-            {authType === 'byoc' && (
-                <Row gutter={16}>
-                    <Col span={8}>
-                        <Form.Item name="tenantId" label={t('task.form.tenantId')}
-                                   rules={[{required: true, message: t('task.form.tenantIdRequired')}]}>
-                            <Input placeholder={t('task.form.tenantIdPlaceholder')}/>
-                        </Form.Item>
-                    </Col>
-                    <Col span={8}>
-                        <Form.Item name="thingIdPrefix" label={t('task.form.thingIdPrefix')}>
-                            <Input placeholder={t('task.form.thingIdPrefixPlaceholder')}/>
-                        </Form.Item>
-                    </Col>
-                    <Col span={8}>
-                        <Form.Item name="thingIdStartAt" label={t('task.form.thingIdStartAt')} initialValue={0}>
-                            <InputNumber min={0} style={{width: '100%'}}/>
-                        </Form.Item>
-                    </Col>
-                </Row>
-            )}
-
             {certEnabled && (
                 <Form.Item
                     name="clientCertId"

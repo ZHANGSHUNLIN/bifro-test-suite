@@ -82,16 +82,9 @@ public class TaskRequest {
     private String password = "";
 
     
-    private String tenantId;
-
-    
     @Min(value = 0, message = "{validation.task.thingIdOffset.min}")
     private int thingIdStartAt = 0;
 
-    
-    private String thingIdPrefix;
-
-    
     private boolean cleanSession = true;
 
     
@@ -248,9 +241,7 @@ public class TaskRequest {
                 .map(r -> TaskBroker.builder().host(r.getHost()).port(r.getPort()).build()).toList())
             .username(this.username)
             .password(this.password)
-            .tenantId(this.tenantId)
             .thingIdStartAt(this.thingIdStartAt)
-            .thingIdPrefix(this.thingIdPrefix)
             .cleanSession(this.cleanSession)
             .localAddresses(this.localAddresses)
             .keepAliveInSec(this.keepAliveInSec)

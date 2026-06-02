@@ -58,9 +58,7 @@ class TaskSpecMapperTest {
         request.setBrokers(List.of(broker("broker-1", "localhost", 1883)));
         request.setUsername("user");
         request.setPassword("pass");
-        request.setTenantId("tenant");
         request.setThingIdStartAt(100);
-        request.setThingIdPrefix("thing");
         request.setCleanSession(false);
         request.setKeepAliveInSec(60);
         request.setAckTimeoutInSec(30);
@@ -72,7 +70,7 @@ class TaskSpecMapperTest {
         request.setFanOut(2);
         request.setFanIn(3);
         request.setTopicsPerClient(4);
-        request.setTopic("topic/${thingId}");
+        request.setTopic("topic/{{client_id}}");
         request.setQos(MqttQoS.AT_LEAST_ONCE);
         request.setFixedTopic(true);
         request.setWildcard(true);
@@ -83,7 +81,7 @@ class TaskSpecMapperTest {
         request.setDelayAfterStageInSec(10);
         request.setRetain(true);
         request.setMqtt5(true);
-        request.setAuthType(AuthType.BYOC);
+        request.setAuthType(AuthType.NORMAL);
         request.setClientCertEnabled(true);
         request.setClientCertId("cert-1");
         request.setEmptyClientId(true);
@@ -92,7 +90,7 @@ class TaskSpecMapperTest {
         request.setDisconnectRate(200);
         request.setWillConfig(willConfig);
         request.setPayloadMode(PayloadMode.TEMPLATE);
-        request.setPayloadTemplate("{\"id\":\"${thingId}\"}");
+        request.setPayloadTemplate("{\"id\":\"{{client_id}}\"}");
         request.setWaveQpsSpec(waveQpsSpec);
         request.setQpsMode(TaskConfig.QpsMode.DYNAMIC);
         request.setProfileConfig(profileConfig);
@@ -118,12 +116,10 @@ class TaskSpecMapperTest {
             .satisfies(broker -> {
                 assertThat(broker.getHost()).isEqualTo("localhost");
                 assertThat(broker.getPort()).isEqualTo(1883);
-            });
+        });
         assertThat(config.getUsername()).isEqualTo("user");
         assertThat(config.getPassword()).isEqualTo("pass");
-        assertThat(config.getTenantId()).isEqualTo("tenant");
         assertThat(config.getThingIdStartAt()).isEqualTo(100);
-        assertThat(config.getThingIdPrefix()).isEqualTo("thing");
         assertThat(config.isCleanSession()).isFalse();
         assertThat(config.getKeepAliveInSec()).isEqualTo(60);
         assertThat(config.getAckTimeoutInSec()).isEqualTo(30);
@@ -135,7 +131,7 @@ class TaskSpecMapperTest {
         assertThat(config.getFanOut()).isEqualTo(2);
         assertThat(config.getFanIn()).isEqualTo(3);
         assertThat(config.getTopicsPerClient()).isEqualTo(4);
-        assertThat(config.getTopic()).isEqualTo("topic/${thingId}");
+        assertThat(config.getTopic()).isEqualTo("topic/{{client_id}}");
         assertThat(config.getQos()).isEqualTo(MqttQoS.AT_LEAST_ONCE);
         assertThat(config.isFixedTopic()).isTrue();
         assertThat(config.isWildcard()).isTrue();
@@ -146,7 +142,7 @@ class TaskSpecMapperTest {
         assertThat(config.getDelayAfterStageInSec()).isEqualTo(10);
         assertThat(config.isRetain()).isTrue();
         assertThat(config.isMqtt5()).isTrue();
-        assertThat(config.getAuthType()).isEqualTo(AuthType.BYOC);
+        assertThat(config.getAuthType()).isEqualTo(AuthType.NORMAL);
         assertThat(config.getClientCertId()).isEqualTo("cert-1");
         assertThat(config.isEmptyClientId()).isTrue();
         assertThat(config.getExpiryIntervalInSec()).isEqualTo(600);
@@ -156,7 +152,7 @@ class TaskSpecMapperTest {
         assertThat(config.getWillConfig()).isSameAs(willConfig);
         assertThat(config.isEnableAutoMultiAddress()).isTrue();
         assertThat(config.getPayloadMode()).isEqualTo(PayloadMode.TEMPLATE);
-        assertThat(config.getPayloadTemplate()).isEqualTo("{\"id\":\"${thingId}\"}");
+        assertThat(config.getPayloadTemplate()).isEqualTo("{\"id\":\"{{client_id}}\"}");
         assertThat(config.getQpsMode()).isEqualTo(TaskConfig.QpsMode.DYNAMIC);
         assertThat(config.getProfileConfig()).isSameAs(profileConfig);
         assertThat(config.getWaveQpsSpec()).isSameAs(waveQpsSpec);

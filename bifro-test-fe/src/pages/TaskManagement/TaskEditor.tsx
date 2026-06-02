@@ -49,6 +49,8 @@ const brokerSelectValue = (broker: { brokerId?: string; host: string; port: numb
 const resolveBrokerGroup = (brokers?: Array<{ group?: string }>, fallbackGroup: string = '') =>
     brokers?.find(broker => broker.group)?.group || fallbackGroup;
 
+const normalizeAuthType = (authType?: string) => authType === 'byoc' ? 'normal' : (authType || 'none');
+
 const toBrokerRequest = (brokerId: string, availableBrokers: any[]) => {
     const found = availableBrokers.find((b: any) => b.brokerId === brokerId);
     if (found) {
@@ -161,7 +163,8 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
                 setCurrentTaskType(mainTask.taskType);
                 setCurrentTemplate(resolvedTemplate);
                 setWillEnabled(mainTask.willConfig?.willFlag || false);
-                setAuthType(mainTask.authType || 'none');
+                form.setFieldValue('authType', normalizeAuthType(mainTask.authType));
+                setAuthType(normalizeAuthType(mainTask.authType));
                 setCertEnabled(!!mainTask.clientCertId);
                 // For CHAOS tasks, chaosPolicy must be injected after CHAOS Form.Item mounts
                 if (mainTask.taskType === TaskTypeValues.CHAOS && mainTask.chaosPolicy) {
@@ -233,7 +236,8 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
                         setCurrentTaskType(copyTaskType);
                         setCurrentTemplate(resolvedTemplate);
                         setWillEnabled(mainTask.willConfig?.willFlag || false);
-                        setAuthType(mainTask.authType || 'none');
+                        form.setFieldValue('authType', normalizeAuthType(mainTask.authType));
+                        setAuthType(normalizeAuthType(mainTask.authType));
                         setCertEnabled(!!mainTask.clientCertId);
                         const brokerGroup = resolveBrokerGroup(editingTask.brokers, taskGroup || defaultBrokerGroupId || '');
                         setSelectedBrokerGroup(brokerGroup);
@@ -267,7 +271,6 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
     const fieldToTabKey: Record<string, string> = {
         taskName: 'config', taskType: 'config', template: 'config', group: 'config',
         protocol: 'config', authType: 'config', username: 'config', password: 'config',
-        tenantId: 'config', thingIdPrefix: 'config', thingIdStartAt: 'config',
         brokers: 'config', clientCertEnabled: 'config', clientCertId: 'config',
         topic: 'stress', qos: 'stress', topicsPerClient: 'stress',
         totalClientCount: 'stress', connectRate: 'stress', disconnectRate: 'stress',
@@ -321,12 +324,10 @@ const TaskEditor: React.FC<TaskEditorProps> = ({
                 authType: values.authType ?? 'normal',
                 expiryIntervalInSec: values.expiryIntervalInSec ?? 120,
                 willConfig: values.willConfig ?? {willFlag: false},
-                thingIdStartAt: values.thingIdStartAt ?? 0,
-                thingIdPrefix: values.thingIdPrefix ?? null,
+                thingIdStartAt: 0,
                 protocol: values.protocol ?? 'mqtt',
                 username: values.username ?? '',
                 password: values.password ?? '',
-                tenantId: values.tenantId ?? null,
                 keepAliveInSec: values.keepAliveInSec ?? 120,
                 ackTimeoutInSec: values.ackTimeoutInSec ?? 120,
                 reconnectMaxAttempts: values.reconnectMaxAttempts ?? 2,

@@ -15,22 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.bifromq.testsuite.client;
+package org.apache.bifromq.testsuite.template;
 
-import org.apache.bifromq.testsuite.configs.MqttClientConfig;
+import java.util.Optional;
 
-import java.util.concurrent.atomic.AtomicInteger;
+public interface TemplateVariableResolver {
 
-public class NoneAuthStrategy implements AuthStrategy {
-
-    @Override
-    public AuthResult apply(MqttClientConfig.MqttClientConfigBuilder builder,
-                            String clientId,
-                            AtomicInteger subscribeCount) {
-
-        return new AuthResult(builder
-            .username("")
-            .password("")
-            .thingIdStartAt(0));
-    }
+    Optional<TemplateVariable> resolve(String expression);
 }

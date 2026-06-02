@@ -28,11 +28,9 @@ public interface AuthStrategy {
 
     class AuthResult {
         final MqttClientConfig.MqttClientConfigBuilder builder;
-        final String thingId;
 
-        AuthResult(MqttClientConfig.MqttClientConfigBuilder builder, String thingId) {
+        AuthResult(MqttClientConfig.MqttClientConfigBuilder builder) {
             this.builder = builder;
-            this.thingId = thingId;
         }
     }
 }

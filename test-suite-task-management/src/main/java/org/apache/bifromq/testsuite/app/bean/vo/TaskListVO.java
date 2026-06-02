@@ -51,8 +51,6 @@ public class TaskListVO implements Serializable {
     private String protocol;
     private int port;
     private String username;
-    
-    private String tenantId;
     private boolean cleanSession;
     private int keepAliveInSec;
     private int connectTimeoutInMs;
@@ -88,7 +86,6 @@ public class TaskListVO implements Serializable {
     private int delayAfterStageInSec;
     
     private int thingIdStartAt;
-    private String thingIdPrefix;
 
     public static TaskListVO fromTaskConfig(TaskInfoMetadata taskInfoMetadata) {
         TaskListVO vo = new TaskListVO();

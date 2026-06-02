@@ -18,12 +18,25 @@
 package org.apache.bifromq.testsuite.worker.topic;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.IntStream;
 import org.apache.bifromq.testsuite.TaskTemplate;
 import org.apache.bifromq.testsuite.models.TopicFilter;
+import org.apache.bifromq.testsuite.template.PlaceholderTemplate;
+import org.apache.bifromq.testsuite.template.TemplateRenderContext;
+import org.apache.bifromq.testsuite.template.TemplateVariable;
+import org.apache.bifromq.testsuite.template.TemplateVariableResolver;
 import org.apache.bifromq.testsuite.worker.context.TaskExecutionConfig;
 
 public class DefaultTopicDistributionPlanner implements TopicDistributionPlanner {
+    private static final String CTX_TASK_ID = "task_id";
+    private static final String CTX_NODE_ID = "node_id";
+    private static final String CTX_INDEX = "index";
+    private static final String CTX_TOPIC_INDEX = "topic_index";
+    private static final String CTX_TOPIC_OFFSET = "topic_offset";
+    private static final TemplateVariableResolver TOPIC_VARIABLES = new TopicVariableResolver();
+
     private final String taskId;
     private final TaskExecutionConfig config;
     private final int thingIdStartAt;
@@ -69,7 +82,7 @@ public class DefaultTopicDistributionPlanner implements TopicDistributionPlanner
     private String clientTopic(int topicIndex, boolean subscriber) {
         String baseTopic;
         if (usesConfiguredTopic()) {
-            baseTopic = config.topic();
+            baseTopic = renderConfiguredTopic(topicIndex, 0);
         } else {
             baseTopic = String.format("%s/%d", taskId, topicIndex);
         }
@@ -79,7 +92,10 @@ public class DefaultTopicDistributionPlanner implements TopicDistributionPlanner
     private String clientTopicWithOffset(int topicIndex, int topicOffset, boolean subscriber) {
         String baseTopic;
         if (usesConfiguredTopic()) {
-            baseTopic = String.format("%s/%d", config.topic(), topicOffset);
+            baseTopic = renderConfiguredTopic(topicIndex, topicOffset);
+            if (!isTemplate(config.topic())) {
+                baseTopic = String.format("%s/%d", baseTopic, topicOffset);
+            }
         } else {
             baseTopic = String.format("%s/%d/%d", taskId, topicIndex, topicOffset);
         }
@@ -97,5 +113,38 @@ public class DefaultTopicDistributionPlanner implements TopicDistributionPlanner
             return baseTopic;
         }
         return baseTopic + "/" + (subscriber ? "+" : "suffix");
+    }
+
+    private String renderConfiguredTopic(int topicIndex, int topicOffset) {
+        String topic = config.topic();
+        if (!isTemplate(topic)) {
+            return topic;
+        }
+        return PlaceholderTemplate.compile(topic, TOPIC_VARIABLES)
+            .render(TemplateRenderContext.of(Map.of(
+                CTX_TASK_ID, taskId,
+                CTX_NODE_ID, config.nodeId() == null ? "" : config.nodeId(),
+                CTX_INDEX, topicIndex,
+                CTX_TOPIC_INDEX, topicIndex,
+                CTX_TOPIC_OFFSET, topicOffset)));
+    }
+
+    private static boolean isTemplate(String value) {
+        return value != null && value.contains("{{");
+    }
+
+    private static final class TopicVariableResolver implements TemplateVariableResolver {
+
+        @Override
+        public Optional<TemplateVariable> resolve(String expression) {
+            return switch (expression) {
+                case CTX_TASK_ID -> Optional.of(context -> context.stringValue(CTX_TASK_ID));
+                case CTX_NODE_ID -> Optional.of(context -> context.stringValue(CTX_NODE_ID));
+                case CTX_INDEX -> Optional.of(context -> String.valueOf(context.longValue(CTX_INDEX, 0)));
+                case CTX_TOPIC_INDEX -> Optional.of(context -> String.valueOf(context.longValue(CTX_TOPIC_INDEX, 0)));
+                case CTX_TOPIC_OFFSET -> Optional.of(context -> String.valueOf(context.longValue(CTX_TOPIC_OFFSET, 0)));
+                default -> Optional.empty();
+            };
+        }
     }
 }

@@ -55,10 +55,8 @@ public class WorkerTaskSpec implements Serializable {
     private List<TaskBroker> brokers = new ArrayList<>();
     private String username;
     private String password;
-    private String tenantId;
     @Builder.Default
     private int thingIdStartAt = 0;
-    private String thingIdPrefix;
     private boolean cleanSession;
     @Builder.Default
     private int keepAliveInSec = 120;
@@ -145,9 +143,7 @@ public class WorkerTaskSpec implements Serializable {
             .brokers(config.getBrokers())
             .username(config.getUsername())
             .password(config.getPassword())
-            .tenantId(config.getTenantId())
             .thingIdStartAt(config.getThingIdStartAt())
-            .thingIdPrefix(config.getThingIdPrefix())
             .cleanSession(config.isCleanSession())
             .keepAliveInSec(config.getKeepAliveInSec())
             .ackTimeoutInSec(config.getAckTimeoutInSec())
@@ -210,9 +206,7 @@ public class WorkerTaskSpec implements Serializable {
             .brokers(brokers == null ? new ArrayList<>() : brokers)
             .username(username)
             .password(password)
-            .tenantId(tenantId)
             .thingIdStartAt(thingIdStartAt)
-            .thingIdPrefix(thingIdPrefix)
             .cleanSession(cleanSession)
             .keepAliveInSec(keepAliveInSec)
             .ackTimeoutInSec(ackTimeoutInSec)

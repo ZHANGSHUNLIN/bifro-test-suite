@@ -23,13 +23,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class NormalAuthStrategy implements AuthStrategy {
 
-    private static final String DEFAULT_THING_ID = "DevOnly";
-
     @Override
     public AuthResult apply(MqttClientConfig.MqttClientConfigBuilder builder,
                             String clientId,
                             AtomicInteger subscribeCount) {
-        
-        return new AuthResult(builder, DEFAULT_THING_ID);
+
+        return new AuthResult(builder);
     }
 }

@@ -37,7 +37,7 @@ runtime metrics, and report management in one project.
 - Distribute large-scale workloads across multiple worker nodes with node status and heartbeat tracking.
 - Manage broker targets, task groups, test profiles, certificates, and execution reports.
 - Observe throughput, latency, connection success rate, client state, and runtime metrics while tasks are running.
-- Use built-in authentication support for no-auth, username/password, BYOC, IoT Core, and mTLS certificate cases.
+- Use built-in authentication support for no-auth, username/password with placeholders, and mTLS certificate cases.
 
 ## Architecture
 
@@ -76,7 +76,7 @@ runtime metrics, and report management in one project.
 | --- | --- |
 | MQTT workloads | Connection, pub/sub, publish-only, subscribe-only, single-message, and immediate-disconnect scenarios |
 | Protocol support | MQTT 3.1.1 and MQTT 5.0 |
-| Authentication | None, username/password, BYOC, IoT Core, and mTLS certificate based authentication |
+| Authentication | None, username/password with client placeholders, and mTLS certificate based authentication |
 | Distributed execution | Worker nodes, node heartbeat, cluster membership, and per-node task assignment |
 | Resource management | Broker groups, task groups, profiles, certificates, and reusable task configuration |
 | Observability | Runtime metrics, reports, latency, throughput, connection success rate, and client-level statistics |

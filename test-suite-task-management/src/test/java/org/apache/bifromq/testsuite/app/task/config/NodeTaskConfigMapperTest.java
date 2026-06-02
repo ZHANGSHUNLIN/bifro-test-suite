@@ -54,9 +54,7 @@ class NodeTaskConfigMapperTest {
             .brokers(List.of(TaskBroker.builder().host("localhost").port(1883).build()))
             .username("user")
             .password("pass")
-            .tenantId("tenant")
             .thingIdStartAt(100)
-            .thingIdPrefix("thing")
             .cleanSession(true)
             .keepAliveInSec(60)
             .ackTimeoutInSec(30)
@@ -67,7 +65,7 @@ class NodeTaskConfigMapperTest {
             .totalClientCount(100)
             .fanOut(2)
             .fanIn(3)
-            .topic("topic/${thingId}")
+            .topic("topic/{{client_id}}")
             .qos(MqttQoS.AT_LEAST_ONCE)
             .fixedTopic(true)
             .isWildcard(true)
@@ -78,7 +76,7 @@ class NodeTaskConfigMapperTest {
             .delayAfterStageInSec(10)
             .retain(true)
             .isMqtt5(true)
-            .authType(AuthType.BYOC)
+            .authType(AuthType.NORMAL)
             .isEmptyClientId(true)
             .expiryIntervalInSec(600)
             .connectRate(1000)
@@ -89,7 +87,7 @@ class NodeTaskConfigMapperTest {
             .willConfig(willConfig)
             .qpsMode(TaskConfig.QpsMode.DYNAMIC)
             .payloadMode(PayloadMode.TEMPLATE)
-            .payloadTemplate("{\"id\":\"${thingId}\"}")
+            .payloadTemplate("{\"id\":\"{{client_id}}\"}")
             .clientImpl(MqttClientImpl.HIVEMQ)
             .build();
         NodeExecutionConfig executionConfig = NodeExecutionConfig.builder()
@@ -112,9 +110,7 @@ class NodeTaskConfigMapperTest {
         assertThat(nodeTaskConfig.getBrokers()).hasSize(1);
         assertThat(nodeTaskConfig.getUsername()).isEqualTo("user");
         assertThat(nodeTaskConfig.getPassword()).isEqualTo("pass");
-        assertThat(nodeTaskConfig.getTenantId()).isEqualTo("tenant");
         assertThat(nodeTaskConfig.getThingIdStartAt()).isEqualTo(100);
-        assertThat(nodeTaskConfig.getThingIdPrefix()).isEqualTo("thing");
         assertThat(nodeTaskConfig.isCleanSession()).isTrue();
         assertThat(nodeTaskConfig.getKeepAliveInSec()).isEqualTo(60);
         assertThat(nodeTaskConfig.getAckTimeoutInSec()).isEqualTo(30);
@@ -127,7 +123,7 @@ class NodeTaskConfigMapperTest {
         assertThat(nodeTaskConfig.getFanIn()).isEqualTo(3);
         assertThat(nodeTaskConfig.getNodePubCount()).isEqualTo(15);
         assertThat(nodeTaskConfig.getNodeSubCount()).isEqualTo(10);
-        assertThat(nodeTaskConfig.getTopic()).isEqualTo("topic/${thingId}");
+        assertThat(nodeTaskConfig.getTopic()).isEqualTo("topic/{{client_id}}");
         assertThat(nodeTaskConfig.getQos()).isEqualTo(MqttQoS.AT_LEAST_ONCE);
         assertThat(nodeTaskConfig.isFixedTopic()).isTrue();
         assertThat(nodeTaskConfig.isWildcard()).isTrue();
@@ -138,7 +134,7 @@ class NodeTaskConfigMapperTest {
         assertThat(nodeTaskConfig.getDelayAfterStageInSec()).isEqualTo(10);
         assertThat(nodeTaskConfig.isRetain()).isTrue();
         assertThat(nodeTaskConfig.isMqtt5()).isTrue();
-        assertThat(nodeTaskConfig.getAuthType()).isEqualTo(AuthType.BYOC);
+        assertThat(nodeTaskConfig.getAuthType()).isEqualTo(AuthType.NORMAL);
         assertThat(nodeTaskConfig.isEmptyClientId()).isTrue();
         assertThat(nodeTaskConfig.getExpiryIntervalInSec()).isEqualTo(600);
         assertThat(nodeTaskConfig.getConnectRate()).isEqualTo(250);
@@ -149,7 +145,7 @@ class NodeTaskConfigMapperTest {
         assertThat(nodeTaskConfig.getWillConfig()).isSameAs(willConfig);
         assertThat(nodeTaskConfig.getQpsMode()).isEqualTo(TaskConfig.QpsMode.DYNAMIC);
         assertThat(nodeTaskConfig.getPayloadMode()).isEqualTo(PayloadMode.TEMPLATE);
-        assertThat(nodeTaskConfig.getPayloadTemplate()).isEqualTo("{\"id\":\"${thingId}\"}");
+        assertThat(nodeTaskConfig.getPayloadTemplate()).isEqualTo("{\"id\":\"{{client_id}}\"}");
         assertThat(nodeTaskConfig.getClientImpl()).isEqualTo(MqttClientImpl.HIVEMQ);
     }
 

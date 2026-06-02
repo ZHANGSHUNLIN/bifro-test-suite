@@ -18,8 +18,8 @@
 import React from 'react';
 import {Alert, Col, Collapse, Descriptions, Divider, Form, Input, InputNumber, Row, Select, Slider, Switch, Typography} from 'antd';
 import {useTranslation} from 'react-i18next';
-import i18n from '../../../../i18n';
 import {TaskTemplateValues} from '../../../../features/task';
+import {payloadPlaceholderGuide, validatePayloadTemplate} from '../../../../features/task/domain/templatePlaceholders';
 import type {WaveformProfile} from '../../../../features/profile';
 
 const {TextArea} = Input;
@@ -52,39 +52,8 @@ const hasTopicsPerClient = (t: string) => [
     TaskTemplateValues.PUBSUB_SUB_ONLY,
 ].includes(t as any);
 
-function validatePayloadTemplate(template: string): string | undefined {
-    if (!template || template.trim() === '') {
-        return i18n.t('task.form.msgTemplateRequired');
-    }
-    const PLACEHOLDER_RE = /\{\{([^}]+)}}/g;
-    const KNOWN = [
-        /^timestamp_ms$/,
-        /^index$/,
-        /^uuid$/,
-        /^random_text:\d+$/,
-        /^random_int:-?\d+:-?\d+$/,
-    ];
-    let match: RegExpExecArray | null;
-    while ((match = PLACEHOLDER_RE.exec(template)) !== null) {
-        const ph = match[1].trim();
-        if (!KNOWN.some(re => re.test(ph))) {
-            return i18n.t('task.form.unknownPlaceholder', {ph});
-        }
-    }
-    const openCount = (template.match(/\{\{/g) || []).length;
-    const closeCount = (template.match(/}}/g) || []).length;
-    if (openCount !== closeCount) {
-        return i18n.t('task.form.unclosedPlaceholder');
-    }
-    return undefined;
-}
-
 const getPlaceholderGuide = (t: (key: string) => string) => [
-    {key: '{{timestamp_ms}}', desc: t('task.form.placeholderDesc.timestamp_ms')},
-    {key: '{{index}}', desc: t('task.form.placeholderDesc.index')},
-    {key: '{{uuid}}', desc: t('task.form.placeholderDesc.uuid')},
-    {key: '{{random_text:N}}', desc: t('task.form.placeholderDesc.random_text')},
-    {key: '{{random_int:min:max}}', desc: t('task.form.placeholderDesc.random_int')},
+    ...payloadPlaceholderGuide().map(({key, descKey}) => ({key, desc: t(descKey)})),
 ];
 
 function fmtDuration(ms: number): string {
@@ -430,8 +399,19 @@ const StressParamsForm: React.FC<StressParamsFormProps> = ({
                                         {
                                             validator: (_, value) => {
                                                 if (!value) return Promise.resolve();
-                                                const err = validatePayloadTemplate(value);
-                                                return err ? Promise.reject(err) : Promise.resolve();
+                                                const result = validatePayloadTemplate(value);
+                                                if (result.valid) {
+                                                    return Promise.resolve();
+                                                }
+                                                if (result.reason === 'unclosed') {
+                                                    return Promise.reject(t('task.form.unclosedPlaceholder'));
+                                                }
+                                                if (result.reason === 'unknown') {
+                                                    return Promise.reject(t('task.form.unknownPlaceholder', {
+                                                        ph: result.placeholder,
+                                                    }));
+                                                }
+                                                return Promise.reject(t('task.form.msgTemplateRequired'));
                                             },
                                         },
                                     ]}

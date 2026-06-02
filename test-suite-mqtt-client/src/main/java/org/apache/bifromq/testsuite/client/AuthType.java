@@ -23,19 +23,20 @@ import com.fasterxml.jackson.annotation.JsonValue;
 public enum AuthType {
 
     NONE("none"),
-    NORMAL("normal"),
-    BYOC("byoc"),
-    IOT_CORE("iotCore");
+    NORMAL("normal");
 
     private final String legacyValue;
 
     AuthType(String legacyValue) {
         this.legacyValue = legacyValue;
     }
-    
+
     @JsonCreator
     public static AuthType fromString(String value) {
         if (value == null) {
+            return NORMAL;
+        }
+        if ("byoc".equalsIgnoreCase(value)) {
             return NORMAL;
         }
         for (AuthType type : values()) {
@@ -45,7 +46,7 @@ public enum AuthType {
         }
         throw new IllegalArgumentException("Unknown authType: " + value);
     }
-    
+
     @JsonValue
     public String toLegacyValue() {
         return legacyValue;

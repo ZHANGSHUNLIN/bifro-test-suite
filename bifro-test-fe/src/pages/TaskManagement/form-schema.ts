@@ -256,7 +256,7 @@ export const willFields: FormFieldConfig[] = [
         label: i18n.t('task.form.willTopic'),
         type: 'input',
         placeholder: i18n.t('task.form.willTopicPlaceholder'),
-        initialValue: 'last/{clientId}',
+        initialValue: 'last/{{client_id_short}}',
     },
     {
         name: 'willConfig.willMessage',

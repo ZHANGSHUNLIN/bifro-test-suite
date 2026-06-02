@@ -33,9 +33,7 @@ public final class TaskSpecMapper {
         config.setBrokers(spec.brokers());
         config.setUsername(spec.username());
         config.setPassword(spec.password());
-        config.setTenantId(spec.tenantId());
         config.setThingIdStartAt(spec.thingIdStartAt());
-        config.setThingIdPrefix(spec.thingIdPrefix());
         config.setCleanSession(spec.cleanSession());
         config.setLocalAddresses(spec.localAddresses());
         config.setKeepAliveInSec(spec.keepAliveInSec());

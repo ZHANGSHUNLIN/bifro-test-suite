@@ -23,7 +23,6 @@ import type {ProfileRef, WaveformProfile} from '../../profile';
 export interface CustomSpecificParamRequest {
     username?: string;
     password?: string;
-    tenantId?: string;
     type?: string; // ClientTaskType
     topic?: string;
     count?: number;
@@ -65,9 +64,7 @@ export interface TaskRequest {
     customSpecificParamList?: CustomSpecificParamRequest[];
     username?: string;
     password?: string;
-    tenantId?: string;
     thingIdStartAt?: number;
-    thingIdPrefix?: string;
     clientCertEnabled?: boolean; // whether client certificate is enabled
     clientCertId?: string; // client certificate ID
     cleanSession?: boolean;
@@ -157,9 +154,7 @@ export interface TaskConfig {
     customSpecificParamList?: CustomSpecificParamRequest[];
     username?: string;
     password?: string;
-    tenantId?: string;
     thingIdStartAt?: number;
-    thingIdPrefix?: string;
     cleanSession?: boolean;
     localAddresses?: string[];
     keepAliveInSec?: number;

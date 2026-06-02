@@ -18,32 +18,31 @@
 package org.apache.bifromq.testsuite.payload;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.Map;
+import java.util.Optional;
+import org.apache.bifromq.testsuite.template.PlaceholderTemplate;
+import org.apache.bifromq.testsuite.template.TemplateRenderContext;
+import org.apache.bifromq.testsuite.template.TemplateRenderers;
+import org.apache.bifromq.testsuite.template.TemplateVariable;
+import org.apache.bifromq.testsuite.template.TemplateVariableResolver;
 
 public class TemplatePayloadStrategy implements PayloadStrategy {
 
+    private static final String CTX_INDEX = "index";
+    private static final String CTX_CLIENT_ID = "client_id";
+    private static final String CTX_TASK_ID = "task_id";
     private static final String PH_TIMESTAMP_MS = "timestamp_ms";
     private static final String PH_TIMESTAMP_S = "timestamp_s";
-
     private static final String PH_INDEX = "index";
     private static final String PH_CLIENT_ID = "client_id";
     private static final String PH_TASK_ID = "task_id";
     private static final String PH_UUID = "uuid";
     private static final String PH_RANDOM_TEXT_PREFIX = "random_text:";
     private static final String PH_RANDOM_INT_PREFIX = "random_int:";
-    private static final char[] PRINTABLE_CHARS;
+    private static final TemplateVariableResolver PAYLOAD_VARIABLES = new PayloadVariableResolver();
 
-    static {
-        String chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-        PRINTABLE_CHARS = chars.toCharArray();
-    }
-
-    private final List<Token> tokens;
+    private final PlaceholderTemplate template;
     private final String clientId;
-
     private final String taskId;
 
     public TemplatePayloadStrategy(String template) {
@@ -54,7 +53,7 @@ public class TemplatePayloadStrategy implements PayloadStrategy {
         if (template == null) {
             throw new IllegalArgumentException("Payload template must not be null");
         }
-        this.tokens = lex(template);
+        this.template = PlaceholderTemplate.compile(template, PAYLOAD_VARIABLES);
         this.clientId = clientId != null ? clientId : "";
         this.taskId = taskId != null ? taskId : "";
     }
@@ -64,84 +63,65 @@ public class TemplatePayloadStrategy implements PayloadStrategy {
             throw new IllegalArgumentException("Payload template must not be null or empty");
         }
 
-        lex(template);
+        PlaceholderTemplate.validate(template, PAYLOAD_VARIABLES);
     }
 
-    private static void appendRandomText(StringBuilder sb, int length) {
-        ThreadLocalRandom rng = ThreadLocalRandom.current();
-        for (int i = 0; i < length; i++) {
-            sb.append(PRINTABLE_CHARS[rng.nextInt(PRINTABLE_CHARS.length)]);
-        }
+    @Override
+    public byte[] buildPayload(long index, int targetSize) {
+        String expanded = template.render(TemplateRenderContext.of(Map.of(
+            CTX_INDEX, index,
+            CTX_CLIENT_ID, clientId,
+            CTX_TASK_ID, taskId)));
+        return expanded.getBytes(StandardCharsets.UTF_8);
     }
 
-    private static List<Token> lex(String template) {
-        List<Token> result = new ArrayList<>();
-        int len = template.length();
-        int pos = 0;
+    private static final class PayloadVariableResolver implements TemplateVariableResolver {
 
-        while (pos < len) {
-            int openIdx = template.indexOf("{{", pos);
-            if (openIdx == -1) {
+        @Override
+        public Optional<TemplateVariable> resolve(String expression) {
+            return switch (expression) {
+                case PH_TIMESTAMP_MS -> Optional.of(context -> String.valueOf(System.currentTimeMillis()));
+                case PH_TIMESTAMP_S -> Optional.of(context -> String.valueOf(System.currentTimeMillis() / 1000L));
+                case PH_INDEX -> Optional.of(context -> String.valueOf(context.longValue(CTX_INDEX, 0)));
+                case PH_CLIENT_ID -> Optional.of(context -> context.stringValue(CTX_CLIENT_ID));
+                case PH_TASK_ID -> Optional.of(context -> context.stringValue(CTX_TASK_ID));
+                case PH_UUID -> Optional.of(context -> TemplateRenderers.uuid());
+                default -> resolveParameterized(expression);
+            };
+        }
 
-                result.add(new Token(template.substring(pos)));
-                break;
+        private Optional<TemplateVariable> resolveParameterized(String expression) {
+            if (expression.startsWith(PH_RANDOM_TEXT_PREFIX)) {
+                int length = parseRandomTextLength(expression);
+                return Optional.of(context -> TemplateRenderers.randomText(length));
             }
-
-            if (openIdx > pos) {
-                result.add(new Token(template.substring(pos, openIdx)));
+            if (expression.startsWith(PH_RANDOM_INT_PREFIX)) {
+                int[] range = parseRandomIntRange(expression);
+                return Optional.of(context -> String.valueOf(TemplateRenderers.randomInt(range[0], range[1])));
             }
-            int closeIdx = template.indexOf("}}", openIdx + 2);
-            if (closeIdx == -1) {
-                throw new IllegalArgumentException(
-                    "Unclosed placeholder '{{' at index " + openIdx + " in template: " + template);
-            }
-            String phContent = template.substring(openIdx + 2, closeIdx).trim();
-            result.add(parseToken(phContent, template));
-            pos = closeIdx + 2;
+            return Optional.empty();
         }
-        return result;
-    }
 
-    private static Token parseToken(String ph, String template) {
-        if (PH_TIMESTAMP_MS.equals(ph)) {
-            return new Token(TokenType.TIMESTAMP_MS);
-        }
-        if (PH_TIMESTAMP_S.equals(ph)) {
-            return new Token(TokenType.TIMESTAMP_S);
-        }
-        if (PH_INDEX.equals(ph)) {
-            return new Token(TokenType.INDEX);
-        }
-        if (PH_CLIENT_ID.equals(ph)) {
-            return new Token(TokenType.CLIENT_ID);
-        }
-        if (PH_TASK_ID.equals(ph)) {
-            return new Token(TokenType.TASK_ID);
-        }
-        if (PH_UUID.equals(ph)) {
-            return new Token(TokenType.UUID_TOKEN);
-        }
-        if (ph.startsWith(PH_RANDOM_TEXT_PREFIX)) {
-            String rest = ph.substring(PH_RANDOM_TEXT_PREFIX.length());
-            int n;
+        private int parseRandomTextLength(String expression) {
+            String rawLength = expression.substring(PH_RANDOM_TEXT_PREFIX.length());
+            int length;
             try {
-                n = Integer.parseInt(rest);
+                length = Integer.parseInt(rawLength);
             } catch (NumberFormatException e) {
-                throw new IllegalArgumentException(
-                    "Invalid random_text length '" + rest + "' in template: " + template);
+                throw new IllegalArgumentException("Invalid random_text length: " + rawLength, e);
             }
-            if (n <= 0) {
-                throw new IllegalArgumentException(
-                    "random_text length must be > 0, got " + n + " in template: " + template);
+            if (length <= 0) {
+                throw new IllegalArgumentException("random_text length must be > 0, got " + length);
             }
-            return new Token(TokenType.RANDOM_TEXT, n, 0);
+            return length;
         }
-        if (ph.startsWith(PH_RANDOM_INT_PREFIX)) {
-            String rest = ph.substring(PH_RANDOM_INT_PREFIX.length());
+
+        private int[] parseRandomIntRange(String expression) {
+            String rest = expression.substring(PH_RANDOM_INT_PREFIX.length());
             String[] parts = rest.split(":", 2);
             if (parts.length != 2) {
                 throw new IllegalArgumentException(
-                    "random_int requires format 'random_int:min:max', got '" + ph + "' in template: " + template);
+                    "random_int requires format 'random_int:min:max', got '" + expression + "'");
             }
             int min;
             int max;
@@ -149,107 +129,12 @@ public class TemplatePayloadStrategy implements PayloadStrategy {
                 min = Integer.parseInt(parts[0].trim());
                 max = Integer.parseInt(parts[1].trim());
             } catch (NumberFormatException e) {
-                throw new IllegalArgumentException(
-                    "random_int min/max must be integers in template: " + template);
+                throw new IllegalArgumentException("random_int min/max must be integers", e);
             }
             if (min > max) {
-                throw new IllegalArgumentException(
-                    "random_int min (" + min + ") must be <= max (" + max + ") in template: " + template);
+                throw new IllegalArgumentException("random_int min (" + min + ") must be <= max (" + max + ")");
             }
-            return new Token(TokenType.RANDOM_INT, min, max);
-        }
-        throw new IllegalArgumentException(
-            "Unknown placeholder '{{" + ph + "}}' in template: " + template
-                + ". Supported: {{timestamp_ms}}, {{timestamp_s}}, {{index}}, {{client_id}}, {{task_id}},"
-                + " {{uuid}}, {{random_text:N}}, {{random_int:min:max}}");
-    }
-
-    @Override
-    public byte[] buildPayload(long index, int targetSize) {
-        String expanded = expand(index);
-        return expanded.getBytes(StandardCharsets.UTF_8);
-    }
-
-    private String expand(long index) {
-        StringBuilder sb = new StringBuilder();
-        for (Token token : tokens) {
-            switch (token.type) {
-                case LITERAL:
-                    sb.append(token.literal);
-                    break;
-                case TIMESTAMP_MS:
-                    sb.append(System.currentTimeMillis());
-                    break;
-                case TIMESTAMP_S:
-                    sb.append(System.currentTimeMillis() / 1000L);
-                    break;
-                case INDEX:
-                    sb.append(index);
-                    break;
-                case CLIENT_ID:
-                    sb.append(clientId);
-                    break;
-                case TASK_ID:
-                    sb.append(taskId);
-                    break;
-                case RANDOM_TEXT:
-                    appendRandomText(sb, token.intArg1);
-                    break;
-                case RANDOM_INT:
-                    int min = token.intArg1;
-                    int max = token.intArg2;
-                    sb.append(ThreadLocalRandom.current().nextInt(min, max + 1));
-                    break;
-                case UUID_TOKEN:
-                    sb.append(UUID.randomUUID());
-                    break;
-                default:
-                    break;
-            }
-        }
-        return sb.toString();
-    }
-
-    private enum TokenType {
-        LITERAL,
-        TIMESTAMP_MS,
-        TIMESTAMP_S,
-        INDEX,
-        CLIENT_ID,
-        TASK_ID,
-        RANDOM_TEXT,
-        RANDOM_INT,
-        UUID_TOKEN
-    }
-
-    private static final class Token {
-        final TokenType type;
-
-        final String literal;
-
-        final int intArg1;
-
-        final int intArg2;
-
-        Token(String literal) {
-            this.type = TokenType.LITERAL;
-            this.literal = literal;
-            this.intArg1 = 0;
-            this.intArg2 = 0;
-        }
-
-        Token(TokenType type) {
-            this.type = type;
-            this.literal = null;
-            this.intArg1 = 0;
-            this.intArg2 = 0;
-        }
-
-        Token(TokenType type, int arg1, int arg2) {
-            this.type = type;
-            this.literal = null;
-            this.intArg1 = arg1;
-            this.intArg2 = arg2;
+            return new int[] {min, max};
         }
     }
 }

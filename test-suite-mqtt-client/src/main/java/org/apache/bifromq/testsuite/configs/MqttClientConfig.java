@@ -48,9 +48,7 @@ public class MqttClientConfig {
     private int reconnectIntervalInMs = 1000;
     private int connectTimeoutInMs = 30000;
     private int maxInflightQueue = 1000;
-    private String tenantId;
     private int thingIdStartAt = 0;
-    private String thingIdPrefix;
     private String username;
     private String password;
     private SSLContext sslContext;

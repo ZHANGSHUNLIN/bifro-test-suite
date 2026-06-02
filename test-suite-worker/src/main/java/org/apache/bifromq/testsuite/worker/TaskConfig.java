@@ -58,10 +58,8 @@ public class TaskConfig implements Serializable {
     private List<TaskBroker> brokers = new ArrayList<>();
     private String username;
     private String password;
-    private String tenantId;
     @Builder.Default
     private int thingIdStartAt = 0;
-    private String thingIdPrefix;
     private boolean cleanSession;
     @Builder.Default
     private int keepAliveInSec = 120;

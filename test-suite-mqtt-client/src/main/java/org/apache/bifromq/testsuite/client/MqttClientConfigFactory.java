@@ -18,6 +18,8 @@
 package org.apache.bifromq.testsuite.client;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
@@ -25,12 +27,24 @@ import org.apache.bifromq.testsuite.WillConfig;
 import org.apache.bifromq.testsuite.configs.ClientTaskConfig;
 import org.apache.bifromq.testsuite.configs.MqttClientConfig;
 import org.apache.bifromq.testsuite.i18n.Messages;
+import org.apache.bifromq.testsuite.template.PlaceholderTemplate;
+import org.apache.bifromq.testsuite.template.TemplateRenderContext;
+import org.apache.bifromq.testsuite.template.TemplateVariable;
+import org.apache.bifromq.testsuite.template.TemplateVariableResolver;
 import org.apache.commons.lang3.StringUtils;
 
 @Slf4j
 public class MqttClientConfigFactory {
 
     private static final int CLIENT_INDEX_PADDING = 7;
+    private static final String CTX_CLIENT_ID = "client_id";
+    private static final String CTX_CLIENT_ID_SHORT = "client_id_short";
+    private static final String CTX_LEGACY_CLIENT_ID_SHORT = "legacy_client_id_short";
+    private static final String CTX_INDEX = "index";
+    private static final String CTX_TASK_ID = "task_id";
+    private static final String CTX_NODE_ID = "node_id";
+    private static final TemplateVariableResolver AUTH_VARIABLES = new ClientContextVariableResolver(false);
+    private static final TemplateVariableResolver WILL_TOPIC_VARIABLES = new ClientContextVariableResolver(true);
 
     private final String taskId;
     private final String nodeId;
@@ -38,8 +52,6 @@ public class MqttClientConfigFactory {
     private final List<TaskBrokerAddress> brokers;
     private final String username;
     private final String password;
-    private final String tenantId;
-    private final String thingIdPrefix;
     private final int thingIdStartAt;
     private final boolean cleanSession;
     private final int keepAliveInSec;
@@ -64,8 +76,6 @@ public class MqttClientConfigFactory {
         this.brokers = builder.brokers;
         this.username = builder.username;
         this.password = builder.password;
-        this.tenantId = builder.tenantId;
-        this.thingIdPrefix = builder.thingIdPrefix;
         this.thingIdStartAt = builder.thingIdStartAt;
         this.cleanSession = builder.cleanSession;
         this.keepAliveInSec = builder.keepAliveInSec;
@@ -127,14 +137,15 @@ public class MqttClientConfigFactory {
 
         String clientId = generateDeterministicClientId(clientIndex);
 
-        AuthStrategy.AuthResult authResult = authStrategy.apply(baseBuilder(), clientId, subscribeCount);
+        AuthStrategy.AuthResult authResult = authStrategy.apply(baseBuilder(clientId, clientIndex), clientId,
+            subscribeCount);
 
         return authResult.builder
             .host(broker.getHost())
             .port(broker.getPort())
             .clientId(clientId)
             .localPort(resolveLocalPort(localPortIndex))
-            .willConfig(resolveWillConfig(authResult.thingId, clientId))
+            .willConfig(resolveWillConfig(clientId, clientIndex))
             .build();
     }
 
@@ -151,14 +162,15 @@ public class MqttClientConfigFactory {
         TaskBrokerAddress broker = brokers.get(ThreadLocalRandom.current().nextInt(brokers.size()));
         String clientId = generateDeterministicClientId(typePrefix, clientIndex);
 
-        AuthStrategy.AuthResult authResult = authStrategy.apply(baseBuilder(), clientId, subscribeCount);
+        AuthStrategy.AuthResult authResult = authStrategy.apply(baseBuilder(clientId, clientIndex), clientId,
+            subscribeCount);
 
         return authResult.builder
             .host(broker.getHost())
             .port(broker.getPort())
             .clientId(clientId)
             .localPort(resolveLocalPort(localPortIndex))
-            .willConfig(resolveWillConfig(authResult.thingId, clientId))
+            .willConfig(resolveWillConfig(clientId, clientIndex))
             .build();
     }
 
@@ -180,7 +192,7 @@ public class MqttClientConfigFactory {
             .retain(retain);
     }
 
-    private MqttClientConfig.MqttClientConfigBuilder baseBuilder() {
+    private MqttClientConfig.MqttClientConfigBuilder baseBuilder(String clientId, int clientIndex) {
         return MqttClientConfig.builder()
             .keepAliveInSec(keepAliveInSec)
             .ackTimeoutInSec(ackTimeoutInSec)
@@ -188,13 +200,11 @@ public class MqttClientConfigFactory {
             .reconnectIntervalInMs(reconnectIntervalInMs)
             .connectTimeoutInMs(connectTimeoutInMs)
             .maxInflightQueue(maxInflightQueue)
-            .username(username)
-            .password(password)
-            .tenantId(tenantId)
+            .username(renderAuthValue(username, clientId, clientIndex))
+            .password(renderAuthValue(password, clientId, clientIndex))
             .thingIdStartAt(thingIdStartAt)
             .isEmptyClientId(isEmptyClientId)
             .authType(authType)
-            .thingIdPrefix(thingIdPrefix)
             .cleanSession(cleanSession)
             .expiryIntervalInSec(expiryIntervalInSec)
             .localAddress(localAddressProvider.next())
@@ -203,12 +213,20 @@ public class MqttClientConfigFactory {
             .willConfig(willConfig);
     }
 
+    private String renderAuthValue(String template, String clientId, int clientIndex) {
+        if (template == null) {
+            return null;
+        }
+        return PlaceholderTemplate.compile(template, AUTH_VARIABLES)
+            .render(clientRenderContext(clientId, clientIndex));
+    }
+
     private int resolveLocalPort(int clientIndex) {
         return LocalPortAllocator.allocate(clientIndex, getLocalAddressCount(), localPortRangeConfig);
     }
 
 
-    private WillConfig resolveWillConfig(String thingId, String clientId) {
+    private WillConfig resolveWillConfig(String clientId, int clientIndex) {
         if (!willConfig.getWillFlag()) {
             return new WillConfig();
         }
@@ -221,16 +239,70 @@ public class MqttClientConfigFactory {
 
         String willTopic = willConfig.getWillTopic();
         if (StringUtils.isNotBlank(willTopic)) {
-            willTopic = willTopic
-                .replace("{thingId}", thingId)
-                .replace("{clientId}", clientId.substring(Math.max(0, clientId.length() - 8)))
-                .replace("{tenantId}", tenantId == null ? "" : tenantId);
+            willTopic = renderWillTopic(willTopic, clientId, clientIndex);
             log.trace("Generated will topic: {}", willTopic);
         }
         resolved.setWillTopic(willTopic);
         return resolved;
     }
 
+    private String renderWillTopic(String template, String clientId, int clientIndex) {
+        return PlaceholderTemplate.compile(normalizeLegacyWillTopicTemplate(template), WILL_TOPIC_VARIABLES)
+            .render(clientRenderContext(clientId, clientIndex));
+    }
+
+    private TemplateRenderContext clientRenderContext(String clientId, int clientIndex) {
+        return TemplateRenderContext.of(Map.of(
+            CTX_CLIENT_ID, clientId,
+            CTX_CLIENT_ID_SHORT, shortClientId(clientId),
+            CTX_LEGACY_CLIENT_ID_SHORT, legacyShortClientId(clientId),
+            CTX_INDEX, clientIndex,
+            CTX_TASK_ID, taskId == null ? "" : taskId,
+            CTX_NODE_ID, nodeId));
+    }
+
+    private String normalizeLegacyWillTopicTemplate(String template) {
+        return template
+            .replace("{clientId}", "{{legacy_client_id_short}}")
+            .replace("{thingId}", "{{legacy_client_id_short}}");
+    }
+
+    private static String shortClientId(String clientId) {
+        String legacyShortId = legacyShortClientId(clientId);
+        if (legacyShortId.startsWith("_") || legacyShortId.startsWith("-")) {
+            return legacyShortId.substring(1);
+        }
+        return legacyShortId;
+    }
+
+    private static String legacyShortClientId(String clientId) {
+        return clientId.substring(Math.max(0, clientId.length() - 8));
+    }
+
+    private static final class ClientContextVariableResolver implements TemplateVariableResolver {
+
+        private final boolean legacyClientIdSupported;
+
+        private ClientContextVariableResolver(boolean legacyClientIdSupported) {
+            this.legacyClientIdSupported = legacyClientIdSupported;
+        }
+
+        @Override
+        public Optional<TemplateVariable> resolve(String expression) {
+            return switch (expression) {
+                case CTX_CLIENT_ID -> Optional.of(context -> context.stringValue(CTX_CLIENT_ID));
+                case CTX_CLIENT_ID_SHORT -> Optional.of(context -> context.stringValue(CTX_CLIENT_ID_SHORT));
+                case CTX_LEGACY_CLIENT_ID_SHORT ->
+                    legacyClientIdSupported
+                        ? Optional.of(context -> context.stringValue(CTX_LEGACY_CLIENT_ID_SHORT))
+                        : Optional.empty();
+                case CTX_INDEX -> Optional.of(context -> String.valueOf(context.longValue(CTX_INDEX, 0)));
+                case CTX_TASK_ID -> Optional.of(context -> context.stringValue(CTX_TASK_ID));
+                case CTX_NODE_ID -> Optional.of(context -> context.stringValue(CTX_NODE_ID));
+                default -> Optional.empty();
+            };
+        }
+    }
 
     public static class TaskBrokerAddress {
         private final String host;
@@ -256,8 +328,6 @@ public class MqttClientConfigFactory {
         private List<TaskBrokerAddress> brokers;
         private String username;
         private String password;
-        private String tenantId;
-        private String thingIdPrefix;
         private int thingIdStartAt;
         private boolean cleanSession;
         private int keepAliveInSec = 120;
@@ -297,16 +367,6 @@ public class MqttClientConfigFactory {
 
         public Builder password(String password) {
             this.password = password;
-            return this;
-        }
-
-        public Builder tenantId(String tenantId) {
-            this.tenantId = tenantId;
-            return this;
-        }
-
-        public Builder thingIdPrefix(String thingIdPrefix) {
-            this.thingIdPrefix = thingIdPrefix;
             return this;
         }
 

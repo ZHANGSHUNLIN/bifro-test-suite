@@ -176,10 +176,8 @@ export const TaskConfigPanel: React.FC<TaskConfigPanelProps> = ({taskDetail, tas
 
     const authTypeLabel =
         mainTask.authType === 'none' ? t('task.form.noAuth') :
-        mainTask.authType === 'normal' ? t('task.form.normalAuth') :
-            mainTask.authType === 'byoc' ? 'BYOC' :
-                mainTask.authType === 'iotCore' ? 'IoT Core' :
-                    mainTask.authType || t('task.form.noAuth');
+        (mainTask.authType === 'normal' || mainTask.authType === 'byoc') ? t('task.form.normalAuth') :
+            mainTask.authType || t('task.form.noAuth');
 
     const taskTypeLabel = mainTask.taskType === 'CONN' ? t('task.type.CONN') :
         mainTask.taskType === 'CHAOS' ? t('task.type.CHAOS') :
@@ -221,17 +219,10 @@ export const TaskConfigPanel: React.FC<TaskConfigPanelProps> = ({taskDetail, tas
                     <Descriptions.Item label={t('task.form.authType')}>{authTypeLabel}</Descriptions.Item>
                     <Descriptions.Item label={t('task.form.enableCert')}>{certEnabled ? t('common.yes') : t('common.no')}</Descriptions.Item>
                     <Descriptions.Item label={t('task.form.clientCert')}>{mainTask.clientCertId || '-'}</Descriptions.Item>
-                    {mainTask.authType === 'normal' && (
+                    {(mainTask.authType === 'normal' || mainTask.authType === 'byoc') && (
                         <>
                             <Descriptions.Item label={t('task.form.username')}>{mainTask.username || '-'}</Descriptions.Item>
                             <Descriptions.Item label={t('task.form.password')}>{mainTask.password ? '***' : '-'}</Descriptions.Item>
-                        </>
-                    )}
-                    {mainTask.authType === 'byoc' && (
-                        <>
-                            <Descriptions.Item label={t('task.form.tenantId')}>{mainTask.tenantId || '-'}</Descriptions.Item>
-                            <Descriptions.Item label={t('task.form.thingIdPrefix')}>{mainTask.thingIdPrefix || '-'}</Descriptions.Item>
-                            <Descriptions.Item label={t('task.form.thingIdStartAt')}>{mainTask.thingIdStartAt ?? 0}</Descriptions.Item>
                         </>
                     )}
                 </Descriptions>
