@@ -339,6 +339,21 @@ const TaskAllocationModal: React.FC<TaskAllocationModalProps> = ({
             width: 210,
             render: (_: unknown, record: NodeListVO) => renderNodeCapacity(record),
         },
+        {
+            title: t('task.allocationModal.columns.action'),
+            key: 'action',
+            width: 110,
+            render: (_: unknown, record: NodeListVO) => (
+                <Button
+                    type="link"
+                    icon={<PlusOutlined/>}
+                    size="small"
+                    onClick={() => addNodesToAllocation([record.nodeId])}
+                >
+                    {t('common.add')}
+                </Button>
+            ),
+        },
     ];
 
     const availableRowSelection: TableProps<NodeListVO>['rowSelection'] = {
