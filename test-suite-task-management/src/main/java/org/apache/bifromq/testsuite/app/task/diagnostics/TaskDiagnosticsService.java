@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.task.diagnostics;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -41,6 +43,7 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 @Component
+@ConditionalOnControlPlane
 public class TaskDiagnosticsService {
     private static final long DEFAULT_STAGE_STUCK_MS = 60_000L;
     private static final Set<String> TERMINAL_TASK_STAGES =

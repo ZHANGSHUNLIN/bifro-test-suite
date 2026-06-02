@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.audit.api;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import org.apache.bifromq.testsuite.audit.application.AuditLogService;
 import org.apache.bifromq.testsuite.audit.domain.AuditLog;
 import org.apache.bifromq.testsuite.web.ApiResponse;
@@ -32,6 +34,7 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequestMapping("/api/audit-logs")
 @RequiredArgsConstructor
+@ConditionalOnControlPlane
 public class AuditLogController {
 
     private final AuditLogService auditLogService;

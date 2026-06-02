@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.controller.group;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -49,6 +51,7 @@ import reactor.core.publisher.Mono;
 @Tag(name = "Group Management", description = "Unified group management API, supports Broker and task groups")
 @RestController
 @RequestMapping("/api/groups")
+@ConditionalOnControlPlane
 public class GroupController implements ApiController {
 
     @Resource

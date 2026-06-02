@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.bean.validation;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import org.apache.bifromq.testsuite.app.database.pojo.MqttBroker;
 import org.apache.bifromq.testsuite.app.database.repository.MqttBrokerRepository;
 import jakarta.validation.ConstraintValidator;
@@ -30,6 +32,7 @@ import reactor.core.scheduler.Schedulers;
  * Validates that a broker with the given ID exists in the database.
  */
 @Component
+@ConditionalOnControlPlane
 public class BrokerExistsValidator implements ConstraintValidator<BrokerExists, String> {
 
     @Autowired

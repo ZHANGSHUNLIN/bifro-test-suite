@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.controller.base;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import java.net.URI;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
@@ -27,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
 @RestController
+@ConditionalOnControlPlane
 public class SpaRoutingController {
     @GetMapping("/")
     public Mono<Void> rootRedirect(ServerHttpResponse response) {

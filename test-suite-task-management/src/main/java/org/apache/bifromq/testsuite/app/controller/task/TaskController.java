@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.controller.task;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,9 +26,12 @@ import io.vertx.core.Vertx;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletionException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.bifromq.testsuite.TaskStage;
 import org.apache.bifromq.testsuite.TaskTemplate;
@@ -43,19 +48,21 @@ import org.apache.bifromq.testsuite.app.bean.vo.TaskStateHistoryVO;
 import org.apache.bifromq.testsuite.app.bean.vo.TaskStatisticsResponse;
 import org.apache.bifromq.testsuite.app.bean.vo.TaskSubTasksResponse;
 import org.apache.bifromq.testsuite.app.controller.ApiController;
+import org.apache.bifromq.testsuite.app.database.pojo.TaskStateHistory;
 import org.apache.bifromq.testsuite.app.database.pojo.TaskInfoMetadata;
 import org.apache.bifromq.testsuite.app.database.repository.TaskStateHistoryRepository;
 import org.apache.bifromq.testsuite.app.database.service.TaskReportService;
+import org.apache.bifromq.testsuite.app.eventbus.WorkerCommandGateway;
 import org.apache.bifromq.testsuite.app.task.TaskManager;
 import org.apache.bifromq.testsuite.app.task.diagnostics.TaskDiagnosticsService;
 import org.apache.bifromq.testsuite.app.task.diagnostics.TaskLogSummaryService;
 import org.apache.bifromq.testsuite.audit.application.AuditLogService;
 import org.apache.bifromq.testsuite.audit.domain.AuditAction;
-import org.apache.bifromq.testsuite.eventbus.ClusterTaskCommandBus;
 import org.apache.bifromq.testsuite.i18n.Messages;
 import org.apache.bifromq.testsuite.web.ApiResponse;
 import org.apache.bifromq.testsuite.web.PageInfo;
 import org.apache.bifromq.testsuite.worker.TaskConfig;
+import org.apache.bifromq.testsuite.worker.command.WorkerCommandAck;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -76,13 +83,14 @@ import reactor.core.publisher.Mono;
 @Tag(name = "Task Management", description = "MQTT test task management API")
 @RestController
 @RequestMapping("/api/task")
+@ConditionalOnControlPlane
 public class TaskController implements ApiController {
 
     @Resource
     private Vertx vertx;
 
     @Resource
-    private ClusterTaskCommandBus clusterTaskCommandBus;
+    private WorkerCommandGateway workerCommandGateway;
 
     @Resource
     private TaskManager taskManager;
@@ -204,9 +212,15 @@ public class TaskController implements ApiController {
     public Mono<ApiResponse<String>> stopTask(
         @PathVariable(value = "id") @Parameter(description = "Task ID") String id,
         ServerWebExchange exchange) {
-        clusterTaskCommandBus.broadcastStop(id);
-        return auditLogService.record(exchange, AuditAction.TASK_STOP, "TASK", id, true, "Stop task")
-            .thenReturn(ApiResponse.success(Messages.get("msg.task.submitted")));
+        return taskManager.getTaskWorkerNodeIds(id)
+            .flatMap(nodeIds -> Mono.fromFuture(workerCommandGateway.sendStopAll(id, nodeIds)))
+            .flatMap(acks -> recordRejectedWorkerCommandAcks(id, "STOP_TASK", acks)
+                .thenReturn(workerStopAckResponse(acks)))
+            .onErrorResume(e -> recordWorkerCommandException(id, "STOP_TASK", e)
+                .thenReturn(ApiResponse.<String>error(rootMessage(e))))
+            .flatMap(result -> auditLogService.record(exchange, AuditAction.TASK_STOP, "TASK", id, result.isSuccess(),
+                    "Stop task")
+                .thenReturn(result));
     }
 
     @Operation(summary = "Delete Task", description = "Delete the specified task")
@@ -276,15 +290,111 @@ public class TaskController implements ApiController {
                     return Mono.just(ApiResponse.error(Messages.get("error.task.templateNotEmpty")));
                 }
 
-                return taskManager.prepareTaskStart(id)
-                    .then(Mono.fromSupplier(() -> {
-                        clusterTaskCommandBus.broadcastStart(id);
-                        return ApiResponse.<Void>success();
-                    }))
+                return taskManager.prepareTaskStartCommands(id)
+                    .flatMap(workerCommands -> Mono.fromFuture(workerCommandGateway.sendStartAll(workerCommands)))
+                    .flatMap(acks -> recordRejectedWorkerCommandAcks(id, "START_TASK", acks)
+                        .thenReturn(workerStartAckResponse(acks)))
+                    .onErrorResume(e -> recordWorkerCommandException(id, "START_TASK", e)
+                        .thenReturn(ApiResponse.<Void>error(rootMessage(e))))
                     .flatMap(result ->
                         auditLogService.record(exchange, AuditAction.TASK_START, "TASK", id, result.isSuccess(),
                                 "Start task")
                             .thenReturn(result));
+            });
+    }
+
+    private ApiResponse<Void> workerStartAckResponse(List<WorkerCommandAck> acks) {
+        return workerAckResponse(acks);
+    }
+
+    private ApiResponse<String> workerStopAckResponse(List<WorkerCommandAck> acks) {
+        ApiResponse<Void> response = workerAckResponse(acks);
+        if (!response.isSuccess()) {
+            return ApiResponse.error(response.getMessage());
+        }
+        return ApiResponse.success(Messages.get("msg.task.submitted"));
+    }
+
+    private ApiResponse<Void> workerAckResponse(List<WorkerCommandAck> acks) {
+        List<WorkerCommandAck> failedAcks = acks.stream()
+            .filter(ack -> ack == null || !ack.accepted())
+            .toList();
+        if (failedAcks.isEmpty()) {
+            return ApiResponse.success();
+        }
+        String reason = failedAcks.stream()
+            .map(ack -> ack == null
+                ? "missing ACK"
+                : "nodeId=" + ack.getNodeId() + ", status=" + ack.getStatus() + ", reason=" + ack.getReason())
+            .reduce((left, right) -> left + "; " + right)
+            .orElse("Worker command rejected");
+        return ApiResponse.error(reason);
+    }
+
+    private String rootMessage(Throwable error) {
+        Throwable current = error;
+        while ((current instanceof CompletionException || current instanceof java.util.concurrent.ExecutionException)
+            && current.getCause() != null) {
+            current = current.getCause();
+        }
+        if (current == null) {
+            return "Worker command failed";
+        }
+        String message = current.getMessage();
+        return message == null || message.isBlank() ? current.toString() : message;
+    }
+
+    private Mono<Void> recordRejectedWorkerCommandAcks(String taskId, String commandType, List<WorkerCommandAck> acks) {
+        if (acks == null || acks.isEmpty()) {
+            return recordWorkerCommandFailure(taskId, null, commandType, "missing ACK", Map.of());
+        }
+        List<WorkerCommandAck> failedAcks = acks.stream()
+            .filter(ack -> ack == null || !ack.accepted())
+            .toList();
+        if (failedAcks.isEmpty()) {
+            return Mono.empty();
+        }
+        return reactor.core.publisher.Flux.fromIterable(failedAcks)
+            .flatMap(ack -> {
+                if (ack == null) {
+                    return recordWorkerCommandFailure(taskId, null, commandType, "missing ACK", Map.of());
+                }
+                Map<String, Object> metadata = new HashMap<>();
+                metadata.put("eventType", "WORKER_COMMAND_REJECTED");
+                metadata.put("commandType", commandType);
+                metadata.put("messageId", ack.getMessageId());
+                metadata.put("status", String.valueOf(ack.getStatus()));
+                metadata.put("ackAtMs", ack.getAckAtMs());
+                return recordWorkerCommandFailure(taskId, ack.getNodeId(), commandType, ack.getReason(), metadata);
+            })
+            .then();
+    }
+
+    private Mono<Void> recordWorkerCommandException(String taskId, String commandType, Throwable error) {
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("eventType", "WORKER_COMMAND_DELIVERY_FAILED");
+        metadata.put("commandType", commandType);
+        metadata.put("errorType", error == null ? "unknown" : error.getClass().getName());
+        return recordWorkerCommandFailure(taskId, null, commandType, rootMessage(error), metadata);
+    }
+
+    private Mono<Void> recordWorkerCommandFailure(String taskId, String nodeId, String commandType,
+                                                  String reason, Map<String, Object> metadata) {
+        TaskStateHistory history = TaskStateHistory.builder()
+            .taskId(taskId)
+            .nodeId(nodeId)
+            .timestamp(Instant.now())
+            .source("WORKER_COMMAND")
+            .errorMessage(commandType + " failed: " + (reason == null || reason.isBlank() ? "unknown" : reason))
+            .metadata(metadata)
+            .eventSeq(-Math.abs(System.nanoTime()))
+            .build();
+        return taskStateHistoryRepository.save(history)
+            .then()
+            .onErrorResume(e -> {
+                log.warn("Failed to record worker command failure, taskId={}, nodeId={}, commandType={}",
+                    taskId, nodeId, commandType, e);
+                return Mono.empty();
             });
     }
 

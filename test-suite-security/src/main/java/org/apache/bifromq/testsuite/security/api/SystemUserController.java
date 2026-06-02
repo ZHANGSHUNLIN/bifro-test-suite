@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.security.api;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import lombok.RequiredArgsConstructor;
 import org.apache.bifromq.testsuite.audit.application.AuditLogService;
 import org.apache.bifromq.testsuite.audit.domain.AuditAction;
@@ -38,6 +40,7 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequestMapping("/api/system/users")
 @RequiredArgsConstructor
+@ConditionalOnControlPlane
 public class SystemUserController {
 
     private final SystemUserService systemUserService;

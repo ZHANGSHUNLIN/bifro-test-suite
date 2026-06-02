@@ -27,6 +27,12 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.vertx.core.eventbus.EventBus;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import org.apache.bifromq.testsuite.TaskStage;
 import org.apache.bifromq.testsuite.app.bean.ClusterNodeInfo;
 import org.apache.bifromq.testsuite.app.bean.NodeInfo;
 import org.apache.bifromq.testsuite.app.bean.dto.NodeTaskAllocationRequest;
@@ -37,27 +43,23 @@ import org.apache.bifromq.testsuite.app.cluster.core.TaskManagerException;
 import org.apache.bifromq.testsuite.app.cluster.shared.HazelcastDataManager;
 import org.apache.bifromq.testsuite.app.cluster.shared.ShareDataAddr;
 import org.apache.bifromq.testsuite.app.config.LocalPortModeProperties;
+import org.apache.bifromq.testsuite.cluster.NodeRole;
+import org.apache.bifromq.testsuite.config.role.NodeRoleProperties;
 import org.apache.bifromq.testsuite.app.database.pojo.NodeTask;
 import org.apache.bifromq.testsuite.app.database.pojo.TaskStateHistory;
 import org.apache.bifromq.testsuite.app.database.repository.NodeTaskRepository;
 import org.apache.bifromq.testsuite.app.database.repository.TaskStateHistoryRepository;
 import org.apache.bifromq.testsuite.app.eventbus.NodeQueryGateway;
-import org.apache.bifromq.testsuite.TaskStage;
 import org.apache.bifromq.testsuite.client.LocalPortRangeConfig;
 import org.apache.bifromq.testsuite.qps.ProfileQpsSpec;
 import org.apache.bifromq.testsuite.worker.TaskConfig;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckRequest;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckResponse;
-import io.vertx.core.eventbus.EventBus;
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
@@ -85,6 +87,8 @@ class ClusterDataManagerTest {
     private LocalPortModeProperties localPortModeProperties;
     @Mock
     private NodeQueryGateway nodeQueryGateway;
+    @Mock
+    private NodeRoleProperties nodeRoleProperties;
     @InjectMocks
     private ClusterDataManager clusterDataManager;
 
@@ -93,6 +97,7 @@ class ClusterDataManagerTest {
         lenient().when(vertx.isClustered()).thenReturn(false);
         lenient().when(vertx.eventBus()).thenReturn(eventBus);
         lenient().when(localPortModeProperties.toConfig()).thenReturn(new LocalPortRangeConfig());
+        lenient().when(nodeRoleProperties.getNodeRole()).thenReturn(NodeRole.ALL);
     }
 
     
@@ -455,6 +460,74 @@ class ClusterDataManagerTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void testAssignCheck_autoAllocation_shouldUseOnlySchedulableNodes() {
+        HazelcastDataManager.IMapWrapper<String, NodeInfo> nodeMap = org.mockito.Mockito.mock(
+            HazelcastDataManager.IMapWrapper.class);
+        when(hazelcastDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO)).thenReturn(nodeMap);
+        when(nodeMap.entries()).thenReturn(CompletableFuture.completedFuture(Map.of(
+            NODE_ID_1, createNodeInfo(NODE_ID_1, NodeRole.WORKER),
+            NODE_ID_2, createNodeInfo(NODE_ID_2, NodeRole.CONTROL)
+        )));
+        when(defaultWeightCalculation.calculateWeights(any(), anyInt(), anyInt()))
+            .thenReturn(new NodeWeight(BigDecimal.ONE, Map.of(NODE_ID_1, BigDecimal.ONE)));
+        when(nodeTaskRepository.deleteByTaskId(TASK_ID)).thenReturn(Mono.empty());
+        when(nodeTaskRepository.saveAll(any(Iterable.class)))
+            .thenAnswer(invocation -> Flux.fromIterable(invocation.getArgument(0)));
+        mockLocalPortCapacityResponse(LocalPortCapacityCheckResponse.builder()
+            .success(true)
+            .taskId(TASK_ID)
+            .nodeId(NODE_ID_1)
+            .assignedClients(10)
+            .capacity(65536)
+            .localAddressCount(1)
+            .sourcePortPreallocationEnabled(false)
+            .build());
+
+        TaskConfig taskConfig = TaskConfig.builder()
+            .taskId(TASK_ID)
+            .totalClientCount(10)
+            .build();
+
+        clusterDataManager.assignCheck(TASK_ID, taskConfig, null).join();
+
+        ArgumentCaptor<Iterable<NodeTask>> nodeTasks = ArgumentCaptor.forClass(Iterable.class);
+        verify(nodeTaskRepository).saveAll(nodeTasks.capture());
+        List<NodeTask> savedNodeTasks = new java.util.ArrayList<>();
+        nodeTasks.getValue().forEach(savedNodeTasks::add);
+        assertThat(savedNodeTasks).hasSize(1);
+        assertThat(savedNodeTasks.get(0).getNodeId()).isEqualTo(NODE_ID_1);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testAssignCheck_manualAllocationToControlNode_shouldReject() {
+        HazelcastDataManager.IMapWrapper<String, NodeInfo> nodeMap = org.mockito.Mockito.mock(
+            HazelcastDataManager.IMapWrapper.class);
+        when(hazelcastDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO)).thenReturn(nodeMap);
+        when(nodeMap.entries()).thenReturn(CompletableFuture.completedFuture(
+            Map.of(NODE_ID_1, createNodeInfo(NODE_ID_1, NodeRole.CONTROL))));
+
+        TaskConfig taskConfig = TaskConfig.builder()
+            .taskId(TASK_ID)
+            .totalClientCount(10)
+            .build();
+        NodeTaskAllocationRequest request = new NodeTaskAllocationRequest();
+        request.setTotalClientCount(10);
+        NodeTaskAllocationRequest.NodeAllocation allocation = new NodeTaskAllocationRequest.NodeAllocation();
+        allocation.setNodeId(NODE_ID_1);
+        allocation.setAllocatedClientCount(10);
+        request.setNodeAllocationList(List.of(allocation));
+
+        java.util.concurrent.CompletionException exception = assertThrows(
+            java.util.concurrent.CompletionException.class,
+            () -> clusterDataManager.assignCheck(TASK_ID, taskConfig, request).join());
+        assertThat(exception.getCause().getMessage())
+            .contains("Node is not schedulable")
+            .contains("role=CONTROL");
+    }
+
+    @Test
     void testAssignCheck_localPortModeEnabledWithoutLocalAddresses_shouldContinueToAssignment() {
         TaskConfig taskConfig = TaskConfig.builder()
             .taskId(TASK_ID)
@@ -793,8 +866,13 @@ class ClusterDataManagerTest {
     
 
     private NodeInfo createNodeInfo(String nodeId) {
+        return createNodeInfo(nodeId, NodeRole.WORKER);
+    }
+
+    private NodeInfo createNodeInfo(String nodeId, NodeRole nodeRole) {
         return NodeInfo.builder()
             .nodeName("test-node")
+            .role(nodeRole)
             .clusterNodeInfo(createClusterNodeInfo(nodeId))
             .build();
     }

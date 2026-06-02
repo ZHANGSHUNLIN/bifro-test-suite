@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.task.diagnostics;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -36,6 +38,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 @Component
+@ConditionalOnControlPlane
 public class TaskLogSummaryService {
     private static final int DEFAULT_LINES = 200;
     private static final int MAX_LINES = 1000;

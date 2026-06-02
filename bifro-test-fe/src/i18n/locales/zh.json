@@ -671,7 +671,8 @@
         "assignedClients": "分配客户端数",
         "action": "操作"
       },
-      "totalMismatch": "客户端数量总和必须等于 {{total}}，当前为 {{current}}"
+      "totalMismatch": "客户端数量总和必须等于 {{total}}，当前为 {{current}}",
+      "unschedulableSelected": "以下节点不可分配任务：{{nodes}}"
     },
     "list": {
       "statusNotDeletable": "该状态不允许删除",
@@ -855,6 +856,8 @@
       "nodeName": "节点名称",
       "nodeId": "节点ID",
       "host": "主机地址",
+      "role": "节点角色",
+      "schedulable": "可调度",
       "status": "状态",
       "cpu": "CPU 负载(LoadAvg)",
       "memory": "内存使用率",
@@ -867,6 +870,16 @@
       "ONLINE": "在线",
       "OFFLINE": "离线",
       "UNSTABLE": "不稳定"
+    },
+    "role": {
+      "CONTROL": "控制面板",
+      "WORKER": "工作节点",
+      "ALL": "兼容模式",
+      "UNKNOWN": "未知"
+    },
+    "schedulable": {
+      "yes": "可分配",
+      "no": "不可分配"
     },
     "msg": {
       "loadFailed": "加载集群数据失败",

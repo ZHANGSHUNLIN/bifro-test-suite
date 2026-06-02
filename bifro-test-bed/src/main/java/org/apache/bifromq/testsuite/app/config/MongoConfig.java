@@ -19,6 +19,7 @@ package org.apache.bifromq.testsuite.app.config;
 
 import java.util.List;
 import org.apache.bifromq.testsuite.TaskStage;
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
@@ -26,6 +27,7 @@ import org.springframework.data.convert.ReadingConverter;
 import org.springframework.data.mongodb.core.convert.MongoCustomConversions;
 
 @Configuration
+@ConditionalOnControlPlane
 public class MongoConfig {
 
     @Bean

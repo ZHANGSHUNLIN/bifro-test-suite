@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.controller.profile;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -57,6 +59,7 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequestMapping("/api/profile")
 @RequiredArgsConstructor
+@ConditionalOnControlPlane
 public class WaveformProfileController implements ApiController {
 
     private final WaveformProfileService profileService;

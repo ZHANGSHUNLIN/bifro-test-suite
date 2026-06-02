@@ -22,10 +22,6 @@ import io.vertx.core.Vertx;
 import io.vertx.core.eventbus.Message;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -38,14 +34,8 @@ import org.apache.bifromq.testsuite.MqttClientTask;
 import org.apache.bifromq.testsuite.TaskSchedule;
 import org.apache.bifromq.testsuite.TaskStage;
 import org.apache.bifromq.testsuite.app.cluster.core.ClusterDataManager;
-import org.apache.bifromq.testsuite.app.cluster.shared.HazelcastDataManager;
-import org.apache.bifromq.testsuite.app.cluster.shared.ShareDataAddr;
 import org.apache.bifromq.testsuite.app.config.LocalPortModeProperties;
-import org.apache.bifromq.testsuite.app.database.pojo.NodeTask;
-import org.apache.bifromq.testsuite.app.database.repository.NodeTaskRepository;
-import org.apache.bifromq.testsuite.app.database.repository.TaskInfoMetadataRepository;
-import org.apache.bifromq.testsuite.app.database.service.TaskMetricsSnapshotService;
-import org.apache.bifromq.testsuite.app.task.runtime.TaskRuntimeStates;
+import org.apache.bifromq.testsuite.config.role.ConditionalOnWorkerPlane;
 import org.apache.bifromq.testsuite.client.LocalAddressProvider;
 import org.apache.bifromq.testsuite.client.LocalPortAllocator;
 import org.apache.bifromq.testsuite.client.LocalPortCapacity;
@@ -61,25 +51,27 @@ import org.apache.bifromq.testsuite.worker.TaskConfig;
 import org.apache.bifromq.testsuite.worker.TaskWorker;
 import org.apache.bifromq.testsuite.worker.TaskWorkerFactory;
 import org.apache.bifromq.testsuite.worker.WorkerTaskCommand;
+import org.apache.bifromq.testsuite.worker.command.WorkerCommand;
+import org.apache.bifromq.testsuite.worker.command.WorkerCommandAck;
+import org.apache.bifromq.testsuite.worker.command.WorkerCommandAckStatus;
+import org.apache.bifromq.testsuite.worker.command.WorkerCommandType;
 import org.apache.bifromq.testsuite.worker.pojo.ClientQueryRequest;
 import org.apache.bifromq.testsuite.worker.pojo.ClientQueryResponse;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckRequest;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Slf4j
 @Component
+@ConditionalOnWorkerPlane
 public class LocalTaskCoordinator {
 
     private final Set<String> runningTasks = ConcurrentHashMap.newKeySet();
 
     @Getter
     private final Map<String, TaskWorker> runningTaskMap = Maps.newConcurrentMap();
-
-    private final Set<String> handledTimeoutNodeIds = ConcurrentHashMap.newKeySet();
 
     private final Set<String> processedMessageIds = java.util.Collections.synchronizedSet(
         new LinkedHashSet<String>() {
@@ -93,86 +85,53 @@ public class LocalTaskCoordinator {
         });
     private final MetricsQueryService metricsQueryService = new MetricsQueryService();
     @Resource
-    private TaskInfoMetadataRepository taskInfoMetadataRepository;
-    @Resource
     private Vertx vertx;
     @Resource
     private ClusterDataManager clusterDataManager;
-    @Resource
-    private HazelcastDataManager hazelcastDataManager;
-    @Resource
-    private NodeTaskRepository nodeTaskRepository;
-    @Resource
-    private TaskMetricsSnapshotService taskMetricsSnapshotService;
     @Resource
     private LocalPortModeProperties localPortModeProperties;
     @Value("${bifro.nodeName}")
     private String nodeName;
 
     public void startTask(String id) {
+        log.warn("Ignore legacy task start by id on worker node: taskId={}", id);
+    }
+
+    public void startTask(WorkerTaskCommand command) {
+        String id = command == null ? null : command.taskId();
+        if (id == null || id.isBlank()) {
+            log.warn("Ignore worker command without taskId");
+            return;
+        }
         if (runningTasks.contains(id)) {
             log.warn("Task {} is running", id);
             return;
         }
         if (localPortModeProperties.isEnabled() && hasOtherRunningTask(id)) {
-            String reason = "Local port mode allows only one running task per node, runningTasks=" + runningTasks;
-            log.warn("Local port mode rejected task start, taskId={}, reason={}", id, reason);
-            markTaskFailed(id, reason).subscribe(
-                v -> {
-                },
-                e -> log.error("Failed to mark rejected task as failed, taskId={}, reason={}", id, reason, e)
-            );
+            log.warn("Local port mode rejected task start, taskId={}, runningTasks={}", id, runningTasks);
             return;
         }
-
-        if (runningTasks.add(id)) {
-            String currentNodeId = clusterDataManager.getCurrentNodeIdCache();
-
-            taskInfoMetadataRepository.findById(id)
-                .flatMap(taskInfoMetadata -> {
-                    TaskConfig mainTask = taskInfoMetadata.getTaskConfig();
-                    String taskId = mainTask.getTaskId();
-                    return nodeTaskRepository.findByTaskIdAndNodeId(taskId, currentNodeId)
-                        .flatMap(nodeTask -> {
-                            try {
-                                applyLocalPortModeConfig(nodeTask);
-                            } catch (RuntimeException e) {
-                                return markTaskFailed(id, nodeTask, e.getMessage())
-                                    .then(Mono.empty());
-                            }
-                            WorkerTaskCommand command = resolveWorkerTaskCommand(nodeTask);
-                            if (command == null) {
-                                return markTaskFailed(id, nodeTask, "Worker task command is missing")
-                                    .then(Mono.empty());
-                            }
-                            log.info("Start local task: taskId={}, nodeId={}, taskType={}, template={}, clients={}",
-                                command.taskId(), command.nodeId(), command.taskType(),
-                                command.template(), command.totalClientCount());
-                            return executeTask(command, id)
-                                .thenReturn(nodeTask);
-                        })
-                        .switchIfEmpty(Mono.defer(() -> {
-                            log.debug("Task {} has no task", taskId);
-                            runningTasks.remove(id);
-                            return Mono.empty();
-                        }));
-                })
-                .subscribe(
-                    result -> {
-
-                        LocalDateTime startTime = LocalDateTime.now();
-                        taskInfoMetadataRepository.updateStartTimeById(id, startTime).subscribe(
-                            v -> log.debug("Task start time set: {}", id),
-                            e -> log.warn("Failed to set task start time: {}", id, e)
-                        );
-                        log.info("Task started: {}", id);
-                    },
-                    e -> {
-                        log.error("Failed to start task: {}", id, e);
-                        runningTasks.remove(id);
-                    }
-                );
+        if (!runningTasks.add(id)) {
+            return;
         }
+        try {
+            applyLocalPortModeConfig(command);
+        } catch (RuntimeException e) {
+            log.error("Task failed before local execution, taskId={}, nodeId={}, reason={}",
+                id, command.nodeId(), e.getMessage(), e);
+            runningTasks.remove(id);
+            return;
+        }
+        log.info("Start local task: taskId={}, nodeId={}, taskType={}, template={}, clients={}",
+            command.taskId(), command.nodeId(), command.taskType(), command.template(), command.totalClientCount());
+        executeTask(command, id)
+            .subscribe(
+                ignored -> log.info("Task started: {}", id),
+                e -> {
+                    log.error("Failed to start task: {}", id, e);
+                    runningTasks.remove(id);
+                }
+            );
     }
 
     private Mono<Void> executeTask(WorkerTaskCommand command, String id) {
@@ -194,38 +153,16 @@ public class LocalTaskCoordinator {
         });
     }
 
-    private WorkerTaskCommand resolveWorkerTaskCommand(NodeTask nodeTask) {
-        if (nodeTask == null) {
-            return null;
-        }
-        WorkerTaskCommand command = nodeTask.getWorkerTaskCommand();
-        if (command != null && command.workerTaskSpec() != null) {
-            return command;
-        }
-        return null;
-    }
-
     private boolean hasOtherRunningTask(String taskId) {
         return runningTasks.stream().anyMatch(runningTaskId -> !runningTaskId.equals(taskId));
     }
 
-    private void applyLocalPortModeConfig(NodeTask nodeTask) {
-        if (nodeTask == null) {
-            return;
-        }
-        TaskConfig taskConfig = nodeTask.getTaskConfig();
-        WorkerTaskCommand command = nodeTask.getWorkerTaskCommand();
-        LocalPortRangeConfig config = mergeLocalPortModeConfig(taskConfig, command);
-        if (taskConfig != null) {
-            taskConfig.setLocalPortRangeConfig(config);
-        }
-        if (command != null && command.workerTaskSpec() != null) {
+    private void applyLocalPortModeConfig(WorkerTaskCommand command) {
+        LocalPortRangeConfig config = mergeLocalPortModeConfig(null, command);
+        if (command.workerTaskSpec() != null) {
             command.workerTaskSpec().setLocalPortRangeConfig(config);
         }
         if (!config.isEnabled()) {
-            return;
-        }
-        if (command == null || command.workerTaskSpec() == null) {
             return;
         }
         if (command.workerTaskSpec().isEnableAutoMultiAddress()) {
@@ -258,31 +195,12 @@ public class LocalTaskCoordinator {
         excludedPorts.addAll(config.getExcludedPorts());
     }
 
-    private Mono<Void> markTaskFailed(String taskId, NodeTask nodeTask, String reason) {
-        log.error("Task failed before local execution, taskId={}, nodeId={}, reason={}",
-            taskId, nodeTask == null ? "" : nodeTask.getNodeId(), reason);
-        runningTasks.remove(taskId);
-        Instant now = Instant.now();
-        Mono<Void> mainUpdate = taskInfoMetadataRepository.updateStageById(taskId, TaskStage.FAILED.name(), now);
-        if (nodeTask == null) {
-            return mainUpdate;
-        }
-        TaskRuntimeStates.applyNodeStage(nodeTask, TaskStage.FAILED, now);
-        return mainUpdate.then(nodeTaskRepository.save(nodeTask)).then();
-    }
-
-    private Mono<Void> markTaskFailed(String taskId, String reason) {
-        String currentNodeId = clusterDataManager.getCurrentNodeIdCache();
-        return nodeTaskRepository.findByTaskIdAndNodeId(taskId, currentNodeId)
-            .flatMap(nodeTask -> markTaskFailed(taskId, nodeTask, reason).thenReturn(true))
-            .switchIfEmpty(markTaskFailed(taskId, null, reason).thenReturn(true))
-            .then();
-    }
-
     @PostConstruct
     public void registerGlobalTaskScheduler() {
         vertx.eventBus().<TaskSchedule>consumer(EventBusAddresses.CLUSTER_TASK_COMMAND,
             message -> handleTaskCommand(message.body()));
+        String commandAddr = EventBusAddresses.workerCommand(clusterDataManager.getCurrentNodeIdCache());
+        vertx.eventBus().<WorkerCommand>consumer(commandAddr, this::handleWorkerCommandMessage);
         String metricsAddr = EventBusAddresses.nodeMetrics(clusterDataManager.getCurrentNodeIdCache());
         vertx.eventBus().<NodeMetricsRequest>consumer(metricsAddr, message -> {
             NodeMetricsResponse response = metricsQueryService.query(message.body());
@@ -317,6 +235,103 @@ public class LocalTaskCoordinator {
 
     }
 
+    void handleWorkerCommand(WorkerTaskCommand command) {
+        if (command == null || command.workerTaskSpec() == null) {
+            log.warn("Ignore empty worker command");
+            return;
+        }
+        String localNodeId = clusterDataManager.getCurrentNodeIdCache();
+        if (command.nodeId() != null && !command.nodeId().equals(localNodeId)) {
+            log.debug("Ignore worker command for another node: taskId={}, commandNodeId={}, localNodeId={}",
+                command.taskId(), command.nodeId(), localNodeId);
+            return;
+        }
+        runWorkerHandler("worker start command", () -> startTask(command));
+    }
+
+    private void handleWorkerCommandMessage(Message<WorkerCommand> message) {
+        WorkerCommandAck ack = handleWorkerCommand(message.body());
+        message.reply(ack);
+    }
+
+    WorkerCommandAck handleWorkerCommand(WorkerCommand command) {
+        WorkerCommandAck ack = validateWorkerCommand(command);
+        if (!ack.accepted() || ack.getStatus() == WorkerCommandAckStatus.IGNORED_DUPLICATE) {
+            return ack;
+        }
+        if (command.getMessageId() != null && !command.getMessageId().isBlank()) {
+            processedMessageIds.add(command.getMessageId());
+        }
+        if (command.getType() == WorkerCommandType.START_TASK) {
+            runWorkerHandler("worker start command", () -> startTask(command.getStartCommand()));
+        } else if (command.getType() == WorkerCommandType.STOP_TASK) {
+            runWorkerHandler("worker stop command", () -> stopTask(command.getTaskId()));
+        }
+        return ack;
+    }
+
+    private WorkerCommandAck validateWorkerCommand(WorkerCommand command) {
+        String localNodeId = clusterDataManager.getCurrentNodeIdCache();
+        if (command == null) {
+            return workerCommandAck(null, null, localNodeId, null,
+                WorkerCommandAckStatus.REJECTED_INVALID_PAYLOAD, "Worker command is empty");
+        }
+        if (command.getMessageId() != null && !command.getMessageId().isBlank()
+            && processedMessageIds.contains(command.getMessageId())) {
+            return workerCommandAck(command, WorkerCommandAckStatus.IGNORED_DUPLICATE, "Duplicate worker command");
+        }
+        if (command.getTaskId() == null || command.getTaskId().isBlank()) {
+            return workerCommandAck(command, WorkerCommandAckStatus.REJECTED_INVALID_PAYLOAD, "Task id is empty");
+        }
+        if (command.getNodeId() != null && !command.getNodeId().equals(localNodeId)) {
+            return workerCommandAck(command, WorkerCommandAckStatus.REJECTED_INVALID_PAYLOAD,
+                "Command node does not match local node: " + localNodeId);
+        }
+        if (command.getType() == WorkerCommandType.START_TASK) {
+            WorkerTaskCommand startCommand = command.getStartCommand();
+            if (startCommand == null || startCommand.workerTaskSpec() == null) {
+                return workerCommandAck(command, WorkerCommandAckStatus.REJECTED_INVALID_PAYLOAD,
+                    "Start command payload is missing");
+            }
+            if (runningTasks.contains(command.getTaskId())) {
+                return workerCommandAck(command, WorkerCommandAckStatus.REJECTED_INVALID_STATE,
+                    "Task is already running");
+            }
+            if (localPortModeProperties.isEnabled() && hasOtherRunningTask(command.getTaskId())) {
+                return workerCommandAck(command, WorkerCommandAckStatus.REJECTED_INVALID_STATE,
+                    "Local port mode allows only one running task per node");
+            }
+            return workerCommandAck(command, WorkerCommandAckStatus.ACCEPTED, null);
+        }
+        if (command.getType() == WorkerCommandType.STOP_TASK) {
+            return workerCommandAck(command, WorkerCommandAckStatus.ACCEPTED, null);
+        }
+        return workerCommandAck(command, WorkerCommandAckStatus.REJECTED_INVALID_PAYLOAD, "Unknown worker command type");
+    }
+
+    private WorkerCommandAck workerCommandAck(WorkerCommand command, WorkerCommandAckStatus status, String reason) {
+        String localNodeId = clusterDataManager.getCurrentNodeIdCache();
+        return workerCommandAck(command == null ? null : command.getMessageId(),
+            command == null ? null : command.getTaskId(),
+            command == null ? localNodeId : command.getNodeId(),
+            command == null ? null : command.getType(),
+            status,
+            reason);
+    }
+
+    private WorkerCommandAck workerCommandAck(String messageId, String taskId, String nodeId, WorkerCommandType type,
+                                             WorkerCommandAckStatus status, String reason) {
+        return WorkerCommandAck.builder()
+            .messageId(messageId)
+            .taskId(taskId)
+            .nodeId(nodeId)
+            .type(type)
+            .status(status)
+            .reason(reason)
+            .ackAtMs(System.currentTimeMillis())
+            .build();
+    }
+
     void handleTaskCommand(TaskSchedule taskSchedule) {
         if (taskSchedule == null) {
             log.warn("Ignore empty task command");
@@ -337,7 +352,7 @@ public class LocalTaskCoordinator {
 
         switch (op) {
             case REG:
-                runWorkerHandler("task start command", () -> startTask(id));
+                log.warn("Ignore legacy task start command without worker payload: taskId={}", id);
                 break;
             case UN_REG:
                 runWorkerHandler("task stop command", () -> stopTask(id));
@@ -358,21 +373,10 @@ public class LocalTaskCoordinator {
             log.warn("TASK_FINISH without sourceNodeId, fallback to local node: taskId={}, nodeId={}",
                 taskId, localNodeId);
         }
-        String finalFinishedNodeId = finishedNodeId;
-        runWorkerHandler("task finish command", () ->
-            nodeTaskRepository.findByTaskIdAndNodeId(taskId, finalFinishedNodeId)
-                .subscribe(
-                    nodeTask -> {
-                        if (finalFinishedNodeId.equals(localNodeId)) {
-                            saveLocalNodeMetricsSnapshot(taskId, nodeTask, TaskStage.SHUTDOWN.name());
-                        }
-                        taskFinish(taskId, finalFinishedNodeId);
-                    },
-                    e -> log.warn("Failed to handle TASK_FINISH: taskId={}, nodeId={}",
-                        taskId, finalFinishedNodeId, e),
-                    () -> log.warn("Ignore TASK_FINISH for unknown node: taskId={}, nodeId={}",
-                        taskId, finalFinishedNodeId)
-                ));
+        if (finishedNodeId.equals(localNodeId)) {
+            removeLocalRunningTask(taskId);
+        }
+        log.info("Handled local TASK_FINISH cleanup: taskId={}, nodeId={}", taskId, finishedNodeId);
     }
 
     private void handleLocalPortCapacityRequest(Message<LocalPortCapacityCheckRequest> message) {
@@ -514,131 +518,6 @@ public class LocalTaskCoordinator {
             + ", missingCount=" + missingCount;
     }
 
-    private String buildLocalPortOccupiedError(LocalPortCapacityCheckRequest request,
-                                               List<LocalPortCapacityCheckResponse.OccupiedPort> occupiedPorts,
-                                               LocalPortRangeConfig config) {
-        String samples = limitOccupiedPorts(occupiedPorts).stream()
-            .map(port -> port.getLocalAddress() + ":" + port.getPort() + "(" + port.getState() + ")")
-            .collect(Collectors.joining(", "));
-        return "Source port range has occupied ports: nodeId=" + request.getNodeId()
-            + ", portRange=" + config.getStartPort() + "-" + config.getEndPort()
-            + ", occupiedPortCount=" + occupiedPorts.size()
-            + ", occupiedPorts=[" + samples + "]";
-    }
-
-    private void taskFinish(String taskId, String nodeId) {
-
-        HazelcastDataManager.IMapWrapper<String, Set<String>> map =
-            hazelcastDataManager.map(ShareDataAddr.FINISH_NODE_TASKS);
-        map.key(taskId)
-            .atomicCompute(existingSet -> {
-                if (existingSet == null) {
-                    HashSet<String> newSet = new HashSet<>();
-                    newSet.add(nodeId);
-                    return newSet;
-                }
-                existingSet.add(nodeId);
-                return existingSet;
-            })
-            .thenAccept(result -> {
-                runningTaskMap.remove(taskId);
-                runningTasks.remove(taskId);
-                log.info("task finish CAS, taskId: {}, nodeId: {}, finish set: {}", taskId, nodeId, result);
-                checkAllTasksComplete(map, taskId, result);
-            });
-
-    }
-
-    private void checkAllTasksComplete(HazelcastDataManager.IMapWrapper<String, Set<String>> map, String taskId,
-                                       Set<String> finishNodeIds) {
-
-        nodeTaskRepository.findAllByTaskId(taskId)
-            .collectList()
-            .flatMap(nodeTasks -> {
-                Map<String, TaskConfig> subTasks = nodeTasks.stream()
-                    .collect(Collectors.toMap(NodeTask::getNodeId, NodeTask::getTaskConfig));
-
-                Set<String> allNodeTasks = subTasks.keySet();
-                if (allNodeTasks.size() == finishNodeIds.size() && finishNodeIds.containsAll(allNodeTasks)) {
-                    log.info("All nodes finished close task, taskId={}, nodes={}", taskId, finishNodeIds);
-                    map.key(taskId).remove();
-
-                    return reconcileNodeTasksToStage(nodeTasks, TaskStage.SHUTDOWN)
-                        .flatMap(reconciledNodeTasks -> {
-                            LocalDateTime endTime = LocalDateTime.now();
-                            return taskInfoMetadataRepository.updateStageById(
-                                    taskId, TaskStage.SHUTDOWN.name(), Instant.now())
-                                .then(taskInfoMetadataRepository.updateEndTimeById(taskId, endTime))
-                                .doOnSuccess(v -> log.debug("Task stage/endTime set: {}", taskId))
-                                .doOnError(e -> log.warn("Failed to set task stage/endTime: {}", taskId, e));
-                        });
-                } else {
-                    log.info(
-                        "Task not finished on all nodes, skip close task stage, taskId={}, finishedNodes={}, allNodes={}",
-                        taskId, finishNodeIds, allNodeTasks);
-                    return Mono.empty();
-                }
-            })
-            .subscribe(
-                v -> {
-                },
-                e -> log.error("Failed to check all tasks complete: {}", taskId, e)
-            );
-    }
-
-    private Mono<List<NodeTask>> reconcileNodeTasksToStage(List<NodeTask> nodeTasks, TaskStage stage) {
-        if (nodeTasks == null || nodeTasks.isEmpty()) {
-            return Mono.just(List.of());
-        }
-        Instant now = Instant.now();
-        List<Mono<NodeTask>> saves = nodeTasks.stream()
-            .filter(nodeTask -> {
-                return TaskRuntimeStates.nodeStage(nodeTask) != stage
-                    || nodeTask.getTaskConfig() != null && nodeTask.getTaskConfig().getTaskWorkStage() != stage;
-            })
-            .map(nodeTask -> {
-                TaskRuntimeStates.applyNodeStage(nodeTask, stage, now);
-                return nodeTaskRepository.save(nodeTask);
-            })
-            .collect(Collectors.toList());
-
-        if (saves.isEmpty()) {
-            return Mono.just(nodeTasks);
-        }
-        return Flux.concat(saves).collectList();
-    }
-
-    private void saveLocalNodeMetricsSnapshot(String taskId, NodeTask nodeTask, String taskStage) {
-        if (nodeTask == null || nodeTask.getNodeId() == null) {
-            return;
-        }
-        String currentNodeId = clusterDataManager.getCurrentNodeIdCache();
-        if (!nodeTask.getNodeId().equals(currentNodeId)) {
-            return;
-        }
-        NodeMetricsRequest request = NodeMetricsRequest.builder()
-            .nodeId(currentNodeId)
-            .taskId(taskId)
-            .build();
-        NodeMetricsResponse response = metricsQueryService.query(request);
-
-        taskInfoMetadataRepository.findById(taskId)
-            .flatMap(metadata -> taskMetricsSnapshotService.saveNodeSnapshot(
-                taskId,
-                metadata.getTaskName(),
-                taskStage,
-                currentNodeId,
-                nodeTask.getNodeName(),
-                metadata.getStartTime(),
-                LocalDateTime.now(),
-                response))
-            .subscribe(
-                v -> log.info("Local node metrics snapshot saved, taskId={}, nodeId={}", taskId, currentNodeId),
-                e -> log.warn("Failed to save local node metrics snapshot, taskId={}, nodeId={}",
-                    taskId, currentNodeId, e)
-            );
-    }
-
     public Map<String, TaskStage> runningTask() {
         return runningTaskMap.entrySet().stream()
             .collect(Collectors.toMap(Map.Entry::getKey, v -> v.getValue().getTaskState()));
@@ -657,226 +536,12 @@ public class LocalTaskCoordinator {
             taskWorker.stopTask()
                 .thenAccept(r -> {
                     log.info("taskId stopped: {}", taskId);
-
-                    taskInfoMetadataRepository.findById(taskId)
-                        .flatMap(metadata -> {
-
-                            LocalDateTime endTime = LocalDateTime.now();
-                            return taskInfoMetadataRepository.updateEndTimeById(taskId, endTime)
-                                .then(nodeTaskRepository.findByTaskIdAndNodeId(
-                                    taskId, clusterDataManager.getCurrentNodeIdCache()))
-                                .doOnNext(nodeTask ->
-                                    saveLocalNodeMetricsSnapshot(taskId, nodeTask, TaskStage.STOPPED.name()))
-                                .then();
-                        })
-                        .subscribe(
-                            v -> {
-                                runningTaskMap.remove(taskId);
-                                runningTasks.remove(taskId);
-                            },
-                            e -> log.warn("Failed to handle stopped task: {}", taskId, e)
-                        );
+                    removeLocalRunningTask(taskId);
                 });
         } else {
-            handleStopWithoutWorker(taskId);
+            log.info("No local worker found for stop command: taskId={}", taskId);
+            removeLocalRunningTask(taskId);
         }
-    }
-
-    private void handleStopWithoutWorker(String taskId) {
-        nodeTaskRepository.findAllByTaskId(taskId)
-            .collectList()
-            .flatMap(nodeTasks -> {
-                if (nodeTasks == null || nodeTasks.isEmpty()) {
-                    log.warn("No NodeTasks found for stop: taskId={}", taskId);
-                    return Mono.empty();
-                }
-
-                List<Mono<NodeTask>> saveMonos = new ArrayList<>();
-                for (NodeTask nodeTask : nodeTasks) {
-                    TaskStage currentStage = TaskRuntimeStates.nodeStage(nodeTask);
-                    if (!TaskRuntimeStates.isTerminal(currentStage)) {
-                        log.info("Force stopping NodeTask: taskId={}, nodeId={}, stage={}",
-                            taskId, nodeTask.getNodeId(), currentStage);
-                        TaskRuntimeStates.applyNodeStage(nodeTask, TaskStage.STOPPED, Instant.now());
-                        saveMonos.add(nodeTaskRepository.save(nodeTask));
-                    }
-                }
-
-                if (!saveMonos.isEmpty()) {
-                    return Flux.concat(saveMonos)
-                        .then(Mono.fromRunnable(() -> checkAndUpdateMainTaskToStopped(taskId)));
-                } else {
-                    log.info("All NodeTasks already terminal, checking main task state: taskId={}", taskId);
-                    return Mono.fromRunnable(() -> checkAndUpdateMainTaskToStopped(taskId));
-                }
-            })
-            .subscribe(
-                v -> {
-                },
-                e -> log.error("Failed to handle stop without worker: taskId={}", taskId, e)
-            );
-    }
-
-    private void checkAndUpdateMainTaskToStopped(String taskId) {
-        nodeTaskRepository.findAllByTaskId(taskId)
-            .collectList()
-            .flatMap(nodeTasks -> {
-                if (nodeTasks == null || nodeTasks.isEmpty()) {
-                    return Mono.empty();
-                }
-                Set<String> onlineNodeIds = clusterDataManager.getCurrentNodeIds();
-                List<Mono<NodeTask>> cleanupMonos = new ArrayList<>();
-                for (NodeTask nodeTask : nodeTasks) {
-                    TaskStage stage = TaskRuntimeStates.nodeStage(nodeTask);
-                    if (!onlineNodeIds.contains(nodeTask.getNodeId())
-                        && !TaskRuntimeStates.isTerminal(stage)) {
-                        log.info("Node {} is offline, marking NodeTask as STOPPED: taskId={}",
-                            nodeTask.getNodeId(), taskId);
-                        TaskRuntimeStates.applyNodeStage(nodeTask, TaskStage.STOPPED, Instant.now());
-                        cleanupMonos.add(nodeTaskRepository.save(nodeTask));
-                    }
-                }
-
-                Mono<List<NodeTask>> refreshedTasks;
-                if (!cleanupMonos.isEmpty()) {
-                    refreshedTasks = Flux.concat(cleanupMonos)
-                        .then(nodeTaskRepository.findAllByTaskId(taskId).collectList());
-                } else {
-                    refreshedTasks = Mono.just(nodeTasks);
-                }
-
-                return refreshedTasks.flatMap(tasks -> {
-                    boolean allTerminal = tasks.stream()
-                        .map(TaskRuntimeStates::nodeStage)
-                        .allMatch(TaskRuntimeStates::isTerminal);
-
-                    if (allTerminal) {
-                        return taskInfoMetadataRepository.findById(taskId)
-                            .flatMap(metadata -> {
-                                TaskStage stage = TaskRuntimeStates.mainStage(metadata);
-                                if (!TaskRuntimeStates.isTerminal(stage)) {
-                                    return taskInfoMetadataRepository.updateStageById(taskId,
-                                            TaskStage.STOPPED.name(), java.time.Instant.now())
-                                        .then(taskInfoMetadataRepository.updateEndTimeById(taskId,
-                                            LocalDateTime.now()))
-                                        .doOnSuccess(v -> log.info("Main task marked as STOPPED: taskId={}",
-                                            taskId));
-                                }
-                                return Mono.empty();
-                            });
-                    } else {
-                        log.info("Not all sub-tasks are terminal, skip main task STOPPED update: taskId={}",
-                            taskId);
-                        return Mono.empty();
-                    }
-                });
-            })
-            .subscribe(
-                v -> {
-                },
-                e -> log.error("Failed to check and update main task to stopped: taskId={}", taskId, e)
-            );
-    }
-
-    public void handleNodeTimeout(String nodeId) {
-        if (!handledTimeoutNodeIds.add(nodeId)) {
-            log.debug("Skip duplicate node timeout handling: nodeId={}", nodeId);
-            return;
-        }
-        log.warn("Handling node timeout: nodeId={}", nodeId);
-        nodeTaskRepository.findAllByNodeId(nodeId)
-            .collectList()
-            .flatMap(nodeTasks -> {
-                Set<String> affectedTaskIds = new HashSet<>();
-
-                if (nodeTasks != null && !nodeTasks.isEmpty()) {
-                    log.info("Found {} NodeTasks in DB for timeout node: nodeId={}",
-                        nodeTasks.size(), nodeId);
-
-                    for (NodeTask nodeTask : nodeTasks) {
-                        TaskConfig taskConfig = nodeTask.getTaskConfig();
-                        if (taskConfig == null) {
-                            continue;
-                        }
-                        TaskStage currentStage = TaskRuntimeStates.nodeStage(nodeTask);
-
-                        if (!TaskRuntimeStates.isTerminal(currentStage)) {
-                            TaskRuntimeStates.applyNodeStage(nodeTask, TaskStage.FAILED, Instant.now());
-                            nodeTaskRepository.save(nodeTask)
-                                .doOnSuccess(
-                                    v -> log.info("NodeTask marked as FAILED due to timeout: taskId={}, nodeId={}",
-                                        nodeTask.getTaskId(), nodeId))
-                                .subscribe();
-                            affectedTaskIds.add(nodeTask.getTaskId());
-                        }
-                    }
-                }
-
-                return Mono.just(affectedTaskIds);
-            })
-            .flatMap(affectedTaskIds -> {
-
-                List<String> localTaskIdsToRemove = new ArrayList<>();
-                runningTaskMap.forEach((taskId, worker) -> {
-                    if (worker instanceof BaseTaskWorker baseWorker) {
-                        String workerNodeId = baseWorker.getNodeId();
-                        if (nodeId.equals(workerNodeId)) {
-                            localTaskIdsToRemove.add(taskId);
-                        }
-                    }
-                });
-
-                for (String taskId : localTaskIdsToRemove) {
-                    runningTaskMap.remove(taskId);
-                    runningTasks.remove(taskId);
-                    affectedTaskIds.add(taskId);
-                }
-
-                affectedTaskIds.forEach(this::checkAndUpdateMainTaskToFailed);
-
-                return Mono.just(localTaskIdsToRemove);
-            })
-            .subscribe(
-                localTaskIdsToRemove -> {
-
-                    if (!localTaskIdsToRemove.isEmpty()) {
-                        log.debug("Cleaned up {} stale local tasks during node timeout handling",
-                            localTaskIdsToRemove.size());
-                    }
-                },
-                e -> log.error("Failed to handle node timeout: nodeId={}", nodeId, e)
-            );
-    }
-
-    private void checkAndUpdateMainTaskToFailed(String taskId) {
-        nodeTaskRepository.findAllByTaskId(taskId)
-            .collectList()
-            .subscribe(nodeTasks -> {
-                if (nodeTasks == null || nodeTasks.isEmpty()) {
-                    return;
-                }
-                boolean allTerminal = nodeTasks.stream()
-                    .map(TaskRuntimeStates::nodeStage)
-                    .allMatch(TaskRuntimeStates::isTerminal);
-
-                if (allTerminal) {
-
-                    taskInfoMetadataRepository.findById(taskId).subscribe(taskInfoMetadata -> {
-                        if (taskInfoMetadata != null) {
-                            TaskStage currentStage = TaskRuntimeStates.mainStage(taskInfoMetadata);
-                            if (!TaskRuntimeStates.isTerminal(currentStage)) {
-                                taskInfoMetadataRepository.updateStageById(
-                                    taskId, TaskStage.FAILED.name(), Instant.now()).subscribe(
-                                    v -> log.info(
-                                        "Main task marked as FAILED due to all sub-tasks done/failed: taskId={}",
-                                        taskId),
-                                    e -> log.warn("Failed to update main task to FAILED: taskId={}", taskId, e)
-                                );
-                            }
-                        }
-                    }, e -> log.warn("Failed to find TaskInfoMetadata for FAILED update: taskId={}", taskId, e));
-                }
-            }, e -> log.warn("Failed to check all tasks for FAILED update: taskId={}", taskId, e));
     }
 
 }

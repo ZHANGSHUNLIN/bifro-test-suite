@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.audit.application;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import org.apache.bifromq.testsuite.audit.domain.AuditLog;
 import org.apache.bifromq.testsuite.audit.infrastructure.AuditLogRepository;
 import org.apache.bifromq.testsuite.web.PageInfo;
@@ -39,6 +41,7 @@ import reactor.core.publisher.Mono;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@ConditionalOnControlPlane
 public class AuditLogService {
 
     private static final int MAX_PAGE_SIZE = 100;

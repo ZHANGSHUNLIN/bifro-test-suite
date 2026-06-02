@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.group;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import org.apache.bifromq.testsuite.i18n.Messages;
 
 import org.apache.bifromq.testsuite.web.ApiResponse;
@@ -44,6 +46,7 @@ import reactor.core.publisher.Mono;
 
 @Slf4j
 @Component
+@ConditionalOnControlPlane
 public class GroupManager {
 
     public static final String TYPE_BROKER = "BROKER";

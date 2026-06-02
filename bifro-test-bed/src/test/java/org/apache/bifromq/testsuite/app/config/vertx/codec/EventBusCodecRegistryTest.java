@@ -34,6 +34,8 @@ import org.apache.bifromq.testsuite.worker.pojo.ClientQueryResponse;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckRequest;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckResponse;
 import org.apache.bifromq.testsuite.worker.pojo.TaskStateChangeEvent;
+import org.apache.bifromq.testsuite.worker.command.WorkerCommand;
+import org.apache.bifromq.testsuite.worker.command.WorkerCommandAck;
 import org.junit.jupiter.api.Test;
 
 class EventBusCodecRegistryTest {
@@ -53,13 +55,15 @@ class EventBusCodecRegistryTest {
             ClientQueryResponse.class,
             PipelineProgressEvent.class,
             LocalPortCapacityCheckRequest.class,
-            LocalPortCapacityCheckResponse.class);
+            LocalPortCapacityCheckResponse.class,
+            WorkerTaskCommand.class,
+            WorkerCommand.class,
+            WorkerCommandAck.class);
     }
 
     @Test
     void codecRegistryShouldNotContainHazelcastOnlyPayloads() {
         assertThat(EventBusCodecRegistry.findByClass(NodeInfo.class)).isNull();
         assertThat(EventBusCodecRegistry.findByClass(TaskConfig.class)).isNull();
-        assertThat(EventBusCodecRegistry.findByClass(WorkerTaskCommand.class)).isNull();
     }
 }

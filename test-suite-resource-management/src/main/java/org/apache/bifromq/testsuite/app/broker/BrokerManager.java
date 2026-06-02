@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.broker;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,6 +40,7 @@ import reactor.core.publisher.Mono;
 
 @Component
 @Slf4j
+@ConditionalOnControlPlane
 public class BrokerManager {
 
     @Resource

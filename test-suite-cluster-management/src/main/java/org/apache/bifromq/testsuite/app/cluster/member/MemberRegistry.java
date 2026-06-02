@@ -39,6 +39,7 @@ import org.apache.bifromq.testsuite.app.bean.ClusterNodeInfo;
 import org.apache.bifromq.testsuite.app.bean.NodeInfo;
 import org.apache.bifromq.testsuite.app.cluster.ClusterConfig;
 import org.apache.bifromq.testsuite.app.cluster.shared.ShareDataAddr;
+import org.apache.bifromq.testsuite.config.role.NodeRoleProperties;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -52,6 +53,8 @@ public class MemberRegistry {
     private HazelcastInstance hazelcastInstance;
     @Resource
     private ClusterConfig clusterConfig;
+    @Resource
+    private NodeRoleProperties nodeRoleProperties;
 
     private volatile String localMemberId;
 
@@ -291,6 +294,7 @@ public class MemberRegistry {
 
         return NodeInfo.builder()
             .nodeName(nodeName)
+            .role(nodeRoleProperties.getNodeRole())
             .clusterNodeInfo(systemInfo)
             .nextPing(System.currentTimeMillis())
             .alive(true)
@@ -302,6 +306,7 @@ public class MemberRegistry {
             .id(memberId)
             .name(nodeInfo.getNodeName())
             .host(nodeInfo.getClusterNodeInfo() != null ? nodeInfo.getClusterNodeInfo().getHost() : null)
+            .role(nodeInfo.getRole())
             .systemInfo(nodeInfo.getClusterNodeInfo())
             .lastHeartbeat(nodeInfo.getNextPing() != null ? nodeInfo.getNextPing() : 0)
             .registeredAt(Instant.now())

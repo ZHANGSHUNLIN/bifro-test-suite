@@ -666,9 +666,14 @@ class TaskManagerTest {
                         nodeTask.getTaskConfig(), plannedStartAtMs));
                 return CompletableFuture.completedFuture(null);
             });
+        when(nodeTaskRepository.findAllByTaskId(TASK_ID)).thenReturn(Flux.just(nodeTask));
 
-        taskManager.prepareTaskStart(TASK_ID).block();
+        List<org.apache.bifromq.testsuite.worker.WorkerTaskCommand> commands =
+            taskManager.prepareTaskStartCommands(TASK_ID).block();
 
+        assertNotNull(commands);
+        assertEquals(1, commands.size());
+        assertEquals("node-1", commands.get(0).nodeId());
         assertNotNull(metadata.getPlannedStartAtMs());
         assertEquals(TaskStage.STARTING, metadata.getCurrentStage());
         assertEquals(TaskStage.STARTING, metadata.getTaskConfig().getTaskWorkStage());

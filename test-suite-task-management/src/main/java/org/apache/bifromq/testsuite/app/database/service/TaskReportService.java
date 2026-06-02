@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.database.service;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -38,6 +40,7 @@ import reactor.core.publisher.Mono;
 
 @Slf4j
 @Service
+@ConditionalOnControlPlane
 public class TaskReportService {
 
     private static final String METRIC_CONNECT_SUCCESS = "bifro_task_metric_connect_success_count";

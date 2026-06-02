@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.security.api;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.List;
@@ -46,6 +48,7 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@ConditionalOnControlPlane
 public class AuthController {
 
     private final BifroSecurityProperties securityProperties;

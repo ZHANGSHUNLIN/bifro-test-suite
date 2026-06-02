@@ -21,6 +21,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.apache.bifromq.testsuite.cluster.NodeRole;
 
 @Data
 @AllArgsConstructor
@@ -30,6 +31,8 @@ public class NodeInfo {
 
     private static final long DEFAULT_HEARTBEAT_TIMEOUT_MS = 30_000L;
     private String nodeName;
+    @Builder.Default
+    private NodeRole role = NodeRole.UNKNOWN;
     private ClusterNodeInfo clusterNodeInfo;
     private Long nextPing;
     @Builder.Default
@@ -42,6 +45,10 @@ public class NodeInfo {
         long currentTime = System.currentTimeMillis();
         long timeSinceLastPing = currentTime - nextPing;
         return timeSinceLastPing <= DEFAULT_HEARTBEAT_TIMEOUT_MS;
+    }
+
+    public boolean isSchedulable() {
+        return isAlive() && role != null && role.isSchedulable();
     }
 
 }

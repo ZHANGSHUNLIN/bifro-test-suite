@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.bean.validation;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import org.apache.bifromq.testsuite.certificate.model.CertType;
 import org.apache.bifromq.testsuite.certificate.model.TlsCertificate;
 import org.apache.bifromq.testsuite.certificate.repository.TlsCertificateRepository;
@@ -31,6 +33,7 @@ import reactor.core.scheduler.Schedulers;
  * Validates that a certificate with the given ID exists in the database.
  */
 @Component
+@ConditionalOnControlPlane
 public class CertificateExistsValidator implements ConstraintValidator<CertificateExists, String> {
 
     @Autowired

@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.database.service;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import org.apache.bifromq.testsuite.app.cluster.core.NodeMetricsService;
 import org.apache.bifromq.testsuite.app.database.pojo.TaskMetricsSnapshot;
 import org.apache.bifromq.testsuite.app.database.pojo.TaskMetricsSnapshot.NodeMetricsSnapshot;
@@ -39,6 +41,7 @@ import reactor.core.publisher.Mono;
 
 @Slf4j
 @Service
+@ConditionalOnControlPlane
 public class TaskMetricsSnapshotService {
 
     @Resource

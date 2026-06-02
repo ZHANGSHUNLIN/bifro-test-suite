@@ -39,4 +39,8 @@ public final class EventBusAddresses {
     public static String localPortCapacity(String nodeId) {
         return Constants.NODE_METRICS_ADDRESS_PREFIX + nodeId + Constants.NODE_LOCAL_PORT_CAPACITY_SUFFIX;
     }
+
+    public static String workerCommand(String nodeId) {
+        return "worker." + nodeId + ".command";
+    }
 }

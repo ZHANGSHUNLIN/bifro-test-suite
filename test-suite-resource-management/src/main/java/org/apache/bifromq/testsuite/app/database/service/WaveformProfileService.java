@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.database.service;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import org.apache.bifromq.testsuite.i18n.Messages;
 
 import org.apache.bifromq.testsuite.app.group.DefaultGroupInitializer;
@@ -44,6 +46,7 @@ import reactor.core.publisher.Mono;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@ConditionalOnControlPlane
 public class WaveformProfileService implements TaskProfileService {
 
     private static final int PREVIEW_MAX_POINTS = 500;

@@ -17,6 +17,9 @@
 
 package org.apache.bifromq.testsuite.app.i18n;
 
+import java.util.Locale;
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
@@ -27,16 +30,13 @@ import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
-import java.util.Locale;
-
-import org.springframework.context.i18n.LocaleContextHolder;
-
 /**
  * WebFlux filter that sets the locale from the Accept-Language request header.
  * Defaults to Simplified Chinese if the header is absent.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
+@ConditionalOnControlPlane
 public class LocaleFilter implements WebFilter {
 
     @Override

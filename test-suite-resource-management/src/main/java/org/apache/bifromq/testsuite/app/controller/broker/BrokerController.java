@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.controller.broker;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -51,6 +53,7 @@ import reactor.core.publisher.Mono;
 @Tag(name = "Broker Management", description = "MQTT Broker configuration management API")
 @RestController
 @RequestMapping("/api/broker")
+@ConditionalOnControlPlane
 public class BrokerController implements ApiController {
 
     @Resource

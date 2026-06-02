@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.eventbus;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import java.util.concurrent.CompletableFuture;
 import org.apache.bifromq.testsuite.eventbus.EventBusAddresses;
 import org.apache.bifromq.testsuite.eventbus.EventBusRequestKind;
@@ -30,6 +32,7 @@ import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckResponse;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnControlPlane
 public class VertxNodeQueryGateway implements NodeQueryGateway {
 
     private final VertxEventBusClient client;

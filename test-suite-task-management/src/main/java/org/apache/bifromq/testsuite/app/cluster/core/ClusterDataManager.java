@@ -45,6 +45,7 @@ import org.apache.bifromq.testsuite.app.bean.vo.NodeTaskAllocationVO;
 import org.apache.bifromq.testsuite.app.cluster.shared.HazelcastDataManager;
 import org.apache.bifromq.testsuite.app.cluster.shared.ShareDataAddr;
 import org.apache.bifromq.testsuite.app.config.LocalPortModeProperties;
+import org.apache.bifromq.testsuite.config.role.NodeRoleProperties;
 import org.apache.bifromq.testsuite.app.database.pojo.NodeTask;
 import org.apache.bifromq.testsuite.app.database.pojo.TaskStateHistory;
 import org.apache.bifromq.testsuite.app.database.repository.NodeTaskRepository;
@@ -60,6 +61,7 @@ import org.apache.bifromq.testsuite.worker.TaskConfig;
 import org.apache.bifromq.testsuite.worker.WorkerTaskCommand;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckRequest;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -80,14 +82,16 @@ public class ClusterDataManager {
     private HazelcastInstance hazelcastInstance;
     @Resource
     private DefaultWeightCalculation defaultWeightCalculation;
-    @Resource
+    @Autowired(required = false)
     private NodeTaskRepository nodeTaskRepository;
-    @Resource
+    @Autowired(required = false)
     private TaskStateHistoryRepository taskStateHistoryRepository;
     @Resource
     private LocalPortModeProperties localPortModeProperties;
-    @Resource
+    @Autowired(required = false)
     private NodeQueryGateway nodeQueryGateway;
+    @Resource
+    private NodeRoleProperties nodeRoleProperties;
     @Value("${bifro.nodeName}")
     private String nodeName;
 
@@ -237,22 +241,45 @@ public class ClusterDataManager {
             .toList();
     }
 
+    private Map<String, NodeInfo> schedulableNodes(Map<String, NodeInfo> nodeInfos) {
+        Map<String, NodeInfo> schedulableNodes = new HashMap<>();
+        if (nodeInfos == null) {
+            return schedulableNodes;
+        }
+        nodeInfos.forEach((nodeId, nodeInfo) -> {
+            if (nodeInfo != null && nodeInfo.isSchedulable()) {
+                schedulableNodes.put(nodeId, nodeInfo);
+            }
+        });
+        return schedulableNodes;
+    }
+
+    private void rejectIfNoSchedulableNodes(Map<String, NodeInfo> nodeInfos) {
+        if (nodeInfos == null || nodeInfos.isEmpty()) {
+            throw new ApiException("No schedulable worker nodes are available");
+        }
+    }
+
+    private String unschedulableReason(String nodeId, NodeInfo nodeInfo) {
+        if (nodeInfo == null || !nodeInfo.isAlive()) {
+            return "Node not found or offline: nodeId=" + nodeId;
+        }
+        return "Node is not schedulable: nodeId=" + nodeId + ", role=" + nodeInfo.getRole();
+    }
+
     private CompletableFuture<Void> distributeTasksToNodes(String id, TaskConfig mainTaskConfig,
                                                            NodeTaskAllocationRequest nodeTaskAllocationRequest) {
+        requireControlPlanePersistence();
         return hazelcastDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO)
             .entries()
             .thenComposeAsync(nodeInfoMap -> {
-                Map<String, NodeInfo> newHash = new HashMap<>();
-                nodeInfoMap.forEach((k, v) -> {
-                    if (v.isAlive()) {
-                        newHash.put(k, v);
-                    }
-                });
+                Map<String, NodeInfo> newHash = schedulableNodes(nodeInfoMap);
 
                 Map<String, TaskConfig> nodeTaskConfigs = new HashMap<>();
-                List<String> notFoundNodeIdList = new ArrayList<>();
+                List<String> invalidNodeReasons = new ArrayList<>();
                 if (nodeTaskAllocationRequest == null || nodeTaskAllocationRequest.getNodeAllocationList() == null) {
                     log.info("No allocation request, auto-calculating distribution");
+                    rejectIfNoSchedulableNodes(newHash);
                     Map<String, Integer> autoAlloc =
                         assignedAccordingToWeights(newHash, 1, 1, mainTaskConfig.getTotalClientCount());
                     List<Map.Entry<String, Integer>> autoAllocEntries = new ArrayList<>(autoAlloc.entrySet());
@@ -274,12 +301,13 @@ public class ClusterDataManager {
                             log.debug("Skipping node {} with 0 allocated clients", nodeId);
                             continue;
                         }
+                        NodeInfo nodeInfo = nodeInfoMap.get(nodeId);
                         if (!newHash.containsKey(nodeId)) {
-                            notFoundNodeIdList.add(nodeId);
+                            invalidNodeReasons.add(unschedulableReason(nodeId, nodeInfo));
                         }
                     }
-                    if (!notFoundNodeIdList.isEmpty()) {
-                        throw new ApiException("Node not found or offline: " + notFoundNodeIdList);
+                    if (!invalidNodeReasons.isEmpty()) {
+                        throw new ApiException(String.join("; ", invalidNodeReasons));
                     }
                     nodeTaskConfigs.putAll(NodeTaskAllocationPlanner.toNodeTaskConfigs(
                         mainTaskConfig, validAllocs.stream()
@@ -326,6 +354,7 @@ public class ClusterDataManager {
     }
 
     public CompletableFuture<Void> prepareAssignedTaskStart(String taskId, long plannedStartAtMs) {
+        requireControlPlanePersistence();
         LocalPortRangeConfig localPortConfig = currentLocalPortModeConfig();
         return nodeTaskRepository.findAllByTaskId(taskId)
             .collectList()
@@ -586,13 +615,8 @@ public class ClusterDataManager {
         return hazelcastDataManager.<String, NodeInfo>map(ShareDataAddr.CLUSTER_NODE_INFO)
             .entries()
             .thenApply(entries -> {
-                Map<String, NodeInfo> newHash = new HashMap<>();
-                entries.forEach((k, v) -> {
-
-                    if (v.isAlive()) {
-                        newHash.put(k, v);
-                    }
-                });
+                Map<String, NodeInfo> newHash = schedulableNodes(entries);
+                rejectIfNoSchedulableNodes(newHash);
                 List<NodeTaskAllocationVO.NodeAllocation> nodeAllocations =
                     assignedAccordingToWeights(newHash, 1, 1, totalClientCount)
                         .entrySet().stream().map(r -> {
@@ -608,6 +632,12 @@ public class ClusterDataManager {
             });
     }
 
+    private void requireControlPlanePersistence() {
+        if (nodeTaskRepository == null) {
+            throw new ApiException("Task allocation requires control-plane persistence components");
+        }
+    }
+
     public void regClusterNodeInfoDirect(String nodeName) {
         try {
             IMap<String, NodeInfo> map = getClusterNodeInfoMap();
@@ -615,6 +645,7 @@ public class ClusterDataManager {
             log.debug("add cluster node info using Hazelcast IMap: {}", systemInfo);
             NodeInfo nodeInfo = NodeInfo.builder()
                 .nodeName(nodeName)
+                .role(nodeRoleProperties.getNodeRole())
                 .nextPing(System.currentTimeMillis())
                 .clusterNodeInfo(systemInfo).build();
             map.put(getCurrentNodeIdCache(), nodeInfo);

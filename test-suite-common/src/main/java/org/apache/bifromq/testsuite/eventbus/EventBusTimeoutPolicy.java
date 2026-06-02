@@ -22,8 +22,29 @@ import java.time.Duration;
 public class EventBusTimeoutPolicy {
 
     private static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(5);
+    private final Duration defaultRequestTimeout;
+    private final Duration taskCommandTimeout;
+
+    public EventBusTimeoutPolicy() {
+        this(DEFAULT_REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT);
+    }
+
+    public EventBusTimeoutPolicy(Duration defaultRequestTimeout, Duration taskCommandTimeout) {
+        this.defaultRequestTimeout = normalize(defaultRequestTimeout);
+        this.taskCommandTimeout = normalize(taskCommandTimeout);
+    }
 
     public Duration timeoutFor(EventBusRequestKind kind) {
-        return DEFAULT_REQUEST_TIMEOUT;
+        if (kind == EventBusRequestKind.TASK_COMMAND) {
+            return taskCommandTimeout;
+        }
+        return defaultRequestTimeout;
+    }
+
+    private Duration normalize(Duration timeout) {
+        if (timeout == null || timeout.isNegative() || timeout.isZero()) {
+            return DEFAULT_REQUEST_TIMEOUT;
+        }
+        return timeout;
     }
 }

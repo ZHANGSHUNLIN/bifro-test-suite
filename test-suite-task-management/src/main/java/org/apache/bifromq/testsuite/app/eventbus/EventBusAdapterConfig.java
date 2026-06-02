@@ -18,11 +18,13 @@
 package org.apache.bifromq.testsuite.app.eventbus;
 
 import io.vertx.core.Vertx;
+import java.time.Duration;
 import org.apache.bifromq.testsuite.eventbus.ClusterTaskCommandBus;
 import org.apache.bifromq.testsuite.eventbus.EventBusErrorMapper;
 import org.apache.bifromq.testsuite.eventbus.EventBusTimeoutPolicy;
 import org.apache.bifromq.testsuite.eventbus.VertxClusterTaskCommandBus;
 import org.apache.bifromq.testsuite.eventbus.VertxEventBusClient;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -30,8 +32,10 @@ import org.springframework.context.annotation.Configuration;
 public class EventBusAdapterConfig {
 
     @Bean
-    public EventBusTimeoutPolicy eventBusTimeoutPolicy() {
-        return new EventBusTimeoutPolicy();
+    public EventBusTimeoutPolicy eventBusTimeoutPolicy(
+        @Value("${bifro.eventbus.request-timeout:5s}") Duration requestTimeout,
+        @Value("${bifro.eventbus.task-command-timeout:5s}") Duration taskCommandTimeout) {
+        return new EventBusTimeoutPolicy(requestTimeout, taskCommandTimeout);
     }
 
     @Bean
@@ -48,5 +52,13 @@ public class EventBusAdapterConfig {
     @Bean
     public ClusterTaskCommandBus clusterTaskCommandBus(Vertx vertx) {
         return new VertxClusterTaskCommandBus(vertx.eventBus());
+    }
+
+    @Bean
+    public WorkerCommandGateway workerCommandGateway(
+        VertxEventBusClient eventBusClient,
+        @Value("${bifro.worker-command.start-retries:1}") int startRetries,
+        @Value("${bifro.worker-command.stop-retries:2}") int stopRetries) {
+        return new VertxWorkerCommandGateway(eventBusClient, startRetries, stopRetries);
     }
 }

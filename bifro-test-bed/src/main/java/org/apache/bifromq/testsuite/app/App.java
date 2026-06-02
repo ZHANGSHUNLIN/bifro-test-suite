@@ -22,18 +22,9 @@ import io.micrometer.core.instrument.Metrics;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.hazelcast.HazelcastAutoConfiguration;
-import org.springframework.data.mongodb.config.EnableReactiveMongoAuditing;
-import org.springframework.data.mongodb.repository.config.EnableReactiveMongoRepositories;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @EnableScheduling
-@EnableReactiveMongoAuditing
-@EnableReactiveMongoRepositories(basePackages = {
-    "org.apache.bifromq.testsuite.app.database.repository",
-    "org.apache.bifromq.testsuite.audit.infrastructure",
-    "org.apache.bifromq.testsuite.certificate.repository",
-    "org.apache.bifromq.testsuite.security.infrastructure"
-})
 @SpringBootApplication(
     scanBasePackages = "org.apache.bifromq.testsuite",
     exclude = {HazelcastAutoConfiguration.class}

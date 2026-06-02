@@ -93,6 +93,32 @@ const mockTaskDetailResponse: TaskDetailResponse = {
     timestamp: Date.now(),
     createTime: Date.now() - 30 * 1000,
 }
+
+const mockClusterNodes = [
+    {
+        nodeId: 'node1',
+        nodeName: 'test-node-1',
+        role: 'WORKER',
+        schedulable: true,
+        host: '127.0.0.1',
+        alive: true,
+        lastHeartbeatAt: Date.now(),
+        memory: {max: 16_000_000_000, total: 8_000_000_000, used: 4_000_000_000, free: 4_000_000_000},
+        cpu: {processors: 8, loadAverage: 2.5},
+    },
+    {
+        nodeId: 'node2',
+        nodeName: 'test-node-2',
+        role: 'WORKER',
+        schedulable: true,
+        host: '127.0.0.2',
+        alive: true,
+        lastHeartbeatAt: Date.now(),
+        memory: {max: 16_000_000_000, total: 8_000_000_000, used: 4_000_000_000, free: 4_000_000_000},
+        cpu: {processors: 8, loadAverage: 2.5},
+    },
+]
+
 export const server = setupServer(
     // GET /api/task/list
     http.get('http://localhost:8081/api/task/list', async ({request}) => {
@@ -123,6 +149,14 @@ export const server = setupServer(
                 {value: 'CONN_STANDARD', label: 'Connection Standard Template', type: 'CONN'},
                 {value: 'PUBSUB_STANDARD', label: 'PubSub Standard Template', type: 'PUBSUB'},
             ],
+        })
+    }),
+
+    http.get('http://localhost:8081/api/node/allNodes', async () => {
+        await delay(100)
+        return HttpResponse.json({
+            code: 200,
+            data: mockClusterNodes,
         })
     }),
 

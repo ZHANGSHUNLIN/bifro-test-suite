@@ -17,13 +17,14 @@
 
 package org.apache.bifromq.testsuite.app.controller;
 
-import org.apache.bifromq.testsuite.app.local.LocalTaskCoordinator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.annotation.Resource;
+import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import org.apache.bifromq.testsuite.app.local.LocalTaskCoordinator;
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,13 +32,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Health Check", description = "System health status API")
 @RestController
+@ConditionalOnControlPlane
 public class HealthApi {
 
-    
     @Autowired(required = false)
     private BuildProperties buildProperties;
 
-    @Resource
+    @Autowired(required = false)
     private LocalTaskCoordinator localTaskCoordinator;
 
     @Operation(summary = "Health Check", description = "Check if the service is running normally")
@@ -58,6 +59,9 @@ public class HealthApi {
 
     @GetMapping("/running_tasks")
     public Object info() {
+        if (localTaskCoordinator == null) {
+            return Map.of();
+        }
         return localTaskCoordinator.getRunningTaskMap();
     }
 

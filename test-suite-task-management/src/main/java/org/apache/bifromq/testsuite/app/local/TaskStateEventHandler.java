@@ -28,7 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.bifromq.testsuite.TaskStage;
-import org.apache.bifromq.testsuite.eventbus.EventBusAddresses;
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
 import org.apache.bifromq.testsuite.app.database.pojo.NodeTask;
 import org.apache.bifromq.testsuite.app.database.pojo.TaskInfoMetadata;
 import org.apache.bifromq.testsuite.app.database.pojo.TaskStateHistory;
@@ -36,11 +36,13 @@ import org.apache.bifromq.testsuite.app.database.repository.NodeTaskRepository;
 import org.apache.bifromq.testsuite.app.database.repository.TaskInfoMetadataRepository;
 import org.apache.bifromq.testsuite.app.database.repository.TaskStateHistoryRepository;
 import org.apache.bifromq.testsuite.app.task.runtime.TaskRuntimeStates;
+import org.apache.bifromq.testsuite.eventbus.EventBusAddresses;
 import org.apache.bifromq.testsuite.worker.pojo.TaskStateChangeEvent;
 import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
+@ConditionalOnControlPlane
 public class TaskStateEventHandler {
 
     private final ConcurrentHashMap<String, Object> taskLocks = new ConcurrentHashMap<>();

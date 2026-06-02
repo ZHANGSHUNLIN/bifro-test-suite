@@ -1,0 +1,2 @@
+org.springframework.boot.env.EnvironmentPostProcessor=\
+org.apache.bifromq.testsuite.app.config.WorkerRoleMongoAutoConfigurationExcludePostProcessor

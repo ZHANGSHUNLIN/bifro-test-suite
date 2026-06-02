@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import React, {useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {
     Button,
     Card,
@@ -45,7 +45,14 @@ import {
 import dayjs from 'dayjs';
 import {useTranslation} from 'react-i18next';
 import clusterApi from '../../features/cluster';
-import type {ClusterStatistics, LocalPortModeConfig, NodeListVO, NodeStatus, NodeTaskInfo} from '../../features/cluster';
+import type {
+    ClusterStatistics,
+    LocalPortModeConfig,
+    NodeListVO,
+    NodeRole,
+    NodeStatus,
+    NodeTaskInfo
+} from '../../features/cluster';
 
 const ClusterManagement: React.FC = () => {
     const {t} = useTranslation();
@@ -64,7 +71,7 @@ const ClusterManagement: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
 
-    const loadClusterData = async () => {
+    const loadClusterData = useCallback(async () => {
         setLoading(true);
         setLocalPortLoading(true);
         try {
@@ -94,7 +101,7 @@ const ClusterManagement: React.FC = () => {
             setLoading(false);
             setLocalPortLoading(false);
         }
-    };
+    }, [form, t]);
 
     const saveLocalPortMode = async (values: LocalPortModeConfig) => {
         setLocalPortSaving(true);
@@ -137,7 +144,7 @@ const ClusterManagement: React.FC = () => {
 
     useEffect(() => {
         loadClusterData();
-    }, []);
+    }, [loadClusterData]);
 
     const statusMap: Record<NodeStatus, { text: string; color: string; icon: React.ReactNode }> = {
         ONLINE: {text: t('cluster.status.ONLINE'), color: 'success', icon: <CheckCircleOutlined/>},
@@ -156,6 +163,22 @@ const ClusterManagement: React.FC = () => {
     };
 
     const getNodeStatus = (node: NodeListVO): NodeStatus => node.alive ? 'ONLINE' : 'OFFLINE';
+
+    const roleColorMap: Record<NodeRole, string> = {
+        CONTROL: 'geekblue',
+        WORKER: 'green',
+        ALL: 'purple',
+        UNKNOWN: 'default',
+    };
+
+    const renderRole = (role?: NodeRole) => {
+        const normalizedRole = role || 'UNKNOWN';
+        return (
+            <Tag color={roleColorMap[normalizedRole]}>
+                {t(`cluster.role.${normalizedRole}`)}
+            </Tag>
+        );
+    };
 
     const openLocalPortModal = () => {
         form.setFieldsValue(localPortMode || {enabled: false, startPort: 10000, endPort: 65535});
@@ -182,6 +205,24 @@ const ClusterManagement: React.FC = () => {
             dataIndex: 'host',
             key: 'host',
             width: 120,
+        },
+        {
+            title: t('cluster.columns.role'),
+            dataIndex: 'role',
+            key: 'role',
+            width: 100,
+            render: (role: NodeRole | undefined) => renderRole(role),
+        },
+        {
+            title: t('cluster.columns.schedulable'),
+            dataIndex: 'schedulable',
+            key: 'schedulable',
+            width: 110,
+            render: (schedulable: boolean) => (
+                <Tag color={schedulable ? 'success' : 'default'}>
+                    {schedulable ? t('cluster.schedulable.yes') : t('cluster.schedulable.no')}
+                </Tag>
+            ),
         },
         {
             title: t('cluster.columns.status'),
@@ -433,6 +474,16 @@ const ClusterManagement: React.FC = () => {
                             <Descriptions.Item label={t('cluster.columns.nodeName')}>{nodeDetail.nodeName}</Descriptions.Item>
                             <Descriptions.Item label={t('cluster.columns.nodeId')}>{nodeDetail.nodeId}</Descriptions.Item>
                             <Descriptions.Item label={t('cluster.columns.host')}>{nodeDetail.host || '-'}</Descriptions.Item>
+                            <Descriptions.Item label={t('cluster.columns.role')}>
+                                {renderRole(nodeDetail.role)}
+                            </Descriptions.Item>
+                            <Descriptions.Item label={t('cluster.columns.schedulable')}>
+                                <Tag color={nodeDetail.schedulable ? 'success' : 'default'}>
+                                    {nodeDetail.schedulable
+                                        ? t('cluster.schedulable.yes')
+                                        : t('cluster.schedulable.no')}
+                                </Tag>
+                            </Descriptions.Item>
                             <Descriptions.Item label={t('cluster.columns.status')}>
                                 {nodeDetail.alive ? <Tag color="success">{t('cluster.status.ONLINE')}</Tag> : <Tag color="error">{t('cluster.status.OFFLINE')}</Tag>}
                             </Descriptions.Item>

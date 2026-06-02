@@ -30,6 +30,8 @@ public final class MemberInfoView {
         return NodeListVO.builder()
             .nodeId(memberId)
             .nodeName(memberInfo.getName())
+            .role(memberInfo.getRole())
+            .schedulable(memberInfo.isAlive() && memberInfo.getRole() != null && memberInfo.getRole().isSchedulable())
             .host(memberInfo.getHost())
             .alive(memberInfo.isAlive())
             .lastHeartbeatAt(memberInfo.getLastHeartbeat())

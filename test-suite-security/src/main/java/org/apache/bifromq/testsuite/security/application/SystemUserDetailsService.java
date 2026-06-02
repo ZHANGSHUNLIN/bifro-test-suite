@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.security.application;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.apache.bifromq.testsuite.security.domain.SystemUser;
@@ -29,6 +31,7 @@ import reactor.core.publisher.Mono;
 
 @Service
 @RequiredArgsConstructor
+@ConditionalOnControlPlane
 public class SystemUserDetailsService implements ReactiveUserDetailsService {
 
     private final SystemUserRepository systemUserRepository;

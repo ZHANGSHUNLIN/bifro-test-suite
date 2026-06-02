@@ -22,6 +22,7 @@ import java.time.Instant;
 import java.util.UUID;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.web.server.ServerWebExchange;
@@ -32,6 +33,7 @@ import reactor.util.context.Context;
 
 @Slf4j
 @Configuration
+@ConditionalOnControlPlane
 public class LoggingWebFilter implements WebFilter {
 
     private static final String REQUEST_ID = "requestId";

@@ -32,6 +32,8 @@
             <lineEnding>unix</lineEnding>
             <includes>
                 <include>conf/application.yml</include>
+                <include>conf/application-control.yml</include>
+                <include>conf/application-worker.yml</include>
                 <include>conf/log4j2.xml</include>
             </includes>
         </fileSet>

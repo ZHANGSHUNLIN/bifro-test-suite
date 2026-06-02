@@ -19,11 +19,12 @@ package org.apache.bifromq.testsuite.app.cluster;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
 import org.apache.bifromq.testsuite.app.bean.ClusterNodeInfo;
 import org.apache.bifromq.testsuite.app.bean.vo.NodeListVO;
-import org.apache.bifromq.testsuite.app.cluster.member.MemberInfoView;
 import org.apache.bifromq.testsuite.app.cluster.member.MemberInfo;
-import java.time.Instant;
+import org.apache.bifromq.testsuite.app.cluster.member.MemberInfoView;
+import org.apache.bifromq.testsuite.cluster.NodeRole;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -37,6 +38,7 @@ class MemberInfoTest {
             .id("test-node-1")
             .name("Test Node")
             .host("test-host")
+            .role(NodeRole.WORKER)
             .registeredAt(Instant.now())
             .build();
     }
@@ -104,8 +106,32 @@ class MemberInfoTest {
         assertThat(vo.getNodeId()).isEqualTo(memberId);
         assertThat(vo.getNodeName()).isEqualTo(memberInfo.getName());
         assertThat(vo.getHost()).isEqualTo(memberInfo.getHost());
+        assertThat(vo.getRole()).isEqualTo(NodeRole.WORKER);
+        assertThat(vo.isSchedulable()).isFalse();
         assertThat(vo.getMemory()).isEqualTo(memoryInfo);
         assertThat(vo.getCpu()).isEqualTo(cpuInfo);
+    }
+
+    @Test
+    void fromMemberInfo_givenAliveWorker_shouldBeSchedulable() {
+        memberInfo.setRole(NodeRole.WORKER);
+        memberInfo.updateHeartbeat();
+
+        NodeListVO vo = MemberInfoView.toNodeListVO("test-member-id", memberInfo);
+
+        assertThat(vo.getRole()).isEqualTo(NodeRole.WORKER);
+        assertThat(vo.isSchedulable()).isTrue();
+    }
+
+    @Test
+    void fromMemberInfo_givenAliveControlNode_shouldNotBeSchedulable() {
+        memberInfo.setRole(NodeRole.CONTROL);
+        memberInfo.updateHeartbeat();
+
+        NodeListVO vo = MemberInfoView.toNodeListVO("test-member-id", memberInfo);
+
+        assertThat(vo.getRole()).isEqualTo(NodeRole.CONTROL);
+        assertThat(vo.isSchedulable()).isFalse();
     }
 
     @Test

@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.bean.validation;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import org.apache.bifromq.testsuite.app.database.pojo.WaveformProfile;
 import org.apache.bifromq.testsuite.app.database.repository.WaveformProfileRepository;
 import jakarta.validation.ConstraintValidator;
@@ -31,6 +33,7 @@ import reactor.core.scheduler.Schedulers;
  * Note: WaveformProfile does not have a type field, so type validation is skipped.
  */
 @Component
+@ConditionalOnControlPlane
 public class ProfileExistsValidator implements ConstraintValidator<ProfileExists, String> {
 
     @Autowired

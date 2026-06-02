@@ -22,22 +22,38 @@ import {mockNodeMetricsOfflineResponse, mockNodeMetricsResponse,} from '../data/
 // Mock node info (custom type, not using NodeListVO due to different structure)
 interface MockClusterNodeInfo {
     nodeId: string;
+    nodeName: string;
+    role: string;
+    schedulable: boolean;
     host: string;
     port: number;
     status: string;
-    cpu: number;
-    memory: number;
-    lastHeartbeat: string;
+    cpu: {
+        processors: number;
+        loadAverage: number;
+    };
+    memory: {
+        max: number;
+        total: number;
+        used: number;
+        free: number;
+    };
+    alive: boolean;
+    lastHeartbeatAt: number;
 }
 
 export const mockClusterNodeInfo: MockClusterNodeInfo = {
     nodeId: 'node1',
+    nodeName: 'node1',
+    role: 'WORKER',
+    schedulable: true,
     host: '192.168.1.100',
     port: 8080,
     status: 'active',
-    cpu: 50.5,
-    memory: 60.2,
-    lastHeartbeat: '2024-01-01T00:00:00Z',
+    cpu: {processors: 8, loadAverage: 2.5},
+    memory: {max: 16_000_000_000, total: 8_000_000_000, used: 4_000_000_000, free: 4_000_000_000},
+    alive: true,
+    lastHeartbeatAt: Date.now(),
 }
 
 export const mockNodeListResponse: PageInfo<MockClusterNodeInfo> = {

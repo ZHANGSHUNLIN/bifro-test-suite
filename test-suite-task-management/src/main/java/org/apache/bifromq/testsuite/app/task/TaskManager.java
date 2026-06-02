@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.task;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -71,6 +73,7 @@ import org.apache.bifromq.testsuite.statemachine.TaskStateMachineConfig;
 import org.apache.bifromq.testsuite.web.ApiException;
 import org.apache.bifromq.testsuite.web.ApiResponse;
 import org.apache.bifromq.testsuite.worker.TaskConfig;
+import org.apache.bifromq.testsuite.worker.WorkerTaskCommand;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -80,6 +83,7 @@ import reactor.core.publisher.Mono;
 
 @Component
 @Slf4j
+@ConditionalOnControlPlane
 public class TaskManager {
 
 
@@ -318,6 +322,10 @@ public class TaskManager {
     }
 
     public Mono<Void> prepareTaskStart(String id) {
+        return prepareTaskStartCommands(id).then();
+    }
+
+    public Mono<List<WorkerTaskCommand>> prepareTaskStartCommands(String id) {
         long plannedStartAtMs = System.currentTimeMillis() + DYNAMIC_QPS_START_DELAY_MS;
         return taskInfoMetadataRepository.findById(id)
             .switchIfEmpty(Mono.error(new ApiException(Messages.get("error.task.notFound"))))
@@ -327,7 +335,30 @@ public class TaskManager {
                 TaskRuntimeStates.applyMainStage(taskInfoMetadata, TaskStage.STARTING, java.time.Instant.now());
                 return taskInfoMetadataRepository.updateTaskConfigById(id, mainTaskConfig)
                     .then(Mono.fromFuture(clusterDataManager.prepareAssignedTaskStart(id, plannedStartAtMs)))
-                    .then();
+                    .thenMany(nodeTaskRepository.findAllByTaskId(id))
+                    .map(NodeTask::getWorkerTaskCommand)
+                    .filter(command -> command != null && command.workerTaskSpec() != null)
+                    .collectList()
+                    .flatMap(commands -> {
+                        if (commands.isEmpty()) {
+                            return Mono.error(new ApiException("No worker command prepared for task: " + id));
+                        }
+                        return Mono.just(commands);
+                    });
+            });
+    }
+
+    public Mono<List<String>> getTaskWorkerNodeIds(String taskId) {
+        return nodeTaskRepository.findAllByTaskId(taskId)
+            .map(NodeTask::getNodeId)
+            .filter(nodeId -> nodeId != null && !nodeId.isBlank())
+            .distinct()
+            .collectList()
+            .flatMap(nodeIds -> {
+                if (nodeIds.isEmpty()) {
+                    return Mono.error(new ApiException("No worker nodes found for task: " + taskId));
+                }
+                return Mono.just(nodeIds);
             });
     }
 

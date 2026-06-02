@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.controller.cluster;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
@@ -35,6 +37,7 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequestMapping("/api/cluster/config")
 @Tag(name = "Cluster Config", description = "Cluster runtime configuration API")
+@ConditionalOnControlPlane
 public class ClusterConfigController {
 
     @Resource

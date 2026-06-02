@@ -17,6 +17,7 @@
 
 package org.apache.bifromq.testsuite.app.exception;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
 import org.apache.bifromq.testsuite.web.ApiException;
 import org.apache.bifromq.testsuite.web.ApiResponse;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @Component
 @RestControllerAdvice
+@ConditionalOnControlPlane
 public class BifroExceptionHandler {
 
     @ExceptionHandler(ApiException.class)

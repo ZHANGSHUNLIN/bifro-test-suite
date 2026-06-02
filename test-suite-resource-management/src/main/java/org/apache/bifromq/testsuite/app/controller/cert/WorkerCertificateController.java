@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.controller.cert;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,6 +35,7 @@ import reactor.core.publisher.Mono;
 @Tag(name = "Worker Certificate", description = "Internal TLS certificate API for workers")
 @RestController
 @RequestMapping("/api/worker/certificates")
+@ConditionalOnControlPlane
 public class WorkerCertificateController {
 
     @Resource

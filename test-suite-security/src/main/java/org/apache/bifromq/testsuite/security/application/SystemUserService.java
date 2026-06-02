@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.security.application;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -52,6 +54,7 @@ import reactor.core.publisher.Mono;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@ConditionalOnControlPlane
 public class SystemUserService {
 
     private static final int MAX_PAGE_SIZE = 100;

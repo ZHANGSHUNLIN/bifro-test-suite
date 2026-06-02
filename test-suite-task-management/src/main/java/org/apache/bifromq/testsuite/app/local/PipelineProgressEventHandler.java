@@ -21,8 +21,9 @@ import io.vertx.core.Vertx;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.bifromq.testsuite.eventbus.EventBusAddresses;
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
 import org.apache.bifromq.testsuite.app.database.pojo.NodeTask;
+import org.apache.bifromq.testsuite.eventbus.EventBusAddresses;
 import org.apache.bifromq.testsuite.pipeline.PipelineProgressEvent;
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -32,6 +33,7 @@ import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
+@ConditionalOnControlPlane
 public class PipelineProgressEventHandler {
 
     @Resource

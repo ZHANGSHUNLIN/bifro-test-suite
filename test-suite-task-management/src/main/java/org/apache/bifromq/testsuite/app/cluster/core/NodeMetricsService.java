@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.cluster.core;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import jakarta.annotation.Resource;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +31,7 @@ import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
+@ConditionalOnControlPlane
 public class NodeMetricsService {
 
     @Resource

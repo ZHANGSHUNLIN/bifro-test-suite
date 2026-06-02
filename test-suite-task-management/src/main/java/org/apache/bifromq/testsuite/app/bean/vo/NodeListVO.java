@@ -19,6 +19,7 @@ package org.apache.bifromq.testsuite.app.bean.vo;
 
 import org.apache.bifromq.testsuite.app.bean.ClusterNodeInfo;
 import org.apache.bifromq.testsuite.app.bean.NodeInfo;
+import org.apache.bifromq.testsuite.cluster.NodeRole;
 import lombok.Builder;
 import lombok.Data;
 
@@ -28,6 +29,8 @@ public class NodeListVO {
 
     private String nodeId;
     private String nodeName;
+    private NodeRole role;
+    private boolean schedulable;
     private String host;
     private boolean alive;
     private long lastHeartbeatAt;
@@ -39,6 +42,8 @@ public class NodeListVO {
         return NodeListVO.builder()
             .nodeId(nodeId)
             .nodeName(nodeInfo.getNodeName())
+            .role(nodeInfo.getRole())
+            .schedulable(nodeInfo.isSchedulable())
             .host(clusterNodeInfo != null ? clusterNodeInfo.getHost() : null)
             .alive(nodeInfo.isAlive())
             .lastHeartbeatAt(clusterNodeInfo != null ? clusterNodeInfo.getTimestamp() : 0)

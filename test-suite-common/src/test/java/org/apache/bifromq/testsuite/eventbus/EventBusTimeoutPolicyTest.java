@@ -31,5 +31,14 @@ class EventBusTimeoutPolicyTest {
         assertThat(policy.timeoutFor(EventBusRequestKind.NODE_METRICS)).isEqualTo(Duration.ofSeconds(5));
         assertThat(policy.timeoutFor(EventBusRequestKind.CLIENT_QUERY)).isEqualTo(Duration.ofSeconds(5));
         assertThat(policy.timeoutFor(EventBusRequestKind.LOCAL_PORT_CAPACITY)).isEqualTo(Duration.ofSeconds(5));
+        assertThat(policy.timeoutFor(EventBusRequestKind.TASK_COMMAND)).isEqualTo(Duration.ofSeconds(5));
+    }
+
+    @Test
+    void timeoutFor_givenCustomTimeouts_shouldUseTaskCommandOverride() {
+        EventBusTimeoutPolicy policy = new EventBusTimeoutPolicy(Duration.ofSeconds(3), Duration.ofSeconds(7));
+
+        assertThat(policy.timeoutFor(EventBusRequestKind.NODE_METRICS)).isEqualTo(Duration.ofSeconds(3));
+        assertThat(policy.timeoutFor(EventBusRequestKind.TASK_COMMAND)).isEqualTo(Duration.ofSeconds(7));
     }
 }

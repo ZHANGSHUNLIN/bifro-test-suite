@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.security.config;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import lombok.RequiredArgsConstructor;
 import org.apache.bifromq.testsuite.security.domain.SecurityRole;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -38,6 +40,7 @@ import reactor.core.publisher.Mono;
 @EnableWebFluxSecurity
 @RequiredArgsConstructor
 @EnableConfigurationProperties(BifroSecurityProperties.class)
+@ConditionalOnControlPlane
 public class SecurityConfig {
 
     private final BifroSecurityProperties securityProperties;

@@ -22,6 +22,9 @@ import org.apache.bifromq.testsuite.TaskSchedule;
 import org.apache.bifromq.testsuite.metric.NodeMetricsRequest;
 import org.apache.bifromq.testsuite.metric.NodeMetricsResponse;
 import org.apache.bifromq.testsuite.pipeline.PipelineProgressEvent;
+import org.apache.bifromq.testsuite.worker.WorkerTaskCommand;
+import org.apache.bifromq.testsuite.worker.command.WorkerCommand;
+import org.apache.bifromq.testsuite.worker.command.WorkerCommandAck;
 import org.apache.bifromq.testsuite.worker.pojo.ClientQueryRequest;
 import org.apache.bifromq.testsuite.worker.pojo.ClientQueryResponse;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckRequest;
@@ -39,8 +42,9 @@ public enum CodecType {
     PipelineProgressEvent(new GenericCodecSupplier<>(1020, PipelineProgressEvent.class)),
     LocalPortCapacityCheckRequest(new GenericCodecSupplier<>(1021, LocalPortCapacityCheckRequest.class)),
     LocalPortCapacityCheckResponse(new GenericCodecSupplier<>(1022, LocalPortCapacityCheckResponse.class)),
-
-    ;
+    WorkerTaskCommand(new GenericCodecSupplier<>(1023, WorkerTaskCommand.class)),
+    WorkerCommand(new GenericCodecSupplier<>(1024, WorkerCommand.class)),
+    WorkerCommandAck(new GenericCodecSupplier<>(1025, WorkerCommandAck.class));
     private final CodecSupplier<?> codecSupplier;
 
     <T> CodecType(CodecSupplier<T> codecSupplier) {

@@ -15,6 +15,62 @@
   limitations under the License.
 -->
 
-# TODO
+# bifro-test-bed
 
-1. Verify that subtask data structures (node-task-configs) are cleaned up when tasks end
+Spring Boot application shell for Bifro Test Suite.
+
+## Run Roles
+
+The backend supports three runtime roles:
+
+- `all`: local compatibility mode, starts control-plane and worker-plane components.
+- `control`: REST API, security, audit, task allocation, MongoDB, and worker command fan-out.
+- `worker`: task execution, node registration, metrics/client/local-port query consumers. It does not start control-plane APIs or MongoDB repositories.
+
+Default local development still uses `all`.
+
+## Local Commands
+
+```bash
+mvn spring-boot:run -pl bifro-test-bed
+```
+
+Control plane:
+
+```bash
+mvn spring-boot:run -pl bifro-test-bed \
+  -Dspring-boot.run.arguments="--spring.config.additional-location=file:bifro-test-bed/conf/application-control.yml"
+```
+
+Worker plane:
+
+```bash
+mvn spring-boot:run -pl bifro-test-bed \
+  -Dspring-boot.run.arguments="--spring.config.additional-location=file:bifro-test-bed/conf/application-worker.yml"
+```
+
+## Distribution Config
+
+The assembly package includes:
+
+- `conf/application.yml`: baseline config.
+- `conf/application-control.yml`: control-plane overlay.
+- `conf/application-worker.yml`: worker-plane overlay.
+
+Use Spring Boot `spring.config.additional-location` or equivalent environment variables to load the role overlay after the baseline config.
+
+## Worker Command Settings
+
+Control-plane worker command fan-out uses Vert.x EventBus request/reply:
+
+```yaml
+bifro:
+  eventbus:
+    request-timeout: 5s
+    task-command-timeout: 5s
+  worker-command:
+    start-retries: 1
+    stop-retries: 2
+```
+
+Retries only apply to command delivery failures or request timeout. A worker ACK rejection is recorded as task state history and is not retried automatically.

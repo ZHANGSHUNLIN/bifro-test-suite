@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.group;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import org.apache.bifromq.testsuite.app.database.pojo.MqttGroup;
 import org.apache.bifromq.testsuite.app.database.repository.MqttGroupRepository;
 import java.time.Instant;
@@ -30,6 +32,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@ConditionalOnControlPlane
 public final class DefaultGroupInitializer implements ApplicationRunner {
 
     public static final String DEFAULT_GROUP_NAME = "Default Group";

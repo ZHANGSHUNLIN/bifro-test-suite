@@ -671,7 +671,8 @@
         "assignedClients": "Assigned Clients",
         "action": "Action"
       },
-      "totalMismatch": "Total clients must equal {{total}}, current is {{current}}"
+      "totalMismatch": "Total clients must equal {{total}}, current is {{current}}",
+      "unschedulableSelected": "These nodes cannot receive tasks: {{nodes}}"
     },
     "list": {
       "statusNotDeletable": "This status cannot be deleted",
@@ -855,6 +856,8 @@
       "nodeName": "Node Name",
       "nodeId": "Node ID",
       "host": "Host",
+      "role": "Role",
+      "schedulable": "Schedulable",
       "status": "Status",
       "cpu": "CPU Load (LoadAvg)",
       "memory": "Memory",
@@ -867,6 +870,16 @@
       "ONLINE": "Online",
       "OFFLINE": "Offline",
       "UNSTABLE": "Unstable"
+    },
+    "role": {
+      "CONTROL": "Control",
+      "WORKER": "Worker",
+      "ALL": "All",
+      "UNKNOWN": "Unknown"
+    },
+    "schedulable": {
+      "yes": "Assignable",
+      "no": "Not Assignable"
     },
     "msg": {
       "loadFailed": "Failed to load cluster data",

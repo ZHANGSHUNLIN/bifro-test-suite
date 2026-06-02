@@ -27,7 +27,8 @@ import org.apache.bifromq.testsuite.app.cluster.broadcast.EventBroadcaster;
 import org.apache.bifromq.testsuite.app.cluster.member.MemberHealthMonitor;
 import org.apache.bifromq.testsuite.app.cluster.member.MemberRegistry;
 import org.apache.bifromq.testsuite.app.cluster.topology.ClusterTopology;
-import org.apache.bifromq.testsuite.app.local.LocalTaskCoordinator;
+import org.apache.bifromq.testsuite.app.local.NodeTimeoutTaskReconciler;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -49,8 +50,8 @@ public class ClusterManager {
     @Resource
     private EventBroadcaster broadcaster;
 
-    @Resource
-    private LocalTaskCoordinator localTaskCoordinator;
+    @Autowired(required = false)
+    private NodeTimeoutTaskReconciler nodeTimeoutTaskReconciler;
     private volatile long timeoutCheckTimerId = -1;
     private volatile ClusterTopology currentTopology;
     @Getter
@@ -107,7 +108,9 @@ public class ClusterManager {
                         log.warn("Detected timeout node (left cluster): memberId={}, lastHeartbeat={}",
                             memberId, memberInfo.getLastHeartbeat());
 
-                        localTaskCoordinator.handleNodeTimeout(memberId);
+                        if (nodeTimeoutTaskReconciler != null) {
+                            nodeTimeoutTaskReconciler.handleNodeTimeout(memberId);
+                        }
                         memberRegistry.removeMember(memberId)
                             .onSuccess(
                                 v -> log.info("Cleaned stale timeout member from registry: memberId={}", memberId))

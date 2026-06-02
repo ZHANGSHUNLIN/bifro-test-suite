@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.controller.node;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -56,6 +58,7 @@ import reactor.core.scheduler.Schedulers;
 @RestController
 @RequestMapping("/api/node")
 @Tag(name = "Node Management", description = "Cluster node info query and management API")
+@ConditionalOnControlPlane
 public class NodeController implements ApiController {
 
     @Resource

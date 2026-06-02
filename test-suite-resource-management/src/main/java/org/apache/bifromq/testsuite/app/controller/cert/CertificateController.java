@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.controller.cert;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -50,6 +52,7 @@ import reactor.core.publisher.Mono;
 @Tag(name = "Certificate Management", description = "TLS certificate management API, supports CA and client certificates")
 @RestController
 @RequestMapping("/api/certificates")
+@ConditionalOnControlPlane
 public class CertificateController implements ApiController {
 
     @Resource

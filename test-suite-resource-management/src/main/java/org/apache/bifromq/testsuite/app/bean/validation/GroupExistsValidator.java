@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.bean.validation;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import org.apache.bifromq.testsuite.app.database.pojo.MqttGroup;
 import org.apache.bifromq.testsuite.app.database.repository.MqttGroupRepository;
 import jakarta.validation.ConstraintValidator;
@@ -30,6 +32,7 @@ import reactor.core.scheduler.Schedulers;
  * Validates that a group with the given ID exists in the database.
  */
 @Component
+@ConditionalOnControlPlane
 public class GroupExistsValidator implements ConstraintValidator<GroupExists, String> {
 
     @Autowired

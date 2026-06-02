@@ -27,7 +27,7 @@ import org.apache.bifromq.testsuite.app.cluster.broadcast.EventBroadcaster;
 import org.apache.bifromq.testsuite.app.cluster.member.MemberInfo;
 import org.apache.bifromq.testsuite.app.cluster.member.MemberRegistry;
 import org.apache.bifromq.testsuite.app.cluster.topology.ClusterTopology;
-import org.apache.bifromq.testsuite.app.local.LocalTaskCoordinator;
+import org.apache.bifromq.testsuite.app.local.NodeTimeoutTaskReconciler;
 import io.vertx.core.Future;
 import java.lang.reflect.Method;
 import java.time.Duration;
@@ -52,7 +52,7 @@ class ClusterManagerMembershipTest {
     private EventBroadcaster broadcaster;
 
     @Mock
-    private LocalTaskCoordinator localTaskCoordinator;
+    private NodeTimeoutTaskReconciler nodeTimeoutTaskReconciler;
 
     @Mock
     private io.vertx.core.Vertx vertx;
@@ -137,7 +137,7 @@ class ClusterManagerMembershipTest {
         checkTimeoutNodes.setAccessible(true);
         checkTimeoutNodes.invoke(clusterManager);
 
-        verify(localTaskCoordinator, times(1)).handleNodeTimeout("node-stale");
+        verify(nodeTimeoutTaskReconciler, times(1)).handleNodeTimeout("node-stale");
         verify(memberRegistry, times(1)).removeMember("node-stale");
     }
 

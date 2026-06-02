@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.certificate;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import jakarta.annotation.Resource;
 import java.io.ByteArrayOutputStream;
 import java.util.Base64;
@@ -45,6 +47,7 @@ import reactor.core.publisher.Mono;
 
 @Slf4j
 @Component
+@ConditionalOnControlPlane
 public class CertificateManager {
 
     @Resource

@@ -15,8 +15,10 @@
  * limitations under the License.
  */
 
-import React, {useEffect, useState} from 'react';
-import {Alert, Button, InputNumber, message, Modal, Popconfirm, Select, Space, Table, Typography} from 'antd';
+import React, {useCallback, useEffect, useState} from 'react';
+import {Alert, Button, InputNumber, message, Modal, Popconfirm, Select, Space, Table, Tag, Typography} from 'antd';
+import clusterApi from '../../features/cluster';
+import type {NodeListVO} from '../../features/cluster';
 import type {NodeAllocation, NodeTaskAllocationVO} from '../../features/task';
 import {taskApi} from '../../features/task';
 import {DeleteOutlined} from '@ant-design/icons';
@@ -47,24 +49,44 @@ const TaskAllocationModal: React.FC<TaskAllocationModalProps> = ({
     const [allocationData, setAllocationData] = useState<NodeTaskAllocationVO | null>(null);
     const [editingData, setEditingData] = useState<NodeAllocation[]>([]);
     const [availableNodes, setAvailableNodes] = useState<string[]>([]);
+    const [schedulableNodeIds, setSchedulableNodeIds] = useState<Set<string>>(new Set());
+    const [nodeById, setNodeById] = useState<Record<string, NodeListVO>>({});
     const [selectedNodeToAdd, setSelectedNodeToAdd] = useState<string | undefined>(undefined);
     const [assignError, setAssignError] = useState<string | null>(null);
 
-    const errorMessage = (fallback: string, error: unknown): string => {
+    const errorMessage = useCallback((fallback: string, error: unknown): string => {
         if (error instanceof Error && error.message) {
             return `${fallback}: ${error.message}`;
         }
         return fallback;
-    };
+    }, []);
+
+    const loadSchedulableNodes = useCallback(async () => {
+        const nodes = await clusterApi.getAllNodes();
+        const nextNodeById = Object.fromEntries(nodes.map(node => [node.nodeId, node]));
+        setNodeById(nextNodeById);
+        setSchedulableNodeIds(new Set(nodes.filter(node => node.schedulable).map(node => node.nodeId)));
+        return nodes;
+    }, []);
+
+    const resetAvailableNodes = useCallback((allocationList: NodeAllocation[], nodes: NodeListVO[]) => {
+        const assignedNodeIds = new Set(allocationList.map(item => item.nodeId));
+        setAvailableNodes(nodes
+            .filter(node => node.schedulable && !assignedNodeIds.has(node.nodeId))
+            .map(node => node.nodeId));
+    }, []);
 
     // Calculate allocation (always triggers recalculation)
-    const calculateAllocation = async () => {
+    const calculateAllocation = useCallback(async () => {
         setCalculating(true);
         try {
-            const data = await taskApi.calculateNodeTaskAllocation(taskId);
+            const [data, nodes] = await Promise.all([
+                taskApi.calculateNodeTaskAllocation(taskId),
+                loadSchedulableNodes(),
+            ]);
             setAllocationData(data);
             setEditingData(data.nodeAllocationList || []);
-            setAvailableNodes([]);
+            resetAvailableNodes(data.nodeAllocationList || [], nodes);
             setAssignError(null);
         } catch (error) {
             const detail = errorMessage(t('task.msg.calcAssignFailed'), error);
@@ -74,13 +96,16 @@ const TaskAllocationModal: React.FC<TaskAllocationModalProps> = ({
         } finally {
             setCalculating(false);
         }
-    };
+    }, [errorMessage, loadSchedulableNodes, resetAvailableNodes, t, taskId]);
 
     // Pre-fill existing allocation (used in ASSIGNED state)
-    const loadExistingAllocation = async () => {
+    const loadExistingAllocation = useCallback(async () => {
         setCalculating(true);
         try {
-            const resp = await taskApi.getTaskSubTasks(taskId);
+            const [resp, nodes] = await Promise.all([
+                taskApi.getTaskSubTasks(taskId),
+                loadSchedulableNodes(),
+            ]);
             const subTaskDetails = resp.subTaskDetails;
             if (subTaskDetails && Object.keys(subTaskDetails).length > 0) {
                 const nodeAllocationList: NodeAllocation[] = Object.values(subTaskDetails).map(detail => ({
@@ -90,7 +115,7 @@ const TaskAllocationModal: React.FC<TaskAllocationModalProps> = ({
                 const totalClientCount = nodeAllocationList.reduce((sum, n) => sum + n.allocatedClientCount, 0);
                 setAllocationData({totalClientCount, nodeAllocationList});
                 setEditingData(nodeAllocationList);
-                setAvailableNodes([]);
+                resetAvailableNodes(nodeAllocationList, nodes);
             } else {
                 // Subtask data missing, fallback to recalculation
                 await calculateAllocation();
@@ -102,7 +127,7 @@ const TaskAllocationModal: React.FC<TaskAllocationModalProps> = ({
         } finally {
             setCalculating(false);
         }
-    };
+    }, [calculateAllocation, loadSchedulableNodes, resetAvailableNodes, t, taskId]);
 
     // On modal open: pre-fill allocation in ASSIGNED state, otherwise recalculate
     useEffect(() => {
@@ -113,7 +138,7 @@ const TaskAllocationModal: React.FC<TaskAllocationModalProps> = ({
                 calculateAllocation();
             }
         }
-    }, [visible, taskId]);
+    }, [calculateAllocation, loadExistingAllocation, taskId, taskStatus, visible]);
 
     // Handle client count change
     const handleCountChange = (nodeId: string, value: number | null) => {
@@ -130,7 +155,9 @@ const TaskAllocationModal: React.FC<TaskAllocationModalProps> = ({
         const nodeToRemove = editingData.find(item => item.nodeId === nodeId);
         if (nodeToRemove) {
             setEditingData(prev => prev.filter(item => item.nodeId !== nodeId));
-            setAvailableNodes(prev => [...prev, nodeId]);
+            if (schedulableNodeIds.has(nodeId)) {
+                setAvailableNodes(prev => [...prev, nodeId]);
+            }
         }
     };
 
@@ -151,6 +178,13 @@ const TaskAllocationModal: React.FC<TaskAllocationModalProps> = ({
         const totalAllocated = editingData.reduce((sum, item) => sum + item.allocatedClientCount, 0);
         if (totalAllocated !== allocationData.totalClientCount) {
             message.error(t('task.allocationModal.totalMismatch', {total: allocationData.totalClientCount, current: totalAllocated}));
+            return;
+        }
+        const invalidNodeIds = editingData
+            .map(item => item.nodeId)
+            .filter(nodeId => !schedulableNodeIds.has(nodeId));
+        if (invalidNodeIds.length > 0) {
+            message.error(t('task.allocationModal.unschedulableSelected', {nodes: invalidNodeIds.join(', ')}));
             return;
         }
 
@@ -179,6 +213,8 @@ const TaskAllocationModal: React.FC<TaskAllocationModalProps> = ({
         setAllocationData(null);
         setEditingData([]);
         setAvailableNodes([]);
+        setSchedulableNodeIds(new Set());
+        setNodeById({});
         setSelectedNodeToAdd(undefined);
         setAssignError(null);
         onCancel();
@@ -190,6 +226,18 @@ const TaskAllocationModal: React.FC<TaskAllocationModalProps> = ({
             dataIndex: 'nodeId',
             key: 'nodeId',
             width: '35%',
+            render: (nodeId: string) => {
+                const node = nodeById[nodeId];
+                return (
+                    <Space size="small" wrap>
+                        <Text code>{nodeId}</Text>
+                        {node?.role && <Tag color={node.schedulable ? 'green' : 'default'}>{node.role}</Tag>}
+                        {!schedulableNodeIds.has(nodeId) && (
+                            <Tag color="warning">{t('cluster.schedulable.no')}</Tag>
+                        )}
+                    </Space>
+                );
+            },
         },
         {
             title: t('task.allocationModal.columns.assignedClients'),
@@ -282,7 +330,12 @@ const TaskAllocationModal: React.FC<TaskAllocationModalProps> = ({
                                     placeholder={t('common.assign')}
                                     value={selectedNodeToAdd}
                                     onChange={setSelectedNodeToAdd}
-                                    options={availableNodes.map(nodeId => ({label: nodeId, value: nodeId}))}
+                                    options={availableNodes.map(nodeId => ({
+                                        label: nodeById[nodeId]?.nodeName
+                                            ? `${nodeById[nodeId].nodeName} (${nodeId})`
+                                            : nodeId,
+                                        value: nodeId,
+                                    }))}
                                 />
                                 <Button
                                     type="primary"

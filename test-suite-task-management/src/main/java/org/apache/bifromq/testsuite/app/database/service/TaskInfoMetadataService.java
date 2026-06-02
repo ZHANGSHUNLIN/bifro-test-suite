@@ -17,6 +17,8 @@
 
 package org.apache.bifromq.testsuite.app.database.service;
 
+import org.apache.bifromq.testsuite.config.role.ConditionalOnControlPlane;
+
 import org.apache.bifromq.testsuite.app.database.pojo.TaskInfoMetadata;
 import org.apache.bifromq.testsuite.app.database.repository.TaskInfoMetadataRepository;
 import jakarta.annotation.Resource;
@@ -32,6 +34,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 @Service
+@ConditionalOnControlPlane
 public class TaskInfoMetadataService {
 
     @Resource
