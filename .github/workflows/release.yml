@@ -85,7 +85,7 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: bifro-test-fe
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --registry=https://registry.npmmirror.com
 
       - name: Build frontend
         working-directory: bifro-test-fe

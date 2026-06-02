@@ -107,7 +107,7 @@ jobs:
             ${{ runner.os }}-pnpm-
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --registry=https://registry.npmmirror.com
 
       - name: Lint
         run: pnpm lint
@@ -170,7 +170,7 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: bifro-test-fe
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --registry=https://registry.npmmirror.com
 
       - name: Audit frontend dependencies
         working-directory: bifro-test-fe
