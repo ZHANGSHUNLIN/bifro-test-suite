@@ -17,6 +17,7 @@
 
 package org.apache.bifromq.testsuite.app.cluster.member;
 
+import java.util.List;
 import org.apache.bifromq.testsuite.app.bean.ClusterNodeInfo;
 import org.apache.bifromq.testsuite.app.bean.vo.NodeListVO;
 
@@ -37,6 +38,14 @@ public final class MemberInfoView {
             .lastHeartbeatAt(memberInfo.getLastHeartbeat())
             .memory(systemInfo != null ? systemInfo.getMemory() : null)
             .cpu(systemInfo != null ? systemInfo.getCpu() : null)
+            .networkInterfaces(networkInterfacesOf(systemInfo))
             .build();
+    }
+
+    private static List<ClusterNodeInfo.NetworkInterfaceInfo> networkInterfacesOf(ClusterNodeInfo systemInfo) {
+        if (systemInfo == null || systemInfo.getNetworkInterfaces() == null) {
+            return List.of();
+        }
+        return systemInfo.getNetworkInterfaces();
     }
 }

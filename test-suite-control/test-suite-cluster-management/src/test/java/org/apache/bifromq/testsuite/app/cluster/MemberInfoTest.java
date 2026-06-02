@@ -20,6 +20,7 @@ package org.apache.bifromq.testsuite.app.cluster;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
+import java.util.List;
 import org.apache.bifromq.testsuite.app.bean.ClusterNodeInfo;
 import org.apache.bifromq.testsuite.app.bean.vo.NodeListVO;
 import org.apache.bifromq.testsuite.app.cluster.member.MemberInfo;
@@ -110,6 +111,29 @@ class MemberInfoTest {
         assertThat(vo.isSchedulable()).isFalse();
         assertThat(vo.getMemory()).isEqualTo(memoryInfo);
         assertThat(vo.getCpu()).isEqualTo(cpuInfo);
+        assertThat(vo.getNetworkInterfaces()).isEmpty();
+    }
+
+    @Test
+    void fromMemberInfo_shouldExposeNetworkInterfaces() {
+        ClusterNodeInfo.NetworkInterfaceInfo networkInterface =
+            ClusterNodeInfo.NetworkInterfaceInfo.builder()
+                .name("eth0")
+                .displayName("eth0")
+                .up(true)
+                .mtu(1500)
+                .addresses(List.of("10.99.48.10"))
+                .build();
+
+        ClusterNodeInfo systemInfo = new ClusterNodeInfo();
+        systemInfo.setNetworkInterfaces(List.of(networkInterface));
+        memberInfo.setSystemInfo(systemInfo);
+
+        NodeListVO vo = MemberInfoView.toNodeListVO("test-member-id", memberInfo);
+
+        assertThat(vo.getNetworkInterfaces()).hasSize(1);
+        assertThat(vo.getNetworkInterfaces().get(0).getName()).isEqualTo("eth0");
+        assertThat(vo.getNetworkInterfaces().get(0).getAddresses()).containsExactly("10.99.48.10");
     }
 
     @Test
@@ -149,6 +173,7 @@ class MemberInfoTest {
         assertThat(vo.getHost()).isEqualTo(memberInfo.getHost());
         assertThat(vo.getMemory()).isNull();
         assertThat(vo.getCpu()).isNull();
+        assertThat(vo.getNetworkInterfaces()).isEmpty();
     }
 
     @Test

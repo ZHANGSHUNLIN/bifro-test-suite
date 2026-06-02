@@ -918,6 +918,19 @@
       "saveSuccess": "Source port preallocation config updated",
       "saveFailed": "Failed to update source port preallocation config"
     },
+    "network": {
+      "title": "Network Interfaces",
+      "interface": "Interface",
+      "flags": "Status",
+      "mtu": "MTU",
+      "addresses": "IP Addresses",
+      "up": "Up",
+      "down": "Down",
+      "loopback": "Loopback",
+      "virtual": "Virtual",
+      "multicast": "Multicast",
+      "noData": "No network interface data"
+    },
     "cpuCores": "{{n}} cores",
     "cpuLoadValue": "{{load}} / {{n}} cores",
     "sampledAt": "Sampled At: {{time}}",

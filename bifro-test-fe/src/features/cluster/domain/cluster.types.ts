@@ -29,6 +29,17 @@ export interface CpuInfo {
     loadAverage: number;
 }
 
+export interface NetworkInterfaceInfo {
+    name: string;
+    displayName?: string;
+    up: boolean;
+    loopback: boolean;
+    virtual: boolean;
+    multicastSupported: boolean;
+    mtu: number;
+    addresses: string[];
+}
+
 // Node status enum
 export const NodeStatus = {
     ONLINE: 'ONLINE',
@@ -51,6 +62,7 @@ export interface NodeListVO {
     lastHeartbeatAt: number;
     memory: MemoryInfo;
     cpu: CpuInfo;
+    networkInterfaces: NetworkInterfaceInfo[];
 }
 
 // Cluster statistics (computed on frontend)

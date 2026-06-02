@@ -367,13 +367,14 @@ const ClusterManagement: React.FC = () => {
             dataIndex: 'lastHeartbeatAt',
             key: 'lastHeartbeatAt',
             width: 160,
+            ellipsis: true,
+            className: 'cluster-node-updated-at-cell',
             render: (ts: number) => ts ? dayjs(ts).format('YYYY-MM-DD HH:mm:ss') : '-',
         },
         {
             title: t('common.actions'),
             key: 'action',
             width: 120,
-            fixed: 'right' as const,
             render: (_: unknown, record: NodeListVO) => (
                 <Space.Compact size="small">
                     <Button
@@ -529,6 +530,7 @@ const ClusterManagement: React.FC = () => {
                 </div>
                 <Spin spinning={loading}>
                     <Table
+                        className="cluster-node-table"
                         columns={columns}
                         dataSource={filteredNodes}
                         rowKey="nodeId"
@@ -701,6 +703,77 @@ const ClusterManagement: React.FC = () => {
                                 </div>
                             </section>
                         </div>
+
+                        <section className="task-report-section">
+                            <div className="task-report-section-title">{t('cluster.network.title')}</div>
+                            {nodeDetail.networkInterfaces.length > 0 ? (
+                                <Table
+                                    dataSource={nodeDetail.networkInterfaces}
+                                    rowKey={(record) => record.name}
+                                    size="small"
+                                    pagination={false}
+                                    scroll={{x: 760}}
+                                    columns={[
+                                        {
+                                            title: t('cluster.network.interface'),
+                                            dataIndex: 'name',
+                                            key: 'name',
+                                            width: 180,
+                                            render: (name: string, record) => (
+                                                <div>
+                                                    <strong>{name}</strong>
+                                                    {record.displayName && record.displayName !== name && (
+                                                        <div style={{fontSize: 12, color: '#666'}}>
+                                                            {record.displayName}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ),
+                                        },
+                                        {
+                                            title: t('cluster.network.flags'),
+                                            key: 'flags',
+                                            width: 180,
+                                            render: (_: unknown, record) => (
+                                                <Space size={[4, 4]} wrap>
+                                                    <Tag color={record.up ? 'success' : 'default'}>
+                                                        {record.up ? t('cluster.network.up') : t('cluster.network.down')}
+                                                    </Tag>
+                                                    {record.loopback && <Tag>{t('cluster.network.loopback')}</Tag>}
+                                                    {record.virtual && <Tag>{t('cluster.network.virtual')}</Tag>}
+                                                    {record.multicastSupported && (
+                                                        <Tag color="blue">{t('cluster.network.multicast')}</Tag>
+                                                    )}
+                                                </Space>
+                                            ),
+                                        },
+                                        {
+                                            title: t('cluster.network.mtu'),
+                                            dataIndex: 'mtu',
+                                            key: 'mtu',
+                                            width: 90,
+                                            render: (mtu: number) => mtu || '-',
+                                        },
+                                        {
+                                            title: t('cluster.network.addresses'),
+                                            dataIndex: 'addresses',
+                                            key: 'addresses',
+                                            render: (addresses: string[]) => addresses && addresses.length > 0 ? (
+                                                <Space size={[4, 4]} wrap>
+                                                    {addresses.map(address => (
+                                                        <Tag key={address} color="geekblue">{address}</Tag>
+                                                    ))}
+                                                </Space>
+                                            ) : '-',
+                                        },
+                                    ]}
+                                />
+                            ) : (
+                                <div style={{textAlign: 'center', padding: 20, color: '#999'}}>
+                                    {t('cluster.network.noData')}
+                                </div>
+                            )}
+                        </section>
 
                         <section className="task-report-section">
                             <div className="task-report-section-title">{t('cluster.columns.taskCount')}</div>

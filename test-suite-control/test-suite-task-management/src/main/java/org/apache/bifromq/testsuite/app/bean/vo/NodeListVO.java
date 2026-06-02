@@ -17,6 +17,7 @@
 
 package org.apache.bifromq.testsuite.app.bean.vo;
 
+import java.util.List;
 import org.apache.bifromq.testsuite.app.bean.ClusterNodeInfo;
 import org.apache.bifromq.testsuite.app.bean.NodeInfo;
 import org.apache.bifromq.testsuite.cluster.NodeRole;
@@ -36,6 +37,7 @@ public class NodeListVO {
     private long lastHeartbeatAt;
     private ClusterNodeInfo.MemoryInfo memory;
     private ClusterNodeInfo.CpuInfo cpu;
+    private List<ClusterNodeInfo.NetworkInterfaceInfo> networkInterfaces;
 
     public static NodeListVO fromNodeInfo(String nodeId, NodeInfo nodeInfo) {
         ClusterNodeInfo clusterNodeInfo = nodeInfo.getClusterNodeInfo();
@@ -49,7 +51,15 @@ public class NodeListVO {
             .lastHeartbeatAt(clusterNodeInfo != null ? clusterNodeInfo.getTimestamp() : 0)
             .memory(clusterNodeInfo != null ? clusterNodeInfo.getMemory() : null)
             .cpu(clusterNodeInfo != null ? clusterNodeInfo.getCpu() : null)
+            .networkInterfaces(networkInterfacesOf(clusterNodeInfo))
             .build();
+    }
+
+    private static List<ClusterNodeInfo.NetworkInterfaceInfo> networkInterfacesOf(ClusterNodeInfo clusterNodeInfo) {
+        if (clusterNodeInfo == null || clusterNodeInfo.getNetworkInterfaces() == null) {
+            return List.of();
+        }
+        return clusterNodeInfo.getNetworkInterfaces();
     }
 
 }

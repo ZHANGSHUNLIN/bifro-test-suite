@@ -918,6 +918,19 @@
       "saveSuccess": "源端口预分配配置已更新",
       "saveFailed": "源端口预分配配置更新失败"
     },
+    "network": {
+      "title": "网络接口",
+      "interface": "网卡",
+      "flags": "状态",
+      "mtu": "MTU",
+      "addresses": "IP 地址",
+      "up": "启用",
+      "down": "停用",
+      "loopback": "回环",
+      "virtual": "虚拟",
+      "multicast": "组播",
+      "noData": "暂无网卡信息"
+    },
     "cpuCores": "{{n}} 核",
     "cpuLoadValue": "{{load}} / {{n}} 核",
     "sampledAt": "采样时间: {{time}}",

@@ -77,6 +77,13 @@ body {
     letter-spacing: 0.4px;
 }
 
+.cluster-node-table .cluster-node-updated-at-cell {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .ant-card-head {
     min-height: 42px;
 }

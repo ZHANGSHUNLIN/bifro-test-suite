@@ -19,6 +19,7 @@ package org.apache.bifromq.testsuite.app.bean;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -38,6 +39,7 @@ public class ClusterNodeInfo implements Serializable {
     private long timestamp;
     private MemoryInfo memory;
     private CpuInfo cpu;
+    private List<NetworkInterfaceInfo> networkInterfaces;
 
     @Data
     @AllArgsConstructor
@@ -66,6 +68,26 @@ public class ClusterNodeInfo implements Serializable {
 
         private int processors;
         private double loadAverage;
+
+    }
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Builder
+    public static class NetworkInterfaceInfo implements Serializable {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        private String name;
+        private String displayName;
+        private boolean up;
+        private boolean loopback;
+        private boolean virtual;
+        private boolean multicastSupported;
+        private int mtu;
+        private List<String> addresses;
 
     }
 }

@@ -18,6 +18,7 @@
 package org.apache.bifromq.testsuite.app.cluster.member;
 
 import static org.apache.bifromq.testsuite.app.util.RuntimeUtil.getHostName;
+import static org.apache.bifromq.testsuite.app.util.RuntimeUtil.getNetworkInterfaces;
 import static org.apache.bifromq.testsuite.app.util.RuntimeUtil.getSystemLoadAverage;
 
 import com.hazelcast.core.HazelcastInstance;
@@ -281,6 +282,7 @@ public class MemberRegistry {
         systemInfo.setHost(getHostName());
         systemInfo.setMemory(memory);
         systemInfo.setCpu(cpu);
+        systemInfo.setNetworkInterfaces(getNetworkInterfaces());
         systemInfo.setTimestamp(System.currentTimeMillis());
 
         return NodeInfo.builder()

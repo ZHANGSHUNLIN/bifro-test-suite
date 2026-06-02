@@ -18,6 +18,7 @@
 package org.apache.bifromq.testsuite.app.cluster.core;
 
 import static org.apache.bifromq.testsuite.app.util.RuntimeUtil.getHostName;
+import static org.apache.bifromq.testsuite.app.util.RuntimeUtil.getNetworkInterfaces;
 import static org.apache.bifromq.testsuite.app.util.RuntimeUtil.getSystemLoadAverage;
 
 import com.hazelcast.cluster.Member;
@@ -654,6 +655,7 @@ public class ClusterDataManager {
         cpu.setProcessors(runtime.availableProcessors());
         cpu.setLoadAverage(getSystemLoadAverage());
         info.setCpu(cpu);
+        info.setNetworkInterfaces(getNetworkInterfaces());
 
         return info;
     }
