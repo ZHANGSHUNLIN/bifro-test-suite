@@ -15,22 +15,26 @@
  * limitations under the License.
  */
 
-package org.apache.bifromq.testsuite;
+package org.apache.bifromq.testsuite.worker.pojo;
 
-public final class Constants {
+import java.io.Serial;
+import java.io.Serializable;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
-    public static final String CLUSTER_TASK_MESSAGE = "cluster.task.message";
-    public static final String NODE_METRICS_ADDRESS_PREFIX = "node.";
-    public static final String NODE_LOCAL_PORT_CAPACITY_SUFFIX = ".local-port-capacity";
-    public static final String NODE_TASK_METRICS_CLEANUP_SUFFIX = ".task-metrics-cleanup";
-    public static final String TASK_STATE_CHANGE_EVENT = "task.state.change";
-    
-    public static final String PIPELINE_PROGRESS_EVENT = "task.pipeline.progress";
-    public static final String CONN_CLIENT_TAG = "CONN_CLIENTS";
-    public static final String PUB_CLIENT_TAG = "PUB_CLIENTS";
-    public static final String SUB_CLIENT_TAG = "SUB_CLIENTS";
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class TaskMetricsCleanupResponse implements Serializable {
+    @Serial
+    private static final long serialVersionUID = 1L;
 
-    private Constants() {
-    }
-
+    private boolean success;
+    private String taskId;
+    private String nodeId;
+    private int removedMeterCount;
+    private String errorMessage;
 }

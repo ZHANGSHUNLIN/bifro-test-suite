@@ -21,5 +21,6 @@ public enum EventBusRequestKind {
     NODE_METRICS,
     CLIENT_QUERY,
     LOCAL_PORT_CAPACITY,
+    TASK_METRICS_CLEANUP,
     TASK_COMMAND
 }

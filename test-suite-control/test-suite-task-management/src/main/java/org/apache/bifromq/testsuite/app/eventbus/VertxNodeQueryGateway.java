@@ -29,6 +29,8 @@ import org.apache.bifromq.testsuite.worker.pojo.ClientQueryRequest;
 import org.apache.bifromq.testsuite.worker.pojo.ClientQueryResponse;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckRequest;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckResponse;
+import org.apache.bifromq.testsuite.worker.pojo.TaskMetricsCleanupRequest;
+import org.apache.bifromq.testsuite.worker.pojo.TaskMetricsCleanupResponse;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -57,5 +59,12 @@ public class VertxNodeQueryGateway implements NodeQueryGateway {
         String nodeId, LocalPortCapacityCheckRequest request) {
         return client.request(EventBusAddresses.localPortCapacity(nodeId),
             request, EventBusRequestKind.LOCAL_PORT_CAPACITY);
+    }
+
+    @Override
+    public CompletableFuture<TaskMetricsCleanupResponse> cleanupTaskMetrics(
+        String nodeId, TaskMetricsCleanupRequest request) {
+        return client.request(EventBusAddresses.taskMetricsCleanup(nodeId),
+            request, EventBusRequestKind.TASK_METRICS_CLEANUP);
     }
 }

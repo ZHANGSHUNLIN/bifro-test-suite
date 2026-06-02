@@ -153,15 +153,54 @@ public final class MetricsHelper {
         });
     }
 
+    public static int removeMetersForTaskNode(String taskId, String nodeId) {
+        if (taskId == null || taskId.isBlank() || nodeId == null || nodeId.isBlank()) {
+            return 0;
+        }
+        List<Meter> meters = registry.getMeters().stream()
+            .filter(meter -> matchesTaskNode(meter.getId(), taskId, nodeId))
+            .toList();
+        meters.forEach(registry::remove);
+        COUNTER_CACHE.entrySet().removeIf(entry -> matchesCacheKey(entry.getKey(), taskId, nodeId));
+        TIMER_CACHE.entrySet().removeIf(entry -> matchesCacheKey(entry.getKey(), taskId, nodeId));
+        GAUGE_CACHE.entrySet().removeIf(entry -> matchesCacheKey(entry.getKey(), taskId, nodeId));
+        FROZEN_TIMER_SNAPSHOTS.entrySet().removeIf(entry -> matchesCacheKey(entry.getKey(), taskId, nodeId));
+        FAILED_METRIC_KEYS.removeIf(key -> matchesCacheKey(key, taskId, nodeId));
+        return meters.size();
+    }
+
     private static boolean matchesGaugeCacheKey(String key, TaskMetric metric, String taskId, String nodeId) {
         return key.startsWith(metric.getName() + ".")
             && containsTagValue(key, "taskId", taskId)
             && containsTagValue(key, "nodeId", nodeId);
     }
 
+    private static boolean matchesTaskNode(Meter.Id id, String taskId, String nodeId) {
+        return taskId.equals(id.getTag("taskId")) && nodeId.equals(id.getTag("nodeId"));
+    }
+
+    private static boolean matchesCacheKey(String key, String taskId, String nodeId) {
+        return containsTagValue(key, "taskId", taskId) && containsTagValue(key, "nodeId", nodeId);
+    }
+
     private static boolean containsTagValue(String key, String tag, String value) {
-        String tagValue = "." + tag + "." + value;
-        return key.contains(tagValue + ".") || key.endsWith(tagValue);
+        String dottedTagValue = "." + tag + "." + value;
+        return key.contains(dottedTagValue + ".") || key.endsWith(dottedTagValue)
+            || containsTokenizedValue(key, tag + "=" + value);
+    }
+
+    private static boolean containsTokenizedValue(String key, String value) {
+        int index = key.indexOf(value);
+        while (index >= 0) {
+            int end = index + value.length();
+            boolean startsAtBoundary = index == 0 || key.charAt(index - 1) == '.' || key.charAt(index - 1) == ',';
+            boolean endsAtBoundary = end == key.length() || key.charAt(end) == '.' || key.charAt(end) == ',';
+            if (startsAtBoundary && endsAtBoundary) {
+                return true;
+            }
+            index = key.indexOf(value, index + 1);
+        }
+        return false;
     }
 
     public static void recordTimeNanos(TaskMetric metric, long durationNanos, String... tags) {

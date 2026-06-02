@@ -31,5 +31,6 @@ class EventBusAddressesTest {
         assertThat(EventBusAddresses.nodeMetrics("node-a")).isEqualTo("node.node-a.metrics");
         assertThat(EventBusAddresses.nodeClients("node-a")).isEqualTo("node.node-a.clients");
         assertThat(EventBusAddresses.localPortCapacity("node-a")).isEqualTo("node.node-a.local-port-capacity");
+        assertThat(EventBusAddresses.taskMetricsCleanup("node-a")).isEqualTo("node.node-a.task-metrics-cleanup");
     }
 }

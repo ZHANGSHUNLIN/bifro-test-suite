@@ -265,7 +265,6 @@ public abstract class BaseTaskWorker implements TaskWorker {
         public void onStateChange(TaskStage from, TaskStage to, StateTransitionContext<TaskStage> context) {
             taskStage.set(to);
             if (isTerminal(to)) {
-                clearTaskGauges();
                 terminalFuture.complete(to);
             }
             log.info("State transition: {} -> {}, taskId={}", from, to, taskId);
@@ -297,12 +296,5 @@ public abstract class BaseTaskWorker implements TaskWorker {
         public void onStateExited(TaskStage state, StateTransitionContext<TaskStage> context) {
             log.debug("Exited state: {}, taskId={}", state, taskId);
         }
-    }
-
-    private void clearTaskGauges() {
-        MetricsHelper.removeGaugesForTaskNode(taskId, nodeId,
-            BifroTaskMetric.CLIENT_PLANNED_GAUGE,
-            BifroTaskMetric.CLIENT_READY_GAUGE,
-            BifroTaskMetric.CLIENT_ACTIVE_GAUGE);
     }
 }

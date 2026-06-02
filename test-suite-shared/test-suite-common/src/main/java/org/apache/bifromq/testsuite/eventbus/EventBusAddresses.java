@@ -40,6 +40,10 @@ public final class EventBusAddresses {
         return Constants.NODE_METRICS_ADDRESS_PREFIX + nodeId + Constants.NODE_LOCAL_PORT_CAPACITY_SUFFIX;
     }
 
+    public static String taskMetricsCleanup(String nodeId) {
+        return Constants.NODE_METRICS_ADDRESS_PREFIX + nodeId + Constants.NODE_TASK_METRICS_CLEANUP_SUFFIX;
+    }
+
     public static String workerCommand(String nodeId) {
         return "worker." + nodeId + ".command";
     }

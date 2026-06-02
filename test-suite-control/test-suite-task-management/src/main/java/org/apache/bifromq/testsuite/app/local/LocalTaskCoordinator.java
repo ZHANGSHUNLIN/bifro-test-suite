@@ -59,6 +59,8 @@ import org.apache.bifromq.testsuite.worker.pojo.ClientQueryRequest;
 import org.apache.bifromq.testsuite.worker.pojo.ClientQueryResponse;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckRequest;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckResponse;
+import org.apache.bifromq.testsuite.worker.pojo.TaskMetricsCleanupRequest;
+import org.apache.bifromq.testsuite.worker.pojo.TaskMetricsCleanupResponse;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
@@ -203,6 +205,8 @@ public class LocalTaskCoordinator {
             NodeMetricsResponse response = metricsQueryService.query(message.body());
             message.reply(response);
         });
+        String metricsCleanupAddr = EventBusAddresses.taskMetricsCleanup(clusterDataManager.getCurrentNodeIdCache());
+        vertx.eventBus().<TaskMetricsCleanupRequest>consumer(metricsCleanupAddr, this::handleTaskMetricsCleanupRequest);
         String clientsAddr = EventBusAddresses.nodeClients(clusterDataManager.getCurrentNodeIdCache());
         ClientQueryService clientQueryService = new ClientQueryService();
         vertx.eventBus().<ClientQueryRequest>consumer(clientsAddr, message -> {
@@ -387,6 +391,21 @@ public class LocalTaskCoordinator {
                     .taskId(request == null ? null : request.getTaskId())
                     .nodeId(request == null ? null : request.getNodeId())
                     .errorMessage("Failed to check local port capacity: " + e.getMessage())
+                    .build());
+            });
+    }
+
+    private void handleTaskMetricsCleanupRequest(Message<TaskMetricsCleanupRequest> message) {
+        vertx.executeBlocking(() -> metricsQueryService.cleanup(message.body()))
+            .onSuccess(message::reply)
+            .onFailure(e -> {
+                log.warn("Failed to cleanup task metrics", e);
+                TaskMetricsCleanupRequest request = message.body();
+                message.reply(TaskMetricsCleanupResponse.builder()
+                    .success(false)
+                    .taskId(request == null ? null : request.getTaskId())
+                    .nodeId(request == null ? null : request.getNodeId())
+                    .errorMessage("Failed to cleanup task metrics: " + e.getMessage())
                     .build());
             });
     }

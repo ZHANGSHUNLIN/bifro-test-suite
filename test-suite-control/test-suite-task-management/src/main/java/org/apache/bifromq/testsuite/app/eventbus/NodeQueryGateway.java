@@ -24,6 +24,8 @@ import org.apache.bifromq.testsuite.worker.pojo.ClientQueryRequest;
 import org.apache.bifromq.testsuite.worker.pojo.ClientQueryResponse;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckRequest;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckResponse;
+import org.apache.bifromq.testsuite.worker.pojo.TaskMetricsCleanupRequest;
+import org.apache.bifromq.testsuite.worker.pojo.TaskMetricsCleanupResponse;
 
 public interface NodeQueryGateway {
 
@@ -33,4 +35,7 @@ public interface NodeQueryGateway {
 
     CompletableFuture<LocalPortCapacityCheckResponse> checkLocalPortCapacity(
         String nodeId, LocalPortCapacityCheckRequest request);
+
+    CompletableFuture<TaskMetricsCleanupResponse> cleanupTaskMetrics(
+        String nodeId, TaskMetricsCleanupRequest request);
 }

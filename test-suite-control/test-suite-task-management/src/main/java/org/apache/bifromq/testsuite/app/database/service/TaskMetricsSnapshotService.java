@@ -23,9 +23,12 @@ import org.apache.bifromq.testsuite.app.cluster.core.NodeMetricsService;
 import org.apache.bifromq.testsuite.app.database.pojo.TaskMetricsSnapshot;
 import org.apache.bifromq.testsuite.app.database.pojo.TaskMetricsSnapshot.NodeMetricsSnapshot;
 import org.apache.bifromq.testsuite.app.database.repository.TaskMetricsSnapshotRepository;
+import org.apache.bifromq.testsuite.app.eventbus.NodeQueryGateway;
 import org.apache.bifromq.testsuite.metric.CounterMetricData;
 import org.apache.bifromq.testsuite.metric.NodeMetricsResponse;
 import org.apache.bifromq.testsuite.metric.TimerMetricData;
+import org.apache.bifromq.testsuite.worker.pojo.TaskMetricsCleanupRequest;
+import org.apache.bifromq.testsuite.worker.pojo.TaskMetricsCleanupResponse;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -50,6 +53,9 @@ public class TaskMetricsSnapshotService {
     @Resource
     private NodeMetricsService nodeMetricsService;
 
+    @Resource
+    private NodeQueryGateway nodeQueryGateway;
+
     public Mono<TaskMetricsSnapshot> collectAndSaveNodeSnapshot(
         String taskId,
         String taskName,
@@ -60,7 +66,8 @@ public class TaskMetricsSnapshotService {
         LocalDateTime endTime) {
         try {
             NodeMetricsResponse response = nodeMetricsService.queryNodeMetrics(nodeId, taskId, null);
-            return saveNodeSnapshot(taskId, taskName, taskStage, nodeId, nodeName, startTime, endTime, response);
+            return saveNodeSnapshot(taskId, taskName, taskStage, nodeId, nodeName, startTime, endTime, response)
+                .flatMap(snapshot -> cleanupTaskMetrics(taskId, nodeId).thenReturn(snapshot));
         } catch (Exception e) {
             log.warn("Failed to collect node metrics snapshot, taskId={}, nodeId={}, stage={}",
                 taskId, nodeId, taskStage, e);
@@ -134,6 +141,27 @@ public class TaskMetricsSnapshotService {
                 taskId, nodeId, taskStage))
             .doOnError(e -> log.error("Failed to save node metrics snapshot, taskId={}, nodeId={}",
                 taskId, nodeId, e));
+    }
+
+    private Mono<TaskMetricsCleanupResponse> cleanupTaskMetrics(String taskId, String nodeId) {
+        TaskMetricsCleanupRequest request = TaskMetricsCleanupRequest.builder()
+            .taskId(taskId)
+            .nodeId(nodeId)
+            .build();
+        return Mono.defer(() -> Mono.fromFuture(nodeQueryGateway.cleanupTaskMetrics(nodeId, request)))
+            .doOnNext(response -> {
+                if (response != null && response.isSuccess()) {
+                    log.info("Task metrics cleanup completed, taskId={}, nodeId={}, removedMeterCount={}",
+                        taskId, nodeId, response.getRemovedMeterCount());
+                } else {
+                    log.warn("Task metrics cleanup rejected, taskId={}, nodeId={}, errorMessage={}",
+                        taskId, nodeId, response == null ? "No cleanup response" : response.getErrorMessage());
+                }
+            })
+            .onErrorResume(e -> {
+                log.warn("Task metrics cleanup failed, taskId={}, nodeId={}", taskId, nodeId, e);
+                return Mono.empty();
+            });
     }
     
     public Mono<TaskMetricsSnapshot> saveSnapshot(

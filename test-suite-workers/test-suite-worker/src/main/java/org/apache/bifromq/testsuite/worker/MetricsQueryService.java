@@ -25,6 +25,8 @@ import org.apache.bifromq.testsuite.metric.MetricsHelper;
 import org.apache.bifromq.testsuite.metric.NodeMetricsRequest;
 import org.apache.bifromq.testsuite.metric.NodeMetricsResponse;
 import org.apache.bifromq.testsuite.metric.TimerMetricData;
+import org.apache.bifromq.testsuite.worker.pojo.TaskMetricsCleanupRequest;
+import org.apache.bifromq.testsuite.worker.pojo.TaskMetricsCleanupResponse;
 
 @Slf4j
 public class MetricsQueryService {
@@ -52,6 +54,37 @@ public class MetricsQueryService {
                 .timestamp(System.currentTimeMillis())
                 .counterMetrics(Collections.emptyList())
                 .timerMetrics(Collections.emptyList())
+                .build();
+        }
+    }
+
+    public TaskMetricsCleanupResponse cleanup(TaskMetricsCleanupRequest request) {
+        try {
+            if (request == null || request.getTaskId() == null || request.getTaskId().isBlank()
+                || request.getNodeId() == null || request.getNodeId().isBlank()) {
+                return TaskMetricsCleanupResponse.builder()
+                    .success(false)
+                    .taskId(request == null ? null : request.getTaskId())
+                    .nodeId(request == null ? null : request.getNodeId())
+                    .errorMessage("Task metrics cleanup request requires taskId and nodeId")
+                    .build();
+            }
+            int removedMeterCount = MetricsHelper.removeMetersForTaskNode(request.getTaskId(), request.getNodeId());
+            return TaskMetricsCleanupResponse.builder()
+                .success(true)
+                .taskId(request.getTaskId())
+                .nodeId(request.getNodeId())
+                .removedMeterCount(removedMeterCount)
+                .build();
+        } catch (Exception e) {
+            log.error("Failed to cleanup metrics for task={}, node={}",
+                request == null ? null : request.getTaskId(),
+                request == null ? null : request.getNodeId(), e);
+            return TaskMetricsCleanupResponse.builder()
+                .success(false)
+                .taskId(request == null ? null : request.getTaskId())
+                .nodeId(request == null ? null : request.getNodeId())
+                .errorMessage(e.getMessage())
                 .build();
         }
     }

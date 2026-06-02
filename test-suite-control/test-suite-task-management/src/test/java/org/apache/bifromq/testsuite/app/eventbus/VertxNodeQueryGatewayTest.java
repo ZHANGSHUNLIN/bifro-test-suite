@@ -30,6 +30,8 @@ import org.apache.bifromq.testsuite.worker.pojo.ClientQueryRequest;
 import org.apache.bifromq.testsuite.worker.pojo.ClientQueryResponse;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckRequest;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckResponse;
+import org.apache.bifromq.testsuite.worker.pojo.TaskMetricsCleanupRequest;
+import org.apache.bifromq.testsuite.worker.pojo.TaskMetricsCleanupResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -92,5 +94,21 @@ class VertxNodeQueryGatewayTest {
 
         verify(client).<LocalPortCapacityCheckResponse>request(
             EventBusAddresses.localPortCapacity(NODE_ID), request, EventBusRequestKind.LOCAL_PORT_CAPACITY);
+    }
+
+    @Test
+    void cleanupTaskMetricsShouldUseTaskMetricsCleanupAddressAndKind() {
+        TaskMetricsCleanupRequest request = TaskMetricsCleanupRequest.builder()
+            .taskId("task-a")
+            .nodeId(NODE_ID)
+            .build();
+        when(client.<TaskMetricsCleanupResponse>request(
+            EventBusAddresses.taskMetricsCleanup(NODE_ID), request, EventBusRequestKind.TASK_METRICS_CLEANUP))
+            .thenReturn(CompletableFuture.completedFuture(TaskMetricsCleanupResponse.builder().build()));
+
+        gateway.cleanupTaskMetrics(NODE_ID, request);
+
+        verify(client).<TaskMetricsCleanupResponse>request(
+            EventBusAddresses.taskMetricsCleanup(NODE_ID), request, EventBusRequestKind.TASK_METRICS_CLEANUP);
     }
 }

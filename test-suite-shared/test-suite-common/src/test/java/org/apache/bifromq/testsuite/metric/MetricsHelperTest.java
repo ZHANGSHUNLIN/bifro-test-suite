@@ -123,6 +123,45 @@ class MetricsHelperTest {
     }
 
     @Test
+    void removeMetersForTaskNodeShouldRemoveAllTaskMetersAndCaches() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        MetricsHelper.init(registry);
+
+        MetricsHelper.counter(BifroTaskMetric.CONNECT_SUCCESS_COUNT,
+            io.micrometer.core.instrument.Tags.of(
+                "taskId", "task-1",
+                "nodeId", "node-1",
+                "taskType", "CONN"));
+        MetricsHelper.counter(BifroTaskMetric.CONNECT_SUCCESS_COUNT,
+            io.micrometer.core.instrument.Tags.of(
+                "taskId", "task-2",
+                "nodeId", "node-1",
+                "taskType", "CONN"));
+        MetricsHelper.gauge(BifroTaskMetric.CLIENT_ACTIVE_GAUGE, 3,
+            "taskId", "task-1", "nodeId", "node-1", "clientType", "conn");
+        MetricsHelper.gauge(BifroTaskMetric.CLIENT_ACTIVE_GAUGE, 8,
+            "taskId", "task-1", "nodeId", "node-2", "clientType", "conn");
+        MetricsHelper.recordTimeNanos(BifroTaskMetric.PUBLISH_LATENCY, 10_000_000,
+            "taskId", "task-1", "nodeId", "node-1");
+        MetricsHelper.freezeTimerSnapshots("task-1", "node-1");
+
+        int removedMeterCount = MetricsHelper.removeMetersForTaskNode("task-1", "node-1");
+
+        assertThat(removedMeterCount).isGreaterThanOrEqualTo(3);
+        assertThat(MetricsHelper.readCounters("task-1", null)).isEmpty();
+        assertThat(MetricsHelper.readTimers("task-1", null)).isEmpty();
+        assertThat(registry.find(BifroTaskMetric.CLIENT_ACTIVE_GAUGE.getName())
+            .tag("taskId", "task-1")
+            .tag("nodeId", "node-1")
+            .gauge()).isNull();
+        assertThat(MetricsHelper.readCounters("task-2", null)).hasSize(1);
+        assertThat(registry.find(BifroTaskMetric.CLIENT_ACTIVE_GAUGE.getName())
+            .tag("taskId", "task-1")
+            .tag("nodeId", "node-2")
+            .gauge()).isNotNull();
+    }
+
+    @Test
     void metricRegistrationFailureShouldNotEscapeBusinessPath() {
         MetricsHelper.init(new ThrowingMeterRegistry());
         Timer.Sample sample = MetricsHelper.startTimer();
