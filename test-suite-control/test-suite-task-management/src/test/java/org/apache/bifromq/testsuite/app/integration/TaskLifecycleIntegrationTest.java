@@ -23,6 +23,7 @@ import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import org.apache.bifromq.testsuite.app.bean.dto.BrokerEntry;
 import org.apache.bifromq.testsuite.app.bean.dto.NodeTaskAllocationRequest;
@@ -555,7 +556,7 @@ class TaskLifecycleIntegrationTest {
     }
 
     @Test
-    void testAssignTask_idempotentAlreadyAssigned_shouldReturnSuccess() {
+    void testAssignTask_alreadyAssigned_shouldAllowReassign() {
         
         TaskRequest request = createConnTaskRequest();
         TaskInfoMetadata createdTask = taskManager.addTask(request).block();
@@ -572,6 +573,7 @@ class TaskLifecycleIntegrationTest {
         var result = taskManager.assignTask(taskId, allocationRequest).block();
         assertThat(result).isNotNull();
         assertThat(result.isSuccess()).isTrue();
+        verify(clusterDataManager).assignCheck(anyString(), any(TaskConfig.class), any());
     }
 
     

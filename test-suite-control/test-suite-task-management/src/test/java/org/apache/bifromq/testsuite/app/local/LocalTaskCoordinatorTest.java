@@ -21,8 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 
 import io.vertx.core.Future;
@@ -39,11 +39,14 @@ import org.apache.bifromq.testsuite.app.config.LocalPortModeProperties;
 import org.apache.bifromq.testsuite.client.LocalPortRangeConfig;
 import org.apache.bifromq.testsuite.worker.TaskBroker;
 import org.apache.bifromq.testsuite.worker.TaskConfig;
+import org.apache.bifromq.testsuite.worker.TaskWorker;
+import org.apache.bifromq.testsuite.worker.TaskWorkerRuntime;
 import org.apache.bifromq.testsuite.worker.WorkerTaskCommand;
 import org.apache.bifromq.testsuite.worker.command.WorkerCommand;
 import org.apache.bifromq.testsuite.worker.command.WorkerCommandAck;
 import org.apache.bifromq.testsuite.worker.command.WorkerCommandAckStatus;
 import org.apache.bifromq.testsuite.worker.command.WorkerCommandType;
+import org.apache.bifromq.testsuite.worker.pojo.TaskStopContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -68,6 +71,10 @@ class LocalTaskCoordinatorTest {
     private EventBus eventBus;
     @Mock
     private LocalPortModeProperties localPortModeProperties;
+    @Mock
+    private TaskWorkerRuntime taskWorkerRuntime;
+    @Mock
+    private TaskWorker taskWorker;
     @InjectMocks
     private LocalTaskCoordinator localTaskCoordinator;
 
@@ -76,6 +83,14 @@ class LocalTaskCoordinatorTest {
         lenient().when(clusterDataManager.getCurrentNodeIdCache()).thenReturn(NODE_ID);
         lenient().when(vertx.eventBus()).thenReturn(eventBus);
         lenient().when(localPortModeProperties.toConfig()).thenReturn(new LocalPortRangeConfig());
+        lenient().when(taskWorkerRuntime.create(any(), any())).thenReturn(taskWorker);
+        lenient().when(taskWorkerRuntime.runningTaskStages(any())).thenAnswer(invocation -> {
+            Map<String, TaskWorker> runningTasks = invocation.getArgument(0);
+            return runningTasks.entrySet().stream()
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getTaskState()));
+        });
+        lenient().when(taskWorker.terminalFuture()).thenReturn(new java.util.concurrent.CompletableFuture<>());
+        lenient().when(taskWorker.getTaskState()).thenReturn(TaskStage.ONGOING);
         lenient().when(vertx.executeBlocking(any(Callable.class)))
             .thenAnswer(invocation -> {
                 Callable<?> callable = invocation.getArgument(0);
@@ -118,12 +133,45 @@ class LocalTaskCoordinatorTest {
     }
 
     @Test
+    void handleWorkerCommandEnvelope_startShouldRejectWhenShuttingDown() {
+        localTaskCoordinator.markShuttingDown();
+        WorkerCommand command = WorkerCommand.builder()
+            .messageId("message-shutdown")
+            .taskId(TASK_ID)
+            .nodeId(NODE_ID)
+            .type(WorkerCommandType.START_TASK)
+            .startCommand(WorkerTaskCommand.fromTaskConfig(taskConfig()))
+            .build();
+
+        WorkerCommandAck ack = localTaskCoordinator.handleWorkerCommand(command);
+
+        assertEquals(WorkerCommandAckStatus.REJECTED_INVALID_STATE, ack.getStatus());
+    }
+
+    @Test
     void handleWorkerCommandEnvelope_duplicateShouldAckIgnored() {
         WorkerCommand command = WorkerCommand.builder()
             .messageId("message-dup")
             .taskId(TASK_ID)
             .nodeId(NODE_ID)
             .type(WorkerCommandType.STOP_TASK)
+            .build();
+
+        WorkerCommandAck firstAck = localTaskCoordinator.handleWorkerCommand(command);
+        WorkerCommandAck secondAck = localTaskCoordinator.handleWorkerCommand(command);
+
+        assertEquals(WorkerCommandAckStatus.ACCEPTED, firstAck.getStatus());
+        assertEquals(WorkerCommandAckStatus.IGNORED_DUPLICATE, secondAck.getStatus());
+    }
+
+    @Test
+    void handleWorkerCommandEnvelope_duplicateStartShouldAckIgnored() {
+        WorkerCommand command = WorkerCommand.builder()
+            .messageId("message-start-dup")
+            .taskId(TASK_ID)
+            .nodeId(NODE_ID)
+            .type(WorkerCommandType.START_TASK)
+            .startCommand(WorkerTaskCommand.fromTaskConfig(taskConfig()))
             .build();
 
         WorkerCommandAck firstAck = localTaskCoordinator.handleWorkerCommand(command);
@@ -196,6 +244,13 @@ class LocalTaskCoordinatorTest {
     @Test
     void stopTask_whenNoLocalWorker_shouldHandleGracefully() {
         localTaskCoordinator.stopTask(TASK_ID);
+
+        assertEquals(0, localTaskCoordinator.runningTask().size());
+    }
+
+    @Test
+    void stopTask_givenServiceShutdownContextAndNoLocalWorker_shouldComplete() throws Exception {
+        localTaskCoordinator.stopTask(TASK_ID, TaskStopContext.serviceShutdown(NODE_ID)).get();
 
         assertEquals(0, localTaskCoordinator.runningTask().size());
     }

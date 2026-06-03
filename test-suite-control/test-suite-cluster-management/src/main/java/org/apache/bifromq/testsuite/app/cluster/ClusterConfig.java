@@ -27,7 +27,6 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "bifro.cluster")
 public class ClusterConfig {
 
-
     private Duration heartbeatInterval = Duration.ofSeconds(15);
     private Duration heartbeatTimeout = Duration.ofSeconds(30);
     private Duration staleCleanupInterval = Duration.ofMinutes(1);

@@ -42,6 +42,7 @@ import org.apache.bifromq.testsuite.app.cluster.ClusterConfig;
 import org.apache.bifromq.testsuite.app.cluster.shared.ShareDataAddr;
 import org.apache.bifromq.testsuite.config.node.NodeIdentityProperties;
 import org.apache.bifromq.testsuite.config.role.NodeRoleProperties;
+import org.apache.bifromq.testsuite.config.storage.StorageProperties;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -59,8 +60,11 @@ public class MemberRegistry {
     private NodeRoleProperties nodeRoleProperties;
     @Resource
     private NodeIdentityProperties nodeIdentityProperties;
+    @Resource
+    private StorageProperties storageProperties;
 
     private volatile String localMemberId;
+    private final long startedAt = System.currentTimeMillis();
 
     public Future<Void> registerLocalMember() {
         long startTime = System.currentTimeMillis();
@@ -288,6 +292,9 @@ public class MemberRegistry {
         return NodeInfo.builder()
             .nodeName(nodeIdentityProperties.getNodeId())
             .role(nodeRoleProperties.getNodeRole())
+            .storageMode(storageProperties.getMode())
+            .embeddedDataDir(storageProperties.getEmbedded().getDataDir())
+            .startedAt(startedAt)
             .clusterNodeInfo(systemInfo)
             .nextPing(System.currentTimeMillis())
             .alive(true)
@@ -300,6 +307,8 @@ public class MemberRegistry {
             .name(nodeInfo.getNodeName())
             .host(nodeInfo.getClusterNodeInfo() != null ? nodeInfo.getClusterNodeInfo().getHost() : null)
             .role(nodeInfo.getRole())
+            .storageMode(nodeInfo.getStorageMode())
+            .embeddedDataDir(nodeInfo.getEmbeddedDataDir())
             .systemInfo(nodeInfo.getClusterNodeInfo())
             .lastHeartbeat(nodeInfo.getNextPing() != null ? nodeInfo.getNextPing() : 0)
             .registeredAt(Instant.now())

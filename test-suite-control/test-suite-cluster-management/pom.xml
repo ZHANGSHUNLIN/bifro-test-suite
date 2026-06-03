@@ -36,7 +36,7 @@
         </dependency>
         <dependency>
             <groupId>org.apache.bifromq.testsuite</groupId>
-            <artifactId>test-suite-worker</artifactId>
+            <artifactId>test-suite-worker-api</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

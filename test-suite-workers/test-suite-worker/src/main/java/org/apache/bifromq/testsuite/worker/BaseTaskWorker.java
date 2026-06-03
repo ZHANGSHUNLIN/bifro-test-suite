@@ -46,6 +46,7 @@ import org.apache.bifromq.testsuite.worker.eventbus.VertxTaskRuntimeEventBus;
 import org.apache.bifromq.testsuite.worker.log.TaskLogger;
 import org.apache.bifromq.testsuite.worker.pojo.EventReport;
 import org.apache.bifromq.testsuite.worker.pojo.TaskStateChangeEvent;
+import org.apache.bifromq.testsuite.worker.pojo.TaskStopContext;
 import org.apache.bifromq.testsuite.worker.type.ExecutionPlan;
 
 @Slf4j
@@ -62,6 +63,7 @@ public abstract class BaseTaskWorker implements TaskWorker {
     private final String taskTypeName;
     private final int totalClientCount;
     private final AtomicBoolean interrupt = new AtomicBoolean(false);
+    private final AtomicReference<TaskStopContext> stopContextRef = new AtomicReference<>();
     private final AtomicLong eventSeqGenerator = new AtomicLong(0);
     private final Subject<EventReport> reportEventSubject = PublishSubject.<EventReport>create()
         .toSerialized();
@@ -149,7 +151,16 @@ public abstract class BaseTaskWorker implements TaskWorker {
 
     @Override
     public CompletableFuture<Void> stopTask() {
-        log.info("Stopping task: {}", taskId);
+        return stopTask(TaskStopContext.userStop());
+    }
+
+    @Override
+    public CompletableFuture<Void> stopTask(TaskStopContext stopContext) {
+        TaskStopContext requestedStopContext = normalizeStopContext(stopContext);
+        stopContextRef.compareAndSet(null, requestedStopContext);
+        TaskStopContext effectiveStopContext = stopContextRef.get();
+        Map<String, Object> stopMetadata = stopTransitionMetadata(effectiveStopContext);
+        log.info("Stopping task: {}, reason={}", taskId, effectiveStopContext.getReason());
 
         TaskLogger.logTaskStop(taskId, taskStage.get());
 
@@ -161,7 +172,7 @@ public abstract class BaseTaskWorker implements TaskWorker {
 
         stopTaskDurationTimer("stopped");
 
-        return stateMachine.transition(TaskEvent.SHUTTING, Map.of())
+        return stateMachine.transition(TaskEvent.SHUTTING, stopMetadata)
             .thenCompose(success -> {
                 if (success) {
                     log.debug("Task entered SHUTTING state: {}", taskId);
@@ -169,14 +180,14 @@ public abstract class BaseTaskWorker implements TaskWorker {
 
                 return pipeline.cancel(context);
             })
-            .thenCompose(ignored -> stateMachine.transition(TaskEvent.STOP, Map.of()))
+            .thenCompose(ignored -> stateMachine.transition(TaskEvent.STOP, stopMetadata))
             .thenAccept(success -> {
                 if (success) {
                     log.debug("Task entered STOPPED state: {}", taskId);
                 } else {
 
                     log.debug("STOP transition failed, falling back to INTERRUPT: {}", taskId);
-                    stateMachine.transition(TaskEvent.INTERRUPT, Map.of());
+                    stateMachine.transition(TaskEvent.INTERRUPT, stopMetadata);
                 }
             });
     }
@@ -187,6 +198,7 @@ public abstract class BaseTaskWorker implements TaskWorker {
         stateMachine.transition(TaskEvent.INTERRUPT, Map.of());
     }
 
+    @Override
     public CompletableFuture<TaskStage> terminalFuture() {
         return terminalFuture;
     }
@@ -228,15 +240,21 @@ public abstract class BaseTaskWorker implements TaskWorker {
     }
 
     private void publishStateChangeEvent(TaskStage from, TaskStage to, StateTransitionContext<TaskStage> context) {
-        TaskStateChangeEvent event = TaskStateChangeEvent.builder()
+        TaskStateChangeEvent.TaskStateChangeEventBuilder builder = TaskStateChangeEvent.builder()
             .taskId(taskId)
             .fromStage(from)
             .toStage(to)
             .triggerEvent(context.getEvent() instanceof TaskEvent ? (TaskEvent) context.getEvent() : null)
             .timestamp(context.getTransitionTimestamp())
             .nodeId(nodeId)
-            .eventSeq(eventSeqGenerator.incrementAndGet())
-            .build();
+            .eventSeq(eventSeqGenerator.incrementAndGet());
+        TaskStopContext stopContext = stopContextFromTransition(context);
+        if (stopContext != null && shouldAttachStopContext(context, to)) {
+            builder.reason(stopContext.getReason() == null ? null : stopContext.getReason().name())
+                .message(stopContext.getMessage())
+                .metadata(stopEventMetadata(stopContext));
+        }
+        TaskStateChangeEvent event = builder.build();
 
         taskRuntimeEventBus.sendTaskStateChanged(event);
         log.debug("Published state change event: {}", event);
@@ -258,6 +276,41 @@ public abstract class BaseTaskWorker implements TaskWorker {
 
     TaskPipelineContext getPipelineContextForTest() {
         return context;
+    }
+
+    private TaskStopContext normalizeStopContext(TaskStopContext context) {
+        return context == null ? TaskStopContext.userStop() : context.normalized();
+    }
+
+    private Map<String, Object> stopTransitionMetadata(TaskStopContext stopContext) {
+        return Map.of("stopContext", stopContext);
+    }
+
+    private TaskStopContext stopContextFromTransition(StateTransitionContext<TaskStage> context) {
+        TaskStopContext stopContext = context.getMetadata("stopContext", TaskStopContext.class);
+        return stopContext == null ? stopContextRef.get() : stopContext;
+    }
+
+    private boolean shouldAttachStopContext(StateTransitionContext<TaskStage> context, TaskStage to) {
+        Object event = context.getEvent();
+        return event == TaskEvent.SHUTTING || event == TaskEvent.STOP || to == TaskStage.STOPPED;
+    }
+
+    private Map<String, Object> stopEventMetadata(TaskStopContext stopContext) {
+        java.util.LinkedHashMap<String, Object> metadata = new java.util.LinkedHashMap<>();
+        if (stopContext.getMetadata() != null) {
+            metadata.putAll(stopContext.getMetadata());
+        }
+        if (stopContext.getReason() != null) {
+            metadata.put("reason", stopContext.getReason().name());
+        }
+        if (stopContext.getInitiator() != null && !stopContext.getInitiator().isBlank()) {
+            metadata.put("initiator", stopContext.getInitiator());
+        }
+        if (stopContext.getRequestedAt() != null) {
+            metadata.put("requestedAt", stopContext.getRequestedAt().toString());
+        }
+        return Map.copyOf(metadata);
     }
 
     private class StateChangeLogger implements StateChangeListener<TaskStage> {

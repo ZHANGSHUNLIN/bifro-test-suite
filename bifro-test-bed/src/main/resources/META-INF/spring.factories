@@ -14,4 +14,5 @@
 # limitations under the License.
 
 org.springframework.boot.env.EnvironmentPostProcessor=\
-org.apache.bifromq.testsuite.app.config.WorkerRoleMongoAutoConfigurationExcludePostProcessor
+org.apache.bifromq.testsuite.app.config.WorkerRoleMongoAutoConfigurationExcludePostProcessor,\
+org.apache.bifromq.testsuite.app.config.storage.StorageModeEnvironmentValidator

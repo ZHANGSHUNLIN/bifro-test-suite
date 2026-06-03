@@ -35,10 +35,18 @@
             <groupId>org.apache.bifromq.testsuite</groupId>
             <artifactId>test-suite-common</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.apache.bifromq.testsuite</groupId>
+            <artifactId>test-suite-mqtt-client</artifactId>
+        </dependency>
         <!-- TaskWorker.reportEventSubject() returns Subject -->
         <dependency>
             <groupId>io.reactivex.rxjava3</groupId>
             <artifactId>rxjava</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-core</artifactId>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>

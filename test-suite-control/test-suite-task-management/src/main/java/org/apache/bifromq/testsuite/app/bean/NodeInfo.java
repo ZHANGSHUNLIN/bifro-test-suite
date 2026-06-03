@@ -24,6 +24,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.apache.bifromq.testsuite.cluster.NodeRole;
+import org.apache.bifromq.testsuite.config.storage.StorageMode;
 
 @Data
 @AllArgsConstructor
@@ -36,6 +37,10 @@ public class NodeInfo {
     private String nodeName;
     @Builder.Default
     private NodeRole role = NodeRole.UNKNOWN;
+    @Builder.Default
+    private StorageMode storageMode = StorageMode.DATABASE;
+    private String embeddedDataDir;
+    private Long startedAt;
     private ClusterNodeInfo clusterNodeInfo;
     private Long nextPing;
     @Builder.Default

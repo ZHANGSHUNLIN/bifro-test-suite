@@ -26,6 +26,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.mongodb.client.result.UpdateResult;
+import java.time.Instant;
+import org.apache.bifromq.testsuite.TaskStage;
 import org.apache.bifromq.testsuite.app.database.pojo.TaskInfoMetadata;
 import org.apache.bifromq.testsuite.worker.TaskConfig;
 import java.time.LocalDateTime;
@@ -39,6 +42,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -210,5 +214,30 @@ class TaskInfoMetadataServiceTest {
         assertNotNull(result);
         assertEquals(0, result.getTotalElements());
         assertTrue(result.getContent().isEmpty());
+    }
+
+    @Test
+    void tryUpdateStage_givenMatchedDocument_shouldReturnTrue() {
+        when(reactiveMongoTemplate.updateFirst(any(Query.class), any(Update.class), eq(TaskInfoMetadata.class)))
+            .thenReturn(Mono.just(UpdateResult.acknowledged(1, 1L, null)));
+
+        Boolean result = taskInfoMetadataService
+            .tryUpdateStage("task-001", TaskStage.ASSIGNED, TaskStage.STARTING, Instant.now())
+            .block();
+
+        assertTrue(Boolean.TRUE.equals(result));
+        verify(reactiveMongoTemplate).updateFirst(any(Query.class), any(Update.class), eq(TaskInfoMetadata.class));
+    }
+
+    @Test
+    void tryUpdateStage_givenNoMatchedDocument_shouldReturnFalse() {
+        when(reactiveMongoTemplate.updateFirst(any(Query.class), any(Update.class), eq(TaskInfoMetadata.class)))
+            .thenReturn(Mono.just(UpdateResult.acknowledged(0, 0L, null)));
+
+        Boolean result = taskInfoMetadataService
+            .tryUpdateStage("task-001", TaskStage.ASSIGNED, TaskStage.STARTING, Instant.now())
+            .block();
+
+        assertTrue(Boolean.FALSE.equals(result));
     }
 }

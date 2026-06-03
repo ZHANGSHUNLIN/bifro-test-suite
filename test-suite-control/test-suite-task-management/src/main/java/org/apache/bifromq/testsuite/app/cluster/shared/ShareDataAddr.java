@@ -26,6 +26,7 @@ public enum ShareDataAddr {
     FINISH_NODE_TASKS("finish-node-tasks"),
     CLUSTER_NODE_INFO("cluster-node-info"),
     CLUSTER_RUNTIME_CONFIG("cluster-runtime-config"),
+    STORAGE_MODE_OWNERS("storage-mode-owners"),
     BROKER_MAP_NAME("broker-map"),
     TASK_METADATA("task-metadata"),
     BROKER_TASK_MAPPING("broker-task-mapping");

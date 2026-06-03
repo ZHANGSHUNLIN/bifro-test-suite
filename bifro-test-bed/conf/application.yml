@@ -20,36 +20,59 @@ vertx:
   members: "127.0.0.1"
 server:
   port: 8090
+  shutdown: graceful
 
 management:
   endpoints:
     web:
       exposure:
         include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,storageMode
 
 bifro:
   node-role: all
   node-id: "node-sandbox"
+  storage:
+    mode: EMBEDDED
   security:
     enabled: true
     session-timeout: 8h
-    users: []
-  mqtt:
-    default:
-      clusterMembers:
-        - host: "localhost"
-          port: 1883
-          broker-id: "Default Broker"
-          enabled: true
-          name: "Default Broker"
+    users:
+      - username: admin
+        password: "{noop}admin"
+        roles:
+          - ADMIN
+  shutdown:
+    graceful-enabled: true
+    task-stop-timeout: 120s
+    task-stop-per-task-timeout: 120s
+    participant-timeout: 10s
+    reject-start-when-shutting-down: true
+    log-pending-tasks: true
+#  mqtt:
+#    default:
+#      clusterMembers:
+#        - host: "localhost"
+#          port: 1883
+#          broker-id: "Default Broker"
+#          enabled: true
+#          name: "Default Broker"
 logging:
   config: file:conf/log4j2.xml
 spring:
-  data:
-    mongodb:
-      host: "localhost"
-      port: 27017
-      database: "bifro-test-suite"
+  lifecycle:
+    timeout-per-shutdown-phase: 150s
+#  data:
+#    mongodb:
+#      host: "localhost"
+#      port: 27017
+#      database: "bifro-test-suite"
   springdoc:
     api-docs:
       enabled: true

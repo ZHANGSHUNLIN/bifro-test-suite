@@ -21,6 +21,7 @@ import java.util.List;
 import org.apache.bifromq.testsuite.app.bean.ClusterNodeInfo;
 import org.apache.bifromq.testsuite.app.bean.NodeInfo;
 import org.apache.bifromq.testsuite.cluster.NodeRole;
+import org.apache.bifromq.testsuite.config.storage.StorageMode;
 import lombok.Builder;
 import lombok.Data;
 
@@ -31,6 +32,8 @@ public class NodeListVO {
     private String nodeId;
     private String nodeName;
     private NodeRole role;
+    private StorageMode storageMode;
+    private String embeddedDataDir;
     private boolean schedulable;
     private String host;
     private boolean alive;
@@ -45,6 +48,8 @@ public class NodeListVO {
             .nodeId(nodeId)
             .nodeName(nodeInfo.getNodeName())
             .role(nodeInfo.getRole())
+            .storageMode(nodeInfo.getStorageMode())
+            .embeddedDataDir(nodeInfo.getEmbeddedDataDir())
             .schedulable(nodeInfo.isSchedulable())
             .host(clusterNodeInfo != null ? clusterNodeInfo.getHost() : null)
             .alive(nodeInfo.isAlive())

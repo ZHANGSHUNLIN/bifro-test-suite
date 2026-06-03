@@ -27,6 +27,7 @@ bifro:
 spring:
   data:
     mongodb:
+      auto-index-creation: true
       host: "localhost"
       port: 27017
       database: "bifro-test-suite"

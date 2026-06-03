@@ -19,6 +19,7 @@ package org.apache.bifromq.testsuite.worker.pipeline.stages;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import io.vertx.core.Vertx;
 import java.util.List;
@@ -171,13 +172,30 @@ class CleanupConnStageTest {
     class CancelTests {
 
         @Test
-        void testCancel_shouldReturnCompletedFuture() {
-
+        void testCancel_withNoClients_shouldReturnCompletedFuture() {
             CleanupConnStage stage = new CleanupConnStage(Constants.CONN_CLIENT_TAG);
             TaskPipelineContext context = createTestContext();
+
             CompletableFuture<Void> cancelResult = stage.cancel(context);
+
             assertThat(cancelResult).isNotNull();
             assertThat(cancelResult.isDone()).isTrue();
+        }
+
+        @Test
+        void testCancel_givenCloseFutureStuck_shouldWaitForBoundedCleanup() throws Exception {
+            ConcurrentHashMap<String, MqttClientTask> clients = new ConcurrentHashMap<>();
+            MqttClientTask client = mock(ConnMqttClientTask.class);
+            when(client.close()).thenReturn(new CompletableFuture<>());
+            when(client.getCId()).thenReturn("client1");
+            clients.put("client1", client);
+            CleanupConnStage stage = new CleanupConnStage(Constants.CONN_CLIENT_TAG, 20);
+            TaskPipelineContext context = createTestContextWithClients(clients);
+
+            CompletableFuture<Void> cancelResult = stage.cancel(context);
+
+            cancelResult.get(1, TimeUnit.SECONDS);
+            assertThat(clients).isEmpty();
         }
     }
 
@@ -228,6 +246,23 @@ class CleanupConnStageTest {
             TaskPipelineContext context = createTestContext();
             StageResult result = stage.execute(context).get();
             assertThat(result.isSuccess()).isTrue();
+        }
+
+        @Test
+        void testExecute_givenCloseFutureStuck_shouldCompleteAfterBoundedWait() throws Exception {
+            ConcurrentHashMap<String, MqttClientTask> clients = new ConcurrentHashMap<>();
+            MqttClientTask client = mock(ConnMqttClientTask.class);
+            when(client.close()).thenReturn(new CompletableFuture<>());
+            when(client.getCId()).thenReturn("client1");
+            clients.put("client1", client);
+            CleanupConnStage stage = new CleanupConnStage(Constants.CONN_CLIENT_TAG, 20);
+            TaskPipelineContext context = createTestContextWithClients(clients);
+
+            StageResult result = stage.execute(context).get(1, TimeUnit.SECONDS);
+
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(result.getMessage()).contains("closeTimeout=1");
+            assertThat(clients).isEmpty();
         }
     }
 }

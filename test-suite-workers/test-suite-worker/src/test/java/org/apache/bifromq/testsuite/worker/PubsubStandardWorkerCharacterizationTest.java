@@ -23,7 +23,7 @@ import static org.mockito.Mockito.when;
 import io.vertx.core.Vertx;
 import java.util.List;
 import org.apache.bifromq.testsuite.TaskTemplate;
-import org.apache.bifromq.testsuite.worker.ratelimit.IRateLimiter;
+import org.apache.bifromq.testsuite.worker.RateLimiterType;
 import org.apache.bifromq.testsuite.worker.type.ExecutionPlan;
 import org.apache.bifromq.testsuite.worker.type.WorkerPlanSpecMapper;
 import org.apache.bifromq.testsuite.worker.type.impl.PubSubStandardTaskType;
@@ -73,7 +73,7 @@ class PubsubStandardWorkerCharacterizationTest {
         when(taskConfig.getThingIdStartAt()).thenReturn(0);
         when(taskConfig.getFanOut()).thenReturn(1);
         when(taskConfig.getFanIn()).thenReturn(0);
-        when(taskConfig.getRateLimiterType()).thenReturn(IRateLimiter.Type.GUAVA);
+        when(taskConfig.getRateLimiterType()).thenReturn(RateLimiterType.GUAVA);
         when(taskConfig.getBrokers()).thenReturn(List.of());
         when(taskConfig.isEnableAutoMultiAddress()).thenReturn(false);
         when(taskConfig.getLocalAddresses()).thenReturn(List.of());

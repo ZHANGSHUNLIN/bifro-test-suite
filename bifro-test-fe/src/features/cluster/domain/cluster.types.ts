@@ -50,12 +50,15 @@ export const NodeStatus = {
 export type NodeStatus = typeof NodeStatus[keyof typeof NodeStatus];
 
 export type NodeRole = 'CONTROL' | 'WORKER' | 'ALL' | 'UNKNOWN';
+export type StorageMode = 'DATABASE' | 'EMBEDDED';
 
 // Backend node list item (corresponds to NodeListVO)
 export interface NodeListVO {
     nodeId: string;
     nodeName: string;
     role?: NodeRole;
+    storageMode?: StorageMode;
+    embeddedDataDir?: string;
     schedulable?: boolean;
     host: string;
     alive: boolean;

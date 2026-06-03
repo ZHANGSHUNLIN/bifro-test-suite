@@ -32,6 +32,8 @@ import org.apache.bifromq.testsuite.worker.command.WorkerCommand;
 import org.apache.bifromq.testsuite.worker.command.WorkerCommandAck;
 import org.apache.bifromq.testsuite.worker.command.WorkerCommandAckStatus;
 import org.apache.bifromq.testsuite.worker.command.WorkerCommandType;
+import org.apache.bifromq.testsuite.worker.pojo.TaskStopContext;
+import org.apache.bifromq.testsuite.worker.pojo.TaskStopReason;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -86,6 +88,75 @@ class VertxWorkerCommandGatewayTest {
         verify(eventBusClient, org.mockito.Mockito.times(1))
             .request(eq("worker." + NODE_ID + ".command"), any(WorkerCommand.class),
                 eq(EventBusRequestKind.TASK_COMMAND));
+    }
+
+    @Test
+    void sendStop_givenTransientFailure_shouldRetryWithSameMessageId() throws Exception {
+        VertxWorkerCommandGateway gateway = new VertxWorkerCommandGateway(eventBusClient, 0, 1);
+        WorkerCommandAck ack = WorkerCommandAck.builder()
+            .taskId(TASK_ID)
+            .nodeId(NODE_ID)
+            .type(WorkerCommandType.STOP_TASK)
+            .status(WorkerCommandAckStatus.ACCEPTED)
+            .build();
+        when(eventBusClient.<WorkerCommandAck>request(eq("worker." + NODE_ID + ".command"),
+            any(WorkerCommand.class), eq(EventBusRequestKind.TASK_COMMAND)))
+            .thenReturn(failedFuture(new RuntimeException("transient")))
+            .thenReturn(CompletableFuture.completedFuture(ack));
+
+        WorkerCommandAck result = gateway.sendStop(TASK_ID, NODE_ID).get();
+
+        assertThat(result.getStatus()).isEqualTo(WorkerCommandAckStatus.ACCEPTED);
+        ArgumentCaptor<WorkerCommand> captor = ArgumentCaptor.forClass(WorkerCommand.class);
+        verify(eventBusClient, org.mockito.Mockito.times(2))
+            .request(eq("worker." + NODE_ID + ".command"), captor.capture(), eq(EventBusRequestKind.TASK_COMMAND));
+        assertThat(captor.getAllValues()).extracting(WorkerCommand::getMessageId).doesNotContainNull();
+        assertThat(captor.getAllValues().get(0).getMessageId())
+            .isEqualTo(captor.getAllValues().get(1).getMessageId());
+    }
+
+    @Test
+    void sendStart_givenRejectedAck_shouldNotRetryWithNewCommand() throws Exception {
+        VertxWorkerCommandGateway gateway = new VertxWorkerCommandGateway(eventBusClient, 1, 1);
+        WorkerCommandAck ack = WorkerCommandAck.builder()
+            .taskId(TASK_ID)
+            .nodeId(NODE_ID)
+            .type(WorkerCommandType.START_TASK)
+            .status(WorkerCommandAckStatus.REJECTED_INVALID_STATE)
+            .reason("already running")
+            .build();
+        when(eventBusClient.<WorkerCommandAck>request(eq("worker." + NODE_ID + ".command"),
+            any(WorkerCommand.class), eq(EventBusRequestKind.TASK_COMMAND)))
+            .thenReturn(CompletableFuture.completedFuture(ack));
+
+        WorkerCommandAck result = gateway.sendStart(command()).get();
+
+        assertThat(result.getStatus()).isEqualTo(WorkerCommandAckStatus.REJECTED_INVALID_STATE);
+        verify(eventBusClient, org.mockito.Mockito.times(1))
+            .request(eq("worker." + NODE_ID + ".command"), any(WorkerCommand.class),
+                eq(EventBusRequestKind.TASK_COMMAND));
+    }
+
+    @Test
+    void sendStop_givenStopContext_shouldIncludeContextInCommand() throws Exception {
+        VertxWorkerCommandGateway gateway = new VertxWorkerCommandGateway(eventBusClient, 1, 0);
+        WorkerCommandAck ack = WorkerCommandAck.builder()
+            .taskId(TASK_ID)
+            .nodeId(NODE_ID)
+            .type(WorkerCommandType.STOP_TASK)
+            .status(WorkerCommandAckStatus.ACCEPTED)
+            .build();
+        when(eventBusClient.<WorkerCommandAck>request(eq("worker." + NODE_ID + ".command"),
+            any(WorkerCommand.class), eq(EventBusRequestKind.TASK_COMMAND)))
+            .thenReturn(CompletableFuture.completedFuture(ack));
+
+        gateway.sendStop(TASK_ID, NODE_ID, TaskStopContext.serviceShutdown(NODE_ID)).get();
+
+        ArgumentCaptor<WorkerCommand> captor = ArgumentCaptor.forClass(WorkerCommand.class);
+        verify(eventBusClient).request(eq("worker." + NODE_ID + ".command"),
+            captor.capture(), eq(EventBusRequestKind.TASK_COMMAND));
+        assertThat(captor.getValue().getStopContext().getReason()).isEqualTo(TaskStopReason.SERVICE_SHUTDOWN);
+        assertThat(captor.getValue().getStopContext().getMetadata()).containsEntry("nodeShutdown", true);
     }
 
     private WorkerTaskCommand command() {

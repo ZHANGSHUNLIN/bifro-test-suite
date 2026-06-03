@@ -21,8 +21,6 @@ import java.io.Serial;
 import java.io.Serializable;
 import lombok.Builder;
 import org.apache.bifromq.testsuite.TaskTemplate;
-import org.apache.bifromq.testsuite.worker.type.WorkerPlanSpec;
-import org.apache.bifromq.testsuite.worker.type.WorkerPlanSpecMapper;
 
 @Builder
 public record WorkerTaskCommand(
@@ -54,7 +52,4 @@ public record WorkerTaskCommand(
             .build();
     }
 
-    public WorkerPlanSpec createWorkerPlanSpec() {
-        return WorkerPlanSpecMapper.fromWorkerTaskSpec(workerTaskSpec);
-    }
 }

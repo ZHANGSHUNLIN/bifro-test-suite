@@ -101,7 +101,7 @@ runtime metrics, and report management in one project.
 - Maven 3.8+
 - Node.js 18+
 - pnpm
-- MongoDB 4.4+
+- MongoDB 4.4+ when using external database mode
 
 ### Build from Source
 
@@ -133,18 +133,22 @@ pnpm build
 
 ### Run Locally
 
-Start MongoDB first, then run the backend application:
+Run the backend application:
 
 ```bash
 mvn spring-boot:run -pl bifro-test-bed
 ```
 
-The backend uses `bifro-test-bed/src/main/resources/application.yml` by default:
+Source launches use `bifro-test-bed/src/main/resources/application.yml` as a development-only default:
 
 - Server port: `8081`
-- MongoDB: `localhost:27017`, database `bifro-test-suite`
+- Storage mode: embedded MongoDB, single control-capable node
 - Admin UI path: `http://localhost:8081/admin`
 - Swagger UI: `http://localhost:8081/swagger-ui.html`
+
+The development `application.yml` is excluded from the packaged application jar. Distribution startup scripts load
+configuration from the external `conf/` directory with `--spring.config.location=conf/`, so deployment configuration
+must be managed under `conf/`.
 
 For frontend development:
 
@@ -165,6 +169,36 @@ Manual GitHub releases publish multiple assets for different deployment models:
 | `bifro-test-suite-<version>-frontend.zip` | Frontend-only package containing the built `dist` output |
 | `bifro-test-suite-<version>-sbom.json` | CycloneDX software bill of materials |
 | `SHA256SUMS` | Checksums for release assets |
+
+The full backend package contains `conf/application.yml` plus role or mode overlays:
+
+- `conf/application-control.yml`
+- `conf/application-worker.yml`
+- `conf/application-embedded.yml`
+
+Use the launcher from the package root, for example:
+
+```bash
+bin/bifro-test-suite.sh start
+bin/bifro-test-suite.sh start control
+bin/bifro-test-suite.sh start worker
+bin/bifro-test-suite.sh start embedded
+```
+
+### Deployment Boundary
+
+Control-plane HA is intentionally limited in the current release. Pick the deployment shape by storage mode:
+
+| Storage mode | Control/all nodes | Worker nodes | MongoDB requirement | Notes |
+| --- | --- | --- | --- | --- |
+| `embedded` | Exactly one | One or more | No external MongoDB for the control node | Single-control mode only. It is not HA, and a second embedded control/all node must fail startup. |
+| `database` | One or more | One or more | External MongoDB for control/all nodes | Multiple control nodes may share MongoDB, but this is not full active-active HA yet. Use a single active API writer until HA is designed. |
+
+Worker-only nodes do not require MongoDB in either mode. For embedded control-node movement, migrate or mount the same
+embedded data directory explicitly; automatic takeover is disabled by default.
+
+See [storage mode design](docs/arch/DESIGN-storage-modes.md) and
+[control-plane minimal safety design](docs/arch/DESIGN-control-plane-minimal-safety.md) for the detailed boundaries.
 
 ## Task Templates
 
@@ -241,6 +275,9 @@ user store is empty, the service creates an `admin` user with a random password 
 ```text
 conf/initial-admin-password
 ```
+
+For source launches, this path is relative to the repository root. For distribution launches, it is relative to the
+unpacked package root, for example `<package>/conf/initial-admin-password`.
 
 Protect this file and rotate the password after the first login.
 

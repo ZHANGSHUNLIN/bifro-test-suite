@@ -28,6 +28,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.apache.bifromq.testsuite.app.bean.ClusterNodeInfo;
 import org.apache.bifromq.testsuite.cluster.NodeRole;
+import org.apache.bifromq.testsuite.config.storage.StorageMode;
 
 @Data
 @Builder
@@ -46,6 +47,11 @@ public class MemberInfo implements Serializable {
 
     @Builder.Default
     private NodeRole role = NodeRole.UNKNOWN;
+
+    @Builder.Default
+    private StorageMode storageMode = StorageMode.DATABASE;
+
+    private String embeddedDataDir;
 
     private ClusterNodeInfo systemInfo;
 

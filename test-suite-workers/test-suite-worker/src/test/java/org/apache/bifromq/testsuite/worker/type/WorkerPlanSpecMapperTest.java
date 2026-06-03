@@ -266,7 +266,7 @@ class WorkerPlanSpecMapperTest {
         c.setNodeId("node");
         c.setConnectRate(123);
         c.setDisconnectRate(456);
-        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.ratelimit.IRateLimiter.Type.GUAVA);
+        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.RateLimiterType.GUAVA);
         c.setBrokers(List.of(new org.apache.bifromq.testsuite.worker.TaskBroker("localhost", 1883)));
 
         var context = WorkerPlanSpecMapper.buildExecutionContext(c, 1, 1);
@@ -282,7 +282,7 @@ class WorkerPlanSpecMapperTest {
         c.setConnectRate(123);
         c.setDisconnectRate(456);
         c.setSubscribeRate(77);
-        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.ratelimit.IRateLimiter.Type.GUAVA);
+        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.RateLimiterType.GUAVA);
         c.setBrokers(List.of(new org.apache.bifromq.testsuite.worker.TaskBroker("localhost", 1883)));
 
         var context = WorkerPlanSpecMapper.buildExecutionContext(c, 1, 1);
@@ -299,7 +299,7 @@ class WorkerPlanSpecMapperTest {
         c.setDisconnectRate(456);
         c.setSubscribeRate(3000);
         c.setTopicsPerClient(10);
-        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.ratelimit.IRateLimiter.Type.GUAVA);
+        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.RateLimiterType.GUAVA);
         c.setBrokers(List.of(new org.apache.bifromq.testsuite.worker.TaskBroker("localhost", 1883)));
 
         var context = WorkerPlanSpecMapper.buildExecutionContext(c, 1, 1);
@@ -316,7 +316,7 @@ class WorkerPlanSpecMapperTest {
         c.setDisconnectRate(456);
         c.setSubscribeRate(1);
         c.setTopicsPerClient(10);
-        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.ratelimit.IRateLimiter.Type.GUAVA);
+        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.RateLimiterType.GUAVA);
         c.setBrokers(List.of(new org.apache.bifromq.testsuite.worker.TaskBroker("localhost", 1883)));
 
         var context = WorkerPlanSpecMapper.buildExecutionContext(c, 1, 1);
@@ -331,7 +331,7 @@ class WorkerPlanSpecMapperTest {
         c.setNodeId("node");
         c.setConnectRate(123);
         c.setDisconnectRate(456);
-        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.ratelimit.IRateLimiter.Type.GUAVA);
+        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.RateLimiterType.GUAVA);
         c.setBrokers(List.of(new org.apache.bifromq.testsuite.worker.TaskBroker("localhost", 1883)));
 
         var context = WorkerPlanSpecMapper.buildExecutionContext(c, 3, 7);
@@ -349,7 +349,7 @@ class WorkerPlanSpecMapperTest {
         c.setNodeId("node");
         c.setConnectRate(123);
         c.setDisconnectRate(456);
-        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.ratelimit.IRateLimiter.Type.GUAVA);
+        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.RateLimiterType.GUAVA);
         c.setBrokers(List.of(new org.apache.bifromq.testsuite.worker.TaskBroker("localhost", 1883)));
 
         var context = WorkerPlanSpecMapper.buildExecutionContext(c, 1, 1);
@@ -366,7 +366,7 @@ class WorkerPlanSpecMapperTest {
         c.setDisconnectRate(456);
         c.setSubscribeRate(3000);
         c.setTopicsPerClient(10);
-        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.ratelimit.IRateLimiter.Type.GUAVA);
+        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.RateLimiterType.GUAVA);
         c.setBrokers(List.of(new org.apache.bifromq.testsuite.worker.TaskBroker("localhost", 1883)));
 
         var context = WorkerPlanSpecMapper.buildExecutionContext(c, 1, 1);
@@ -381,7 +381,7 @@ class WorkerPlanSpecMapperTest {
         c.setNodeId("node");
         c.setConnectRate(123);
         c.setDisconnectRate(456);
-        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.ratelimit.IRateLimiter.Type.GUAVA);
+        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.RateLimiterType.GUAVA);
         c.setBrokers(List.of(new org.apache.bifromq.testsuite.worker.TaskBroker("localhost", 1883)));
         c.setConnectProfileDataPoints(List.of(new long[] {0, 0}, new long[] {1_000, 20}));
         c.setConnectWaveQpsSpec(WaveQpsSpec.builder()
@@ -403,7 +403,7 @@ class WorkerPlanSpecMapperTest {
         c.setNodeId("node");
         c.setConnectRate(123);
         c.setDisconnectRate(456);
-        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.ratelimit.IRateLimiter.Type.GUAVA);
+        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.RateLimiterType.GUAVA);
         c.setBrokers(List.of(new org.apache.bifromq.testsuite.worker.TaskBroker("localhost", 1883)));
         c.setDisconnectWaveQpsSpec(WaveQpsSpec.builder()
             .baseQps(10)
@@ -425,7 +425,7 @@ class WorkerPlanSpecMapperTest {
         c.setConnectRate(123);
         c.setDisconnectRate(456);
         c.setTopicsPerClient(10);
-        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.ratelimit.IRateLimiter.Type.GUAVA);
+        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.RateLimiterType.GUAVA);
         c.setBrokers(List.of(new org.apache.bifromq.testsuite.worker.TaskBroker("localhost", 1883)));
         c.setSubscribeProfileDataPoints(List.of(new long[] {0, 0}, new long[] {1_000, 3000}));
 
@@ -442,7 +442,7 @@ class WorkerPlanSpecMapperTest {
         c.setConnectRate(123);
         c.setDisconnectRate(456);
         c.setTopicsPerClient(10);
-        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.ratelimit.IRateLimiter.Type.GUAVA);
+        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.RateLimiterType.GUAVA);
         c.setBrokers(List.of(new org.apache.bifromq.testsuite.worker.TaskBroker("localhost", 1883)));
         c.setSubscribeProfileDataPoints(List.of(new long[] {0, 1}, new long[] {10_000, 1}));
 
@@ -458,7 +458,7 @@ class WorkerPlanSpecMapperTest {
         c.setNodeId("node");
         c.setConnectRate(123);
         c.setDisconnectRate(456);
-        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.ratelimit.IRateLimiter.Type.GUAVA);
+        c.setRateLimiterType(org.apache.bifromq.testsuite.worker.RateLimiterType.GUAVA);
         c.setBrokers(List.of(new org.apache.bifromq.testsuite.worker.TaskBroker("localhost", 1883)));
         c.setEnableAutoMultiAddress(false);
         c.setLocalPortRangeConfig(LocalPortRangeConfig.builder()

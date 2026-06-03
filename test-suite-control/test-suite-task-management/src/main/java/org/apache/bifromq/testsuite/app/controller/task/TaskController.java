@@ -50,11 +50,13 @@ import org.apache.bifromq.testsuite.app.controller.ApiController;
 import org.apache.bifromq.testsuite.app.database.pojo.TaskStateHistory;
 import org.apache.bifromq.testsuite.app.database.pojo.TaskInfoMetadata;
 import org.apache.bifromq.testsuite.app.database.repository.TaskStateHistoryRepository;
+import org.apache.bifromq.testsuite.app.database.service.TaskInfoMetadataService;
 import org.apache.bifromq.testsuite.app.database.service.TaskReportService;
 import org.apache.bifromq.testsuite.app.eventbus.WorkerCommandGateway;
 import org.apache.bifromq.testsuite.app.task.TaskManager;
 import org.apache.bifromq.testsuite.app.task.diagnostics.TaskDiagnosticsService;
 import org.apache.bifromq.testsuite.app.task.diagnostics.TaskLogSummaryService;
+import org.apache.bifromq.testsuite.app.task.runtime.TaskRuntimeStates;
 import org.apache.bifromq.testsuite.audit.application.AuditLogService;
 import org.apache.bifromq.testsuite.audit.domain.AuditAction;
 import org.apache.bifromq.testsuite.i18n.Messages;
@@ -99,6 +101,9 @@ public class TaskController implements ApiController {
 
     @Resource
     private TaskStateHistoryRepository taskStateHistoryRepository;
+
+    @Resource
+    private TaskInfoMetadataService taskInfoMetadataService;
 
     @Resource
     private TaskDiagnosticsService taskDiagnosticsService;
@@ -211,12 +216,37 @@ public class TaskController implements ApiController {
     public Mono<ApiResponse<String>> stopTask(
         @PathVariable(value = "id") @Parameter(description = "Task ID") String id,
         ServerWebExchange exchange) {
-        return taskManager.getTaskWorkerNodeIds(id)
-            .flatMap(nodeIds -> Mono.fromFuture(workerCommandGateway.sendStopAll(id, nodeIds)))
-            .flatMap(acks -> recordRejectedWorkerCommandAcks(id, "STOP_TASK", acks)
-                .thenReturn(workerStopAckResponse(acks)))
-            .onErrorResume(e -> recordWorkerCommandException(id, "STOP_TASK", e)
-                .thenReturn(ApiResponse.<String>error(rootMessage(e))))
+        return taskManager.getTaskBasicInfo(id)
+            .flatMap(response -> {
+                if (!response.isSuccess()) {
+                    return Mono.just(ApiResponse.<String>error(Messages.get("error.task.notFound")));
+                }
+                TaskStage currentStage = response.getData().getMainTaskView() == null
+                    ? null : response.getData().getMainTaskView().taskWorkStage();
+                if (TaskRuntimeStates.isTerminal(currentStage) || currentStage == TaskStage.SHUTTING) {
+                    return Mono.just(ApiResponse.<String>success(Messages.get("msg.task.submitted")));
+                }
+                if (currentStage != TaskStage.STARTING && currentStage != TaskStage.ONGOING) {
+                    return Mono.just(ApiResponse.<String>error(
+                        Messages.get("error.task.invalidStateForStop", currentStage)));
+                }
+                return taskInfoMetadataService.tryUpdateStage(
+                        id,
+                        List.of(TaskStage.STARTING, TaskStage.ONGOING),
+                        TaskStage.SHUTTING,
+                        Instant.now())
+                    .flatMap(updated -> {
+                        if (!updated) {
+                            return Mono.just(ApiResponse.<String>success(Messages.get("msg.task.submitted")));
+                        }
+                        return taskManager.getTaskWorkerNodeIds(id)
+                            .flatMap(nodeIds -> Mono.fromFuture(workerCommandGateway.sendStopAll(id, nodeIds)))
+                            .flatMap(acks -> recordRejectedWorkerCommandAcks(id, "STOP_TASK", acks)
+                                .thenReturn(workerStopAckResponse(acks)))
+                            .onErrorResume(e -> recordWorkerCommandException(id, "STOP_TASK", e)
+                                .thenReturn(ApiResponse.<String>error(rootMessage(e))));
+                    });
+            })
             .flatMap(result -> auditLogService.record(exchange, AuditAction.TASK_STOP, "TASK", id, result.isSuccess(),
                     "Stop task")
                 .thenReturn(result));
@@ -282,12 +312,20 @@ public class TaskController implements ApiController {
                     return Mono.just(ApiResponse.error(Messages.get("error.task.templateNotEmpty")));
                 }
 
-                return taskManager.prepareTaskStartCommands(id)
-                    .flatMap(workerCommands -> Mono.fromFuture(workerCommandGateway.sendStartAll(workerCommands)))
-                    .flatMap(acks -> recordRejectedWorkerCommandAcks(id, "START_TASK", acks)
-                        .thenReturn(workerStartAckResponse(acks)))
-                    .onErrorResume(e -> recordWorkerCommandException(id, "START_TASK", e)
-                        .thenReturn(ApiResponse.<Void>error(rootMessage(e))))
+                return taskInfoMetadataService.tryUpdateStage(id, TaskStage.ASSIGNED, TaskStage.STARTING, Instant.now())
+                    .flatMap(updated -> {
+                        if (!updated) {
+                            return Mono.just(ApiResponse.<Void>error(
+                                Messages.get("error.task.invalidStateForStart", currentStage)));
+                        }
+                        return taskManager.prepareTaskStartCommands(id)
+                            .flatMap(workerCommands ->
+                                Mono.fromFuture(workerCommandGateway.sendStartAll(workerCommands)))
+                            .flatMap(acks -> recordRejectedWorkerCommandAcks(id, "START_TASK", acks)
+                                .thenReturn(workerStartAckResponse(acks)))
+                            .onErrorResume(e -> recordWorkerCommandException(id, "START_TASK", e)
+                                .thenReturn(ApiResponse.<Void>error(rootMessage(e))));
+                    })
                     .flatMap(result ->
                         auditLogService.record(exchange, AuditAction.TASK_START, "TASK", id, result.isSuccess(),
                                 "Start task")

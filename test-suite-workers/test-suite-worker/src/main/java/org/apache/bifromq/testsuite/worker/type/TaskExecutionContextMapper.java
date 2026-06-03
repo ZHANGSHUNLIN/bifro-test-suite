@@ -19,6 +19,7 @@ package org.apache.bifromq.testsuite.worker.type;
 
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import org.apache.bifromq.testsuite.worker.RateLimiterType;
 import org.apache.bifromq.testsuite.worker.TaskConfig;
 import org.apache.bifromq.testsuite.worker.WorkerTaskSpec;
 import org.apache.bifromq.testsuite.worker.context.TaskExecutionContext;
@@ -46,11 +47,11 @@ public final class TaskExecutionContextMapper {
             config.getThingIdStartAt(),
             config.getFanOut(),
             config.getFanIn(),
-            IRateLimiter.create(config.getRateLimiterType(), config.getConnectRate()),
-            IRateLimiter.create(config.getRateLimiterType(), config.getDisconnectRate()),
+            IRateLimiter.create(toRuntimeRateLimiterType(config.getRateLimiterType()), config.getConnectRate()),
+            IRateLimiter.create(toRuntimeRateLimiterType(config.getRateLimiterType()), config.getDisconnectRate()),
             TaskRateStrategyFactory.connect(config),
             TaskRateStrategyFactory.disconnect(config),
-            IRateLimiter.create(config.getRateLimiterType(), effectiveSubscribeClientRate),
+            IRateLimiter.create(toRuntimeRateLimiterType(config.getRateLimiterType()), effectiveSubscribeClientRate),
             TaskRateStrategyFactory.subscribe(config),
             TaskRateStrategyFactory.publish(config, expectedPubCount),
             TaskMqttClientConfigFactoryMapper.fromTaskConfig(config),
@@ -82,11 +83,11 @@ public final class TaskExecutionContextMapper {
             spec.getThingIdStartAt(),
             spec.getFanOut(),
             spec.getFanIn(),
-            IRateLimiter.create(spec.getRateLimiterType(), spec.getConnectRate()),
-            IRateLimiter.create(spec.getRateLimiterType(), spec.getDisconnectRate()),
+            IRateLimiter.create(toRuntimeRateLimiterType(spec.getRateLimiterType()), spec.getConnectRate()),
+            IRateLimiter.create(toRuntimeRateLimiterType(spec.getRateLimiterType()), spec.getDisconnectRate()),
             TaskRateStrategyFactory.connect(spec),
             TaskRateStrategyFactory.disconnect(spec),
-            IRateLimiter.create(spec.getRateLimiterType(), effectiveSubscribeClientRate),
+            IRateLimiter.create(toRuntimeRateLimiterType(spec.getRateLimiterType()), effectiveSubscribeClientRate),
             TaskRateStrategyFactory.subscribe(spec),
             TaskRateStrategyFactory.publish(spec, expectedPubCount),
             TaskMqttClientConfigFactoryMapper.fromWorkerTaskSpec(spec),
@@ -99,5 +100,11 @@ public final class TaskExecutionContextMapper {
             new ConcurrentHashMap<>(),
             Optional.empty()
         );
+    }
+
+    private static IRateLimiter.Type toRuntimeRateLimiterType(RateLimiterType type) {
+        return switch (type == null ? RateLimiterType.GUAVA : type) {
+            case GUAVA -> IRateLimiter.Type.GUAVA;
+        };
     }
 }

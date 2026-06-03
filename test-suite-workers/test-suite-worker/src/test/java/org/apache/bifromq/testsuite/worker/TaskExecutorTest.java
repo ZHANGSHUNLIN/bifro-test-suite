@@ -92,7 +92,7 @@ class TaskExecutorTest {
         lenient().when(taskConfig.getConnectRate()).thenReturn(500);
         lenient().when(taskConfig.getDisconnectRate()).thenReturn(500);
         lenient().when(taskConfig.getRateLimiterType())
-            .thenReturn(org.apache.bifromq.testsuite.worker.ratelimit.IRateLimiter.Type.GUAVA);
+            .thenReturn(org.apache.bifromq.testsuite.worker.RateLimiterType.GUAVA);
         lenient().when(taskConfig.getTaskType())
             .thenReturn(org.apache.bifromq.testsuite.worker.TaskConfig.TaskType.PUBSUB);
 

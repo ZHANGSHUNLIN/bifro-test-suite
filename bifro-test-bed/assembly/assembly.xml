@@ -26,6 +26,15 @@
             <fileMode>0755</fileMode>
             <includes>
                 <include>bin/*.sh</include>
+                <include>bin/**/*.sh</include>
+            </includes>
+        </fileSet>
+        <fileSet>
+            <lineEnding>windows</lineEnding>
+            <fileMode>0755</fileMode>
+            <includes>
+                <include>bin/*.ps1</include>
+                <include>bin/*.cmd</include>
             </includes>
         </fileSet>
         <fileSet>
@@ -34,6 +43,7 @@
                 <include>conf/application.yml</include>
                 <include>conf/application-control.yml</include>
                 <include>conf/application-worker.yml</include>
+                <include>conf/application-embedded.yml</include>
                 <include>conf/log4j2.xml</include>
             </includes>
         </fileSet>

@@ -15,24 +15,22 @@
  * limitations under the License.
  */
 
-package org.apache.bifromq.testsuite.worker.command;
+package org.apache.bifromq.testsuite.app.shutdown;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
+import java.time.Duration;
 import lombok.Data;
-import lombok.NoArgsConstructor;
-import org.apache.bifromq.testsuite.worker.WorkerTaskCommand;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.stereotype.Component;
 
 @Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class WorkerCommand {
+@Component
+@ConfigurationProperties(prefix = "bifro.shutdown")
+public class GracefulShutdownProperties {
 
-    private String messageId;
-    private String taskId;
-    private String nodeId;
-    private WorkerCommandType type;
-    private long createdAtMs;
-    private WorkerTaskCommand startCommand;
+    private boolean gracefulEnabled = true;
+    private Duration taskStopTimeout = Duration.ofSeconds(120);
+    private Duration taskStopPerTaskTimeout = Duration.ofSeconds(120);
+    private Duration participantTimeout = Duration.ofSeconds(10);
+    private boolean rejectStartWhenShuttingDown = true;
+    private boolean logPendingTasks = true;
 }

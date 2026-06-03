@@ -24,7 +24,9 @@ import jakarta.annotation.Resource;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -93,9 +95,11 @@ public class TaskStateEventHandler {
                             event.getTaskId(), event.getNodeId(), eventSeq);
                         return null;
                     }
-                    lastProcessedEventSeq.put(eventKey, eventSeq);
 
-                    saveStateHistoryBlocking(event);
+                    if (!saveStateHistoryBlocking(event)) {
+                        return null;
+                    }
+                    lastProcessedEventSeq.put(eventKey, eventSeq);
 
                     updateNodeTaskStageBlocking(event);
 
@@ -111,7 +115,7 @@ public class TaskStateEventHandler {
         });
     }
 
-    private void saveStateHistoryBlocking(TaskStateChangeEvent event) {
+    private boolean saveStateHistoryBlocking(TaskStateChangeEvent event) {
         try {
             TaskStateHistory history = TaskStateHistory.builder()
                 .taskId(event.getTaskId())
@@ -123,10 +127,13 @@ public class TaskStateEventHandler {
                 .timestamp(event.getTimestamp())
                 .source(event.getNodeId() == null ? "MAIN_TASK" : "SUB_TASK")
                 .eventSeq(event.getEventSeq())
+                .errorMessage(event.getMessage())
+                .metadata(stateHistoryMetadata(event))
                 .build();
 
             taskStateHistoryRepository.save(history).block();
             log.debug("State history saved: {}", history);
+            return true;
         } catch (Exception e) {
 
             if (isDuplicateKeyException(e)) {
@@ -135,7 +142,26 @@ public class TaskStateEventHandler {
             } else {
                 log.error("Failed to save state history", e);
             }
+            return false;
         }
+    }
+
+    private Map<String, Object> stateHistoryMetadata(TaskStateChangeEvent event) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        if (event.getMetadata() != null) {
+            metadata.putAll(event.getMetadata());
+        }
+        if (event.getReason() != null && !event.getReason().isBlank()) {
+            metadata.put("reason", event.getReason());
+        }
+        if (event.getMessage() != null && !event.getMessage().isBlank()) {
+            metadata.put("message", event.getMessage());
+        }
+        Object initiator = metadata.get("initiator");
+        if (initiator instanceof String value && value.isBlank()) {
+            metadata.remove("initiator");
+        }
+        return metadata.isEmpty() ? null : Map.copyOf(metadata);
     }
 
     private boolean isDuplicateKeyException(Throwable e) {

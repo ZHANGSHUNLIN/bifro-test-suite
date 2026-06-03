@@ -17,9 +17,11 @@
 
 package org.apache.bifromq.testsuite.app.database.repository;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import org.apache.bifromq.testsuite.TaskStage;
 import org.apache.bifromq.testsuite.app.database.pojo.TaskInfoMetadata;
 import org.apache.bifromq.testsuite.worker.TaskConfig;
-import java.time.LocalDateTime;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
 import org.springframework.data.mongodb.repository.Update;
@@ -33,6 +35,12 @@ public interface TaskInfoMetadataRepository extends ReactiveMongoRepository<Task
     @Query("{ '_id' : ?0 }")
     @Update(value = "{ $set: { 'taskConfig': ?1 } }")
     Mono<Void> updateTaskConfigById(String id, TaskConfig taskConfig);
+
+    @Query("{ '_id' : ?0 }")
+    @Update(value = "{ $set: { 'taskConfig': ?1, 'currentStage': ?2, 'stageUpdatedAt': ?3, "
+        + "'plannedStartAtMs': ?4 } }")
+    Mono<Void> updateTaskStartRuntimeById(String id, TaskConfig taskConfig, TaskStage currentStage,
+                                          Instant updatedAt, Long plannedStartAtMs);
     
     @Query("{ '_id' : ?0 }")
     @Update(value = "{ $set: { 'startTime': ?1 } }")

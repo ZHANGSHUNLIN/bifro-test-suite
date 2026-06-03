@@ -22,19 +22,22 @@ import io.vertx.core.Vertx;
 import io.vertx.core.eventbus.Message;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
+import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.bifromq.testsuite.MqttClientTask;
 import org.apache.bifromq.testsuite.TaskSchedule;
 import org.apache.bifromq.testsuite.TaskStage;
 import org.apache.bifromq.testsuite.app.cluster.core.ClusterDataManager;
 import org.apache.bifromq.testsuite.app.config.LocalPortModeProperties;
+import org.apache.bifromq.testsuite.app.shutdown.GracefulShutdownProperties;
 import org.apache.bifromq.testsuite.config.role.ConditionalOnWorkerPlane;
 import org.apache.bifromq.testsuite.client.LocalAddressProvider;
 import org.apache.bifromq.testsuite.client.LocalPortAllocator;
@@ -46,12 +49,9 @@ import org.apache.bifromq.testsuite.metric.NodeMetricsRequest;
 import org.apache.bifromq.testsuite.metric.NodeMetricsResponse;
 import org.apache.bifromq.testsuite.scheduler.DelayedTaskScheduler;
 import org.apache.bifromq.testsuite.scheduler.ScheduledTaskEventBusRegistrar;
-import org.apache.bifromq.testsuite.worker.BaseTaskWorker;
-import org.apache.bifromq.testsuite.worker.ClientQueryService;
-import org.apache.bifromq.testsuite.worker.MetricsQueryService;
 import org.apache.bifromq.testsuite.worker.TaskConfig;
 import org.apache.bifromq.testsuite.worker.TaskWorker;
-import org.apache.bifromq.testsuite.worker.TaskWorkerFactory;
+import org.apache.bifromq.testsuite.worker.TaskWorkerRuntime;
 import org.apache.bifromq.testsuite.worker.WorkerTaskCommand;
 import org.apache.bifromq.testsuite.worker.command.WorkerCommand;
 import org.apache.bifromq.testsuite.worker.command.WorkerCommandAck;
@@ -63,6 +63,7 @@ import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckRequest;
 import org.apache.bifromq.testsuite.worker.pojo.LocalPortCapacityCheckResponse;
 import org.apache.bifromq.testsuite.worker.pojo.TaskMetricsCleanupRequest;
 import org.apache.bifromq.testsuite.worker.pojo.TaskMetricsCleanupResponse;
+import org.apache.bifromq.testsuite.worker.pojo.TaskStopContext;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
@@ -76,6 +77,8 @@ public class LocalTaskCoordinator {
     @Getter
     private final Map<String, TaskWorker> runningTaskMap = Maps.newConcurrentMap();
 
+    private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
+
     private final Set<String> processedMessageIds = java.util.Collections.synchronizedSet(
         new LinkedHashSet<String>() {
             @Override
@@ -86,7 +89,6 @@ public class LocalTaskCoordinator {
                 return super.add(e);
             }
         });
-    private final MetricsQueryService metricsQueryService = new MetricsQueryService();
     @Resource
     private Vertx vertx;
     @Resource
@@ -94,7 +96,11 @@ public class LocalTaskCoordinator {
     @Resource
     private LocalPortModeProperties localPortModeProperties;
     @Resource
+    private GracefulShutdownProperties gracefulShutdownProperties;
+    @Resource
     private DelayedTaskScheduler delayedTaskScheduler;
+    @Resource
+    private TaskWorkerRuntime taskWorkerRuntime;
 
     public void startTask(String id) {
         log.warn("Ignore legacy task start by id on worker node: taskId={}", id);
@@ -104,6 +110,10 @@ public class LocalTaskCoordinator {
         String id = command == null ? null : command.taskId();
         if (id == null || id.isBlank()) {
             log.warn("Ignore worker command without taskId");
+            return;
+        }
+        if (shouldRejectStartWhenShuttingDown()) {
+            log.warn("Reject local task start because node is shutting down, taskId={}", id);
             return;
         }
         if (runningTasks.contains(id)) {
@@ -141,12 +151,10 @@ public class LocalTaskCoordinator {
         return Mono.defer(() -> {
             switch (command.taskType()) {
                 case CONN, PUBSUB, CHAOS:
-                    TaskWorker connWorker = TaskWorkerFactory.create(vertx, command.createWorkerPlanSpec());
+                    TaskWorker connWorker = taskWorkerRuntime.create(vertx, command);
                     runningTaskMap.put(id, connWorker);
-                    if (connWorker instanceof BaseTaskWorker baseWorker) {
-                        baseWorker.terminalFuture()
-                            .whenComplete((stage, error) -> removeLocalRunningTask(id));
-                    }
+                    connWorker.terminalFuture()
+                        .whenComplete((stage, error) -> removeLocalRunningTask(id));
                     connWorker.startTask();
                     break;
                 default:
@@ -206,7 +214,7 @@ public class LocalTaskCoordinator {
         vertx.eventBus().<WorkerCommand>consumer(commandAddr, this::handleWorkerCommandMessage);
         String metricsAddr = EventBusAddresses.nodeMetrics(clusterDataManager.getCurrentNodeIdCache());
         vertx.eventBus().<NodeMetricsRequest>consumer(metricsAddr, message -> {
-            NodeMetricsResponse response = metricsQueryService.query(message.body());
+            NodeMetricsResponse response = taskWorkerRuntime.queryMetrics(message.body());
             message.reply(response);
         });
         String metricsCleanupAddr = EventBusAddresses.taskMetricsCleanup(clusterDataManager.getCurrentNodeIdCache());
@@ -217,25 +225,11 @@ public class LocalTaskCoordinator {
             clusterDataManager.getCurrentNodeIdCache()
         ).register();
         String clientsAddr = EventBusAddresses.nodeClients(clusterDataManager.getCurrentNodeIdCache());
-        ClientQueryService clientQueryService = new ClientQueryService();
         vertx.eventBus().<ClientQueryRequest>consumer(clientsAddr, message -> {
             ClientQueryRequest request = message.body();
             TaskWorker taskWorker = runningTaskMap.get(request.getTaskId());
-            if (taskWorker instanceof BaseTaskWorker baseWorker) {
-                Map<String, MqttClientTask> clientMap =
-                    baseWorker.getClientTaskMap(request.getClientType());
-                ClientQueryResponse response = clientQueryService.query(request, clientMap);
-                message.reply(response);
-            } else {
-                message.reply(ClientQueryResponse.builder()
-                    .success(true)
-                    .clients(List.of())
-                    .total(0)
-                    .page(request.getPage())
-                    .size(request.getSize())
-                    .totalPages(0)
-                    .build());
-            }
+            ClientQueryResponse response = taskWorkerRuntime.queryClients(request, taskWorker);
+            message.reply(response);
         });
 
         String localPortCapacityAddr = EventBusAddresses.localPortCapacity(clusterDataManager.getCurrentNodeIdCache());
@@ -275,7 +269,7 @@ public class LocalTaskCoordinator {
         if (command.getType() == WorkerCommandType.START_TASK) {
             runWorkerHandler("worker start command", () -> startTask(command.getStartCommand()));
         } else if (command.getType() == WorkerCommandType.STOP_TASK) {
-            runWorkerHandler("worker stop command", () -> stopTask(command.getTaskId()));
+            runWorkerHandler("worker stop command", () -> stopTask(command.getTaskId(), command.getStopContext()));
         }
         return ack;
     }
@@ -298,6 +292,10 @@ public class LocalTaskCoordinator {
                 "Command node does not match local node: " + localNodeId);
         }
         if (command.getType() == WorkerCommandType.START_TASK) {
+            if (shouldRejectStartWhenShuttingDown()) {
+                return workerCommandAck(command, WorkerCommandAckStatus.REJECTED_INVALID_STATE,
+                    "Node is shutting down");
+            }
             WorkerTaskCommand startCommand = command.getStartCommand();
             if (startCommand == null || startCommand.workerTaskSpec() == null) {
                 return workerCommandAck(command, WorkerCommandAckStatus.REJECTED_INVALID_PAYLOAD,
@@ -405,7 +403,7 @@ public class LocalTaskCoordinator {
     }
 
     private void handleTaskMetricsCleanupRequest(Message<TaskMetricsCleanupRequest> message) {
-        vertx.executeBlocking(() -> metricsQueryService.cleanup(message.body()))
+        vertx.executeBlocking(() -> taskWorkerRuntime.cleanupMetrics(message.body()))
             .onSuccess(message::reply)
             .onFailure(e -> {
                 log.warn("Failed to cleanup task metrics", e);
@@ -544,8 +542,22 @@ public class LocalTaskCoordinator {
     }
 
     public Map<String, TaskStage> runningTask() {
-        return runningTaskMap.entrySet().stream()
-            .collect(Collectors.toMap(Map.Entry::getKey, v -> v.getValue().getTaskState()));
+        return taskWorkerRuntime.runningTaskStages(runningTaskMap);
+    }
+
+    public boolean isShuttingDown() {
+        return shuttingDown.get();
+    }
+
+    public void markShuttingDown() {
+        if (shuttingDown.compareAndSet(false, true)) {
+            log.info("Local task coordinator entered shutdown mode");
+        }
+    }
+
+    private boolean shouldRejectStartWhenShuttingDown() {
+        return shuttingDown.get()
+            && (gracefulShutdownProperties == null || gracefulShutdownProperties.isRejectStartWhenShuttingDown());
     }
 
     void removeLocalRunningTask(String taskId) {
@@ -554,19 +566,57 @@ public class LocalTaskCoordinator {
     }
 
     public void stopTask(String taskId) {
+        stopTask(taskId, TaskStopContext.userStop());
+    }
+
+    public CompletableFuture<Void> stopTask(String taskId, TaskStopContext context) {
 
         TaskWorker taskWorker = runningTaskMap.get(taskId);
         if (taskWorker != null) {
             log.info("cluster task STOP , {}", taskId);
-            taskWorker.stopTask()
-                .thenAccept(r -> {
+            return taskWorker.stopTask(context == null ? TaskStopContext.userStop() : context.normalized())
+                .whenComplete((r, error) -> {
+                    if (error != null) {
+                        log.warn("Failed to stop local task: taskId={}", taskId, error);
+                    }
                     log.info("taskId stopped: {}", taskId);
                     removeLocalRunningTask(taskId);
                 });
         } else {
             log.info("No local worker found for stop command: taskId={}", taskId);
             removeLocalRunningTask(taskId);
+            return CompletableFuture.completedFuture(null);
         }
+    }
+
+    public CompletableFuture<Void> stopAllRunningTasks(TaskStopContext context) {
+        return stopAllRunningTasks(context, null);
+    }
+
+    public CompletableFuture<Void> stopAllRunningTasks(TaskStopContext context, Duration perTaskTimeout) {
+        markShuttingDown();
+        List<String> taskIds = List.copyOf(runningTaskMap.keySet());
+        if (taskIds.isEmpty()) {
+            log.info("No local running tasks to stop during node shutdown");
+            return CompletableFuture.completedFuture(null);
+        }
+        log.info("Stopping {} local running tasks during node shutdown", taskIds.size());
+        List<CompletableFuture<Void>> futures = taskIds.stream()
+            .map(taskId -> withTaskTimeout(taskId, stopTask(taskId, context), perTaskTimeout))
+            .toList();
+        return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
+    }
+
+    private CompletableFuture<Void> withTaskTimeout(String taskId, CompletableFuture<Void> future, Duration timeout) {
+        if (timeout == null || timeout.isZero() || timeout.isNegative()) {
+            return future;
+        }
+        return future.whenComplete((ignored, error) -> {
+            if (error == null) {
+                return;
+            }
+            log.warn("Local task stop failed during node shutdown: taskId={}", taskId, error);
+        }).completeOnTimeout(null, timeout.toMillis(), TimeUnit.MILLISECONDS);
     }
 
 }

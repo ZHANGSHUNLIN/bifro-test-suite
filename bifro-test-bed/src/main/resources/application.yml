@@ -20,6 +20,7 @@ vertx:
   members: "127.0.0.1"
 server:
   port: 8081
+  shutdown: graceful
 
 management:
   endpoints:
@@ -29,6 +30,11 @@ management:
   endpoint:
     health:
       show-details: always
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,storageMode
     metrics:
       enabled: true
     prometheus:
@@ -41,8 +47,10 @@ management:
         enabled: true
 
 bifro:
-  node-role: all
-  node-id: "default-broker-2"
+  node-role: ALL
+  node-id: "default-broker-1"
+  storage:
+    mode: EMBEDDED
   scheduler:
     enabled: true
     max-pending-tasks: 10000
@@ -50,6 +58,13 @@ bifro:
     default-timeout: 30s
   metrics:
     cleanup-delay: 30s
+  shutdown:
+    graceful-enabled: true
+    task-stop-timeout: 120s
+    task-stop-per-task-timeout: 120s
+    participant-timeout: 10s
+    reject-start-when-shutting-down: true
+    log-pending-tasks: true
   security:
     enabled: true
     session-timeout: 8h
@@ -59,12 +74,15 @@ logging:
 
 
 spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 150s
   messages:
     basename: messages
     encoding: UTF-8
     use-code-as-default-message: true
   data:
     mongodb:
+      auto-index-creation: true
       host: "localhost"
       port: 27017
       database: "bifro-test-suite"

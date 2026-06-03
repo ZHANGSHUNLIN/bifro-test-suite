@@ -19,6 +19,7 @@ package org.apache.bifromq.testsuite.app.bean.vo;
 
 import org.apache.bifromq.testsuite.app.database.pojo.TaskStateHistory;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.Map;
 import lombok.Data;
 
 @Data
@@ -43,11 +44,11 @@ public class TaskStateHistoryVO {
     
     private String nodeName;
 
-    
     private String errorMessage;
 
-    
     private String source;
+
+    private Map<String, Object> metadata;
 
     public static TaskStateHistoryVO from(TaskStateHistory history) {
         TaskStateHistoryVO vo = new TaskStateHistoryVO();
@@ -59,6 +60,7 @@ public class TaskStateHistoryVO {
         vo.setNodeName(history.getNodeName());
         vo.setErrorMessage(history.getErrorMessage());
         vo.setSource(history.getSource());
+        vo.setMetadata(history.getMetadata());
         return vo;
     }
 }

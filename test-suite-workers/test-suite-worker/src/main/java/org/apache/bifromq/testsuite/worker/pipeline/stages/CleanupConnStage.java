@@ -19,7 +19,13 @@ package org.apache.bifromq.testsuite.worker.pipeline.stages;
 
 import io.micrometer.core.instrument.Tags;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.bifromq.testsuite.Constants;
@@ -39,14 +45,22 @@ import org.apache.bifromq.testsuite.worker.ratelimit.IRateLimiter;
 @Slf4j
 public class CleanupConnStage implements PipelineStage<TaskPipelineContext> {
 
+    private static final long CLIENT_CLOSE_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
+
     private final String clientTag;
+    private final long clientCloseTimeoutMs;
     private final AtomicLong stageStartMs = new AtomicLong(0);
 
     private DynamicRateController dynamicRateController;
     private FiniteDispatchScheduler finiteDispatchScheduler;
 
     public CleanupConnStage(String clientTag) {
+        this(clientTag, CLIENT_CLOSE_TIMEOUT_MS);
+    }
+
+    CleanupConnStage(String clientTag, long clientCloseTimeoutMs) {
         this.clientTag = clientTag;
+        this.clientCloseTimeoutMs = clientCloseTimeoutMs;
     }
 
     @Override
@@ -80,12 +94,14 @@ public class CleanupConnStage implements PipelineStage<TaskPipelineContext> {
         IRateLimiter rateLimiter = context.getExecutionContext().disconnectRateLimiter();
 
         MqttClientTask[] clients = clientTaskMap.values().toArray(new MqttClientTask[0]);
+        CloseStats closeStats = new CloseStats();
+        Queue<CompletableFuture<Void>> closeFutures = new ConcurrentLinkedQueue<>();
         log.info("Starting cleanup of {} clients for taskId={}, clientTag={}",
             clients.length, taskId, clientTag);
 
         FiniteDispatchPlan dispatchPlan = context.getExecutionContext().disconnectDispatchPlan(clients.length);
         if (dispatchPlan != null) {
-            runFiniteDispatch(context, future, clientTaskMap, clients, taskId, dispatchPlan);
+            runFiniteDispatch(context, future, clientTaskMap, clients, taskId, dispatchPlan, closeStats);
             return future;
         }
 
@@ -100,15 +116,9 @@ public class CleanupConnStage implements PipelineStage<TaskPipelineContext> {
 
         rateLimiter.executeWithRateLimit(clients.length, index -> {
             MqttClientTask client = clients[index];
-            try {
-                client.close();
-            } catch (Exception e) {
-                log.warn("Failed to close client {}, taskId={}: {}",
-                    client.getCId(), taskId, e.getMessage());
-                MetricsHelper.counter(BifroTaskMetric.CLIENT_CLOSE_EXCEPTION_COUNT,
-                    Tags.of("taskId", taskId, "nodeId", nodeId, "clientType", clientTag));
-            }
-            return CompletableFuture.completedFuture(null);
+            CompletableFuture<Void> closeFuture = closeClient(client, taskId, nodeId, closeStats);
+            closeFutures.add(closeFuture);
+            return closeFuture;
         }).whenComplete((__, error) -> {
             stopDynamicQpsScheduler();
             if (error != null) {
@@ -117,12 +127,9 @@ public class CleanupConnStage implements PipelineStage<TaskPipelineContext> {
                 future.complete(StageResult.failure(error));
                 return;
             }
-            log.info("Cleanup completed: {} clients for taskId={}, clientTag={}",
-                clients.length, taskId, clientTag);
-            clientTaskMap.clear();
-            closeSharedSubWorkerExecutor(context);
-            future.complete(StageResult.success(
-                String.format("Cleanup completed for %d clients", clients.length)));
+            CompletableFuture.allOf(closeFutures.toArray(CompletableFuture[]::new))
+                .whenComplete((ignored, closeError) ->
+                    completeCleanup(context, future, clientTaskMap, clients.length, taskId, closeStats));
         });
 
         return future;
@@ -130,7 +137,7 @@ public class CleanupConnStage implements PipelineStage<TaskPipelineContext> {
 
     private void runFiniteDispatch(TaskPipelineContext context, CompletableFuture<StageResult> future,
                                    Map<String, MqttClientTask> clientTaskMap, MqttClientTask[] clients,
-                                   String taskId, FiniteDispatchPlan dispatchPlan) {
+                                   String taskId, FiniteDispatchPlan dispatchPlan, CloseStats closeStats) {
         log.info("Starting finite cleanup dispatch: clients={}, planned={}, duration={}ms, taskId={}, clientTag={}",
             clients.length, dispatchPlan.plannedTotalCount(), dispatchPlan.durationMs(), taskId, clientTag);
         finiteDispatchScheduler = new FiniteDispatchScheduler(
@@ -140,25 +147,70 @@ public class CleanupConnStage implements PipelineStage<TaskPipelineContext> {
                     return CompletableFuture.completedFuture(null);
                 }
                 MqttClientTask client = clients[index];
-                try {
-                    client.close();
-                } catch (Exception e) {
-                    log.warn("Failed to close client {}, taskId={}: {}",
-                        client.getCId(), taskId, e.getMessage());
-                    MetricsHelper.counter(BifroTaskMetric.CLIENT_CLOSE_EXCEPTION_COUNT,
-                        Tags.of("taskId", taskId, "nodeId", context.getExecutionContext().nodeId(),
-                            "clientType", clientTag));
-                }
-                return CompletableFuture.completedFuture(null);
+                return closeClient(client, taskId, context.getExecutionContext().nodeId(), closeStats);
             },
-            () -> {
-                clientTaskMap.clear();
-                closeSharedSubWorkerExecutor(context);
-                future.complete(StageResult.success(
-                    String.format("Cleanup completed for %d clients", clients.length)));
-            }
+            () -> completeCleanup(context, future, clientTaskMap, clients.length, taskId, closeStats)
         );
         finiteDispatchScheduler.start();
+    }
+
+    private CompletableFuture<Void> closeClient(MqttClientTask client, String taskId, String nodeId,
+                                                CloseStats closeStats) {
+        CompletableFuture<Void> closeFuture;
+        try {
+            closeFuture = client.close();
+        } catch (Exception e) {
+            closeStats.failureCount.incrementAndGet();
+            log.warn("Failed to close client {}, taskId={}: {}", client.getCId(), taskId, e.getMessage());
+            MetricsHelper.counter(BifroTaskMetric.CLIENT_CLOSE_EXCEPTION_COUNT,
+                Tags.of("taskId", taskId, "nodeId", nodeId, "clientType", clientTag));
+            return CompletableFuture.completedFuture(null);
+        }
+        if (closeFuture == null) {
+            closeStats.successCount.incrementAndGet();
+            return CompletableFuture.completedFuture(null);
+        }
+        return closeFuture.orTimeout(clientCloseTimeoutMs, TimeUnit.MILLISECONDS)
+            .handle((ignored, error) -> {
+                if (error == null) {
+                    closeStats.successCount.incrementAndGet();
+                    return null;
+                }
+                Throwable cause = unwrap(error);
+                if (cause instanceof TimeoutException) {
+                    closeStats.timeoutCount.incrementAndGet();
+                    log.warn("Timed out closing client {}, taskId={}, timeoutMs={}",
+                        client.getCId(), taskId, clientCloseTimeoutMs);
+                } else {
+                    closeStats.failureCount.incrementAndGet();
+                    log.warn("Failed to close client {}, taskId={}: {}",
+                        client.getCId(), taskId, cause.getMessage());
+                }
+                MetricsHelper.counter(BifroTaskMetric.CLIENT_CLOSE_EXCEPTION_COUNT,
+                    Tags.of("taskId", taskId, "nodeId", nodeId, "clientType", clientTag));
+                return null;
+            });
+    }
+
+    private void completeCleanup(TaskPipelineContext context, CompletableFuture<StageResult> future,
+                                 Map<String, MqttClientTask> clientTaskMap, int clientCount, String taskId,
+                                 CloseStats closeStats) {
+        log.info("Cleanup completed: {} clients for taskId={}, clientTag={}, closeSuccess={}, closeFailure={}, "
+                + "closeTimeout={}",
+            clientCount, taskId, clientTag, closeStats.successCount.get(), closeStats.failureCount.get(),
+            closeStats.timeoutCount.get());
+        clientTaskMap.clear();
+        closeSharedSubWorkerExecutor(context);
+        future.complete(StageResult.success(String.format(
+            "Cleanup completed for %d clients, closeSuccess=%d, closeFailure=%d, closeTimeout=%d",
+            clientCount, closeStats.successCount.get(), closeStats.failureCount.get(), closeStats.timeoutCount.get())));
+    }
+
+    private Throwable unwrap(Throwable error) {
+        if (error instanceof CompletionException && error.getCause() != null) {
+            return error.getCause();
+        }
+        return error;
     }
 
     private void stopDynamicQpsScheduler() {
@@ -195,9 +247,12 @@ public class CleanupConnStage implements PipelineStage<TaskPipelineContext> {
 
     @Override
     public void onCancelled(TaskPipelineContext context) {
-
         log.info("Cleanup triggered on cancellation for clientTag={}", clientTag);
-        this.execute(context);
+    }
+
+    @Override
+    public CompletableFuture<Void> cancel(TaskPipelineContext context) {
+        return execute(context).thenApply(result -> null);
     }
 
     private Map<String, MqttClientTask> resolveClientMap(TaskPipelineContext context) {
@@ -215,5 +270,11 @@ public class CleanupConnStage implements PipelineStage<TaskPipelineContext> {
         if (Constants.SUB_CLIENT_TAG.equals(clientTag)) {
             context.closeSubWorkerExecutor();
         }
+    }
+
+    private static final class CloseStats {
+        private final AtomicInteger successCount = new AtomicInteger();
+        private final AtomicInteger failureCount = new AtomicInteger();
+        private final AtomicInteger timeoutCount = new AtomicInteger();
     }
 }

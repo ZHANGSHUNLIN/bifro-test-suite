@@ -26,6 +26,7 @@ import org.apache.bifromq.testsuite.worker.WorkerTaskCommand;
 import org.apache.bifromq.testsuite.worker.command.WorkerCommand;
 import org.apache.bifromq.testsuite.worker.command.WorkerCommandAck;
 import org.apache.bifromq.testsuite.worker.command.WorkerCommandType;
+import org.apache.bifromq.testsuite.worker.pojo.TaskStopContext;
 
 public class VertxWorkerCommandGateway implements WorkerCommandGateway {
 
@@ -61,12 +62,18 @@ public class VertxWorkerCommandGateway implements WorkerCommandGateway {
 
     @Override
     public CompletableFuture<WorkerCommandAck> sendStop(String taskId, String nodeId) {
+        return sendStop(taskId, nodeId, TaskStopContext.userStop());
+    }
+
+    @Override
+    public CompletableFuture<WorkerCommandAck> sendStop(String taskId, String nodeId, TaskStopContext context) {
         WorkerCommand workerCommand = WorkerCommand.builder()
             .messageId(UUID.randomUUID().toString())
             .taskId(taskId)
             .nodeId(nodeId)
             .type(WorkerCommandType.STOP_TASK)
             .createdAtMs(System.currentTimeMillis())
+            .stopContext(context == null ? TaskStopContext.userStop() : context.normalized())
             .build();
         return requestWithRetry(
             EventBusAddresses.workerCommand(nodeId),

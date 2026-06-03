@@ -17,6 +17,7 @@
 
 package org.apache.bifromq.testsuite.app.cluster;
 
+import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -83,9 +84,7 @@ public class ClusterManager {
 
     private void startTimeoutChecker() {
         long checkInterval = clusterConfig.getHeartbeatIntervalMillis();
-        timeoutCheckTimerId = vertx.setPeriodic(checkInterval, id -> {
-            checkTimeoutNodes();
-        });
+        timeoutCheckTimerId = vertx.setPeriodic(checkInterval, id -> checkTimeoutNodes());
         log.info("Timeout checker started, interval={}ms", checkInterval);
     }
 
@@ -150,7 +149,7 @@ public class ClusterManager {
         return topology;
     }
 
-    public io.vertx.core.Future<ClusterTopology> refreshTopology() {
+    public Future<ClusterTopology> refreshTopology() {
         return memberRegistry.getAllMembers()
             .map(members -> {
                 ClusterTopology newTopology = new ClusterTopology(members, clusterConfig);

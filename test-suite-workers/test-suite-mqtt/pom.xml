@@ -40,6 +40,11 @@
             <artifactId>test-suite-mqtt-client</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.bifromq.testsuite</groupId>
+            <artifactId>test-suite-worker-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>org.slf4j</groupId>

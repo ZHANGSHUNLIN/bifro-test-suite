@@ -29,6 +29,7 @@ import io.vertx.core.eventbus.EventBus;
 import io.vertx.micrometer.MicrometerMetricsOptions;
 import io.vertx.micrometer.backends.BackendRegistries;
 import io.vertx.spi.cluster.hazelcast.HazelcastClusterManager;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.bifromq.testsuite.app.config.vertx.codec.VertxCodecManager;
 import org.apache.bifromq.testsuite.client.PinnedLocalPortTransport;
@@ -40,6 +41,8 @@ import org.springframework.context.annotation.Configuration;
 @Slf4j
 @Configuration
 public class VertxConfig {
+
+    private Vertx managedVertx;
 
     @Bean
     public HazelcastClusterManager hazelcastClusterManager(VertxProperties vertxProperties,
@@ -63,14 +66,14 @@ public class VertxConfig {
         return new HazelcastClusterManager(hazelcastConfig);
     }
 
-    @Bean
+    @Bean(destroyMethod = "")
     public Vertx vertx(VertxProperties vertxProperties, HazelcastClusterManager hazelcastClusterManager) {
         MicrometerMetricsOptions metricsOptions = new MicrometerMetricsOptions()
             .setEnabled(true)
             .setJvmMetricsEnabled(false)
             .setNettyMetricsEnabled(true);
         BackendRegistries.setupBackend(metricsOptions, Metrics.globalRegistry);
-        return Vertx.builder()
+        managedVertx = Vertx.builder()
             .with(new VertxOptions(vertxProperties.getVertxOptions())
                 .setMetricsOptions(metricsOptions)
                 .setPreferNativeTransport(true))
@@ -84,22 +87,12 @@ public class VertxConfig {
                 VertxCodecManager.registerCodecAll(vertx);
                 return vertx;
             })
-            .whenComplete((vertx, throwable) -> {
-                if (throwable != null) {
-                    log.error("Failed to start Test Suite server", throwable);
-                    return;
-                }
-                Runtime.getRuntime().addShutdownHook(
-                    new Thread(() ->
-                        uninterrupted(() -> vertx.close().toCompletionStage().toCompletableFuture().join())
-                    )
-                );
-            })
             .join();
+        return managedVertx;
 
     }
 
-    @Bean
+    @Bean(destroyMethod = "")
     public HazelcastInstance hazelcastInstance(Vertx vertx, HazelcastClusterManager hazelcastClusterManager) {
         HazelcastInstance hazelcastInstance = hazelcastClusterManager.getHazelcastInstance();
         if (hazelcastInstance == null) {
@@ -111,6 +104,16 @@ public class VertxConfig {
     @Bean
     public EventBus eventBus(Vertx vertx) {
         return vertx.eventBus();
+    }
+
+    @PreDestroy
+    public void closeVertx() {
+        if (managedVertx == null) {
+            return;
+        }
+        log.info("Closing managed Vert.x");
+        uninterrupted(() -> managedVertx.close().toCompletionStage().toCompletableFuture().join());
+        log.info("Managed Vert.x closed");
     }
 
     private void uninterrupted(Runnable runnable) {

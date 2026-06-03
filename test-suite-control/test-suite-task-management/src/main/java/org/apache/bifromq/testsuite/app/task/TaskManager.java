@@ -65,12 +65,12 @@ import org.apache.bifromq.testsuite.constants.PayloadMode;
 import org.apache.bifromq.testsuite.i18n.Messages;
 import org.apache.bifromq.testsuite.metric.CounterMetricData;
 import org.apache.bifromq.testsuite.metric.TimerMetricData;
-import org.apache.bifromq.testsuite.payload.TemplatePayloadStrategy;
 import org.apache.bifromq.testsuite.pipeline.PipelineStageSnapshot;
 import org.apache.bifromq.testsuite.statemachine.StateMachine;
 import org.apache.bifromq.testsuite.statemachine.TaskStateMachineConfig;
 import org.apache.bifromq.testsuite.web.ApiException;
 import org.apache.bifromq.testsuite.web.ApiResponse;
+import org.apache.bifromq.testsuite.worker.PayloadTemplateValidator;
 import org.apache.bifromq.testsuite.worker.TaskConfig;
 import org.apache.bifromq.testsuite.worker.WorkerTaskCommand;
 import org.apache.commons.lang3.RandomStringUtils;
@@ -207,7 +207,7 @@ public class TaskManager {
 
         if (PayloadMode.TEMPLATE == taskRequest.getPayloadMode()) {
             try {
-                TemplatePayloadStrategy.validateTemplate(taskRequest.getPayloadTemplate());
+                PayloadTemplateValidator.validate(taskRequest.getPayloadTemplate());
             } catch (IllegalArgumentException e) {
                 return Mono.error(new ApiException(Messages.get("error.task.msgTemplateFormat", e.getMessage())));
             }
@@ -282,11 +282,6 @@ public class TaskManager {
                 TaskConfig taskConfig = taskInfoMetadata.getTaskConfig();
                 TaskStage currentStage = TaskRuntimeStates.mainStage(taskInfoMetadata);
 
-
-                if (currentStage == TaskStage.ASSIGNED) {
-                    return Mono.just(ApiResponse.success(taskConfig));
-                }
-
                 if (TaskRuntimeStates.isRunning(currentStage)) {
                     return Mono.just(
                         ApiResponse.<TaskConfig>error(Messages.get("error.task.invalidStateForAssign", currentStage)));
@@ -323,7 +318,12 @@ public class TaskManager {
                 TaskConfig mainTaskConfig = taskInfoMetadata.getTaskConfig();
                 TaskRuntimeStates.applyMainPlannedStart(taskInfoMetadata, plannedStartAtMs);
                 TaskRuntimeStates.applyMainStage(taskInfoMetadata, TaskStage.STARTING, java.time.Instant.now());
-                return taskInfoMetadataRepository.updateTaskConfigById(id, mainTaskConfig)
+                return taskInfoMetadataRepository.updateTaskStartRuntimeById(
+                        id,
+                        mainTaskConfig,
+                        taskInfoMetadata.getCurrentStage(),
+                        taskInfoMetadata.getStageUpdatedAt(),
+                        taskInfoMetadata.getPlannedStartAtMs())
                     .then(Mono.fromFuture(clusterDataManager.prepareAssignedTaskStart(id, plannedStartAtMs)))
                     .thenMany(nodeTaskRepository.findAllByTaskId(id))
                     .map(NodeTask::getWorkerTaskCommand)
@@ -373,18 +373,23 @@ public class TaskManager {
                         new ApiException(Messages.get("error.task.nameExists", taskRequest.getTaskName())));
                 }
 
-                List<String> brokerIds = taskRequest.getBrokers().stream()
-                    .map(BrokerEntry::getBrokerId)
-                    .collect(Collectors.toList());
-
-                return validateBrokersInSameGroup(brokerIds)
-                    .flatMap(isValid -> {
-                        if (!isValid) {
-                            return Mono.error(new ApiException(Messages.get("error.task.brokerSameGroup")));
+                return taskInfoMetadataRepository.findById(taskId)
+                    .flatMap(existingMetadata -> {
+                        TaskStage currentStage = TaskRuntimeStates.mainStage(existingMetadata);
+                        if (currentStage != TaskStage.INIT) {
+                            return Mono.error(new ApiException(
+                                Messages.get("error.task.invalidStateForEdit", currentStage)));
                         }
 
-                        return taskInfoMetadataRepository.findById(taskId)
-                            .flatMap(existingMetadata -> {
+                        List<String> brokerIds = taskRequest.getBrokers().stream()
+                            .map(BrokerEntry::getBrokerId)
+                            .collect(Collectors.toList());
+
+                        return validateBrokersInSameGroup(brokerIds)
+                            .flatMap(isValid -> {
+                                if (!isValid) {
+                                    return Mono.error(new ApiException(Messages.get("error.task.brokerSameGroup")));
+                                }
 
                                 return mqttBrokerRepository.findAllById(brokerIds)
                                     .collectList()
@@ -427,9 +432,9 @@ public class TaskManager {
 
                                         return taskInfoMetadataRepository.save(existingMetadata);
                                     });
-                            })
-                            .switchIfEmpty(Mono.error(new ApiException("Task not found with id: " + taskId)));
-                    });
+                            });
+                    })
+                    .switchIfEmpty(Mono.error(new ApiException("Task not found with id: " + taskId)));
             });
     }
 

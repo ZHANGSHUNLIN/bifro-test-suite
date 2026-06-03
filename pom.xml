@@ -41,7 +41,7 @@
     </licenses>
 
     <properties>
-        <revision>1.0.24-SNAPSHOT</revision>
+        <revision>1.0.25-SNAPSHOT</revision>
         <skipFrontend>false</skipFrontend>
         <skipFrontendResources>false</skipFrontendResources>
         <os.plugin.version>1.7.1</os.plugin.version>
@@ -74,6 +74,7 @@
         <rxjava.version>3.1.12</rxjava.version>
         <frontend-maven-plugin.version>1.12.1</frontend-maven-plugin.version>
         <maven-resources-plugin.version>3.3.1</maven-resources-plugin.version>
+        <maven-jar-plugin.version>3.4.1</maven-jar-plugin.version>
         <jacoco-maven-plugin.version>0.8.13</jacoco-maven-plugin.version>
         <maven-source-plugin.version>3.3.1</maven-source-plugin.version>
         <junit.version>5.10.2</junit.version>
@@ -400,6 +401,11 @@
                     <version>${frontend-maven-plugin.version}</version>
                 </plugin>
 
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>${maven-jar-plugin.version}</version>
+                </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-resources-plugin</artifactId>

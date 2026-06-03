@@ -41,7 +41,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 @CompoundIndexes({
     @CompoundIndex(name = "taskId_timestamp_idx", def = "{'taskId': 1, 'timestamp': -1}"),
     @CompoundIndex(name = "taskId_nodeId_eventSeq_uidx", def = "{'taskId': 1, 'nodeId': 1, 'eventSeq': 1}",
-        unique = true, sparse = true)
+        unique = true, partialFilter = "{'eventSeq': {'$type': 'long'}}")
 })
 public class TaskStateHistory implements Serializable {
     @Serial

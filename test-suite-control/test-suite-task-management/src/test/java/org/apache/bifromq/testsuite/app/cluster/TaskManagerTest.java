@@ -29,6 +29,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -245,6 +246,35 @@ class TaskManagerTest {
     }
 
     @Test
+    void testModifyTask_assignedTask_shouldThrowException() {
+        TaskRequest taskRequest = createTaskRequest();
+
+        TaskConfig existingConfig = TaskConfig.builder()
+            .taskId(TASK_ID)
+            .taskType(TaskConfig.TaskType.PUBSUB)
+            .taskWorkStage(TaskStage.ASSIGNED)
+            .build();
+
+        TaskInfoMetadata existingMetadata = TaskInfoMetadata.builder()
+            .taskId(TASK_ID)
+            .taskName("Old Name")
+            .taskConfig(existingConfig)
+            .currentStage(TaskStage.ASSIGNED)
+            .build();
+
+        when(taskInfoMetadataRepository.findByTaskName("Test Task")).thenReturn(Mono.empty());
+        when(taskInfoMetadataRepository.findById(TASK_ID)).thenReturn(Mono.just(existingMetadata));
+
+        ApiException exception = assertThrows(ApiException.class, () -> {
+            taskManager.modifyTask(TASK_ID, taskRequest).block();
+        });
+
+        assertEquals("error.task.invalidStateForEdit", exception.getMessage());
+        verify(taskInfoMetadataRepository, never()).save(any(TaskInfoMetadata.class));
+        verify(mqttBrokerRepository, never()).findAllById(anyList());
+    }
+
+    @Test
     void testModifyTask_nullTaskId_shouldThrowException() {
         
         TaskRequest taskRequest = createTaskRequest();
@@ -274,14 +304,6 @@ class TaskManagerTest {
         
         TaskRequest taskRequest = createTaskRequest();
 
-        MqttBroker mqttBroker = MqttBroker.builder()
-            .brokerId(BROKER_ID)
-            .host("localhost")
-            .port(1883)
-            .group("test-group")
-            .build();
-
-        when(mqttBrokerRepository.findAllById(anyList())).thenReturn(Flux.just(mqttBroker));
         when(taskInfoMetadataRepository.findByTaskName("Test Task")).thenReturn(Mono.empty());
         when(taskInfoMetadataRepository.findById(TASK_ID)).thenReturn(Mono.empty());
 
@@ -557,6 +579,38 @@ class TaskManagerTest {
     }
 
     @Test
+    void testAssignTask_alreadyAssigned_shouldReassignTaskToNodes() {
+        TaskConfig taskConfig = TaskConfig.builder()
+            .taskId(TASK_ID)
+            .taskWorkStage(TaskStage.ASSIGNED)
+            .build();
+
+        TaskInfoMetadata metadata = TaskInfoMetadata.builder()
+            .taskId(TASK_ID)
+            .taskConfig(taskConfig)
+            .currentStage(TaskStage.ASSIGNED)
+            .build();
+
+        NodeTaskAllocationRequest request = new NodeTaskAllocationRequest();
+        request.setTotalClientCount(100);
+        request.setNodeAllocationList(new ArrayList<>());
+
+        when(taskInfoMetadataRepository.findById(TASK_ID)).thenReturn(Mono.just(metadata));
+        when(clusterDataManager.assignCheck(eq(TASK_ID), any(TaskConfig.class), any(NodeTaskAllocationRequest.class)))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        when(taskInfoMetadataRepository.save(any(TaskInfoMetadata.class)))
+            .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        ApiResponse<TaskConfig> result = taskManager.assignTask(TASK_ID, request).block();
+
+        assertTrue(result.isSuccess());
+        assertEquals(TaskStage.ASSIGNED, metadata.getCurrentStage());
+        assertEquals(TaskStage.ASSIGNED, metadata.getTaskConfig().getTaskWorkStage());
+        verify(clusterDataManager).assignCheck(eq(TASK_ID), any(TaskConfig.class), eq(request));
+        verify(taskInfoMetadataRepository).save(metadata);
+    }
+
+    @Test
     void testAssignTask_taskNotFound_shouldReturnError() {
         
         when(taskInfoMetadataRepository.findById(TASK_ID)).thenReturn(Mono.empty());
@@ -614,7 +668,8 @@ class TaskManagerTest {
             .taskConfig(nodeTaskConfig)
             .build();
         when(taskInfoMetadataRepository.findById(TASK_ID)).thenReturn(Mono.just(metadata));
-        when(taskInfoMetadataRepository.updateTaskConfigById(eq(TASK_ID), any(TaskConfig.class)))
+        when(taskInfoMetadataRepository.updateTaskStartRuntimeById(
+            eq(TASK_ID), any(TaskConfig.class), eq(TaskStage.STARTING), any(), any()))
             .thenReturn(Mono.empty());
         when(clusterDataManager.prepareAssignedTaskStart(eq(TASK_ID), any(Long.class)))
             .thenAnswer(invocation -> {

@@ -101,7 +101,7 @@ MQTT Broker、IoT 平台以及消息系统的稳定性和性能表现。
 - Maven 3.8+
 - Node.js 18+
 - pnpm
-- MongoDB 4.4+
+- 使用外部数据库模式时需要 MongoDB 4.4+
 
 ### 源码构建
 
@@ -133,18 +133,21 @@ pnpm build
 
 ### 本地运行
 
-先启动 MongoDB，然后运行后端应用：
+运行后端应用：
 
 ```bash
 mvn spring-boot:run -pl bifro-test-bed
 ```
 
-后端默认使用 `bifro-test-bed/src/main/resources/application.yml`：
+源码启动会使用 `bifro-test-bed/src/main/resources/application.yml` 作为仅用于开发的默认配置：
 
 - 服务端口：`8081`
-- MongoDB：`localhost:27017`，数据库 `bifro-test-suite`
+- 存储模式：嵌入式 MongoDB，单控制面节点
 - 管理界面：`http://localhost:8081/admin`
 - Swagger UI：`http://localhost:8081/swagger-ui.html`
+
+开发用的 `application.yml` 不会被打进发布应用 jar。发布包启动脚本会通过
+`--spring.config.location=conf/` 从外部 `conf/` 目录加载配置，所以部署配置应统一在 `conf/` 下管理。
 
 前端开发模式：
 
@@ -165,6 +168,36 @@ pnpm dev
 | `bifro-test-suite-<version>-frontend.zip` | 前端-only 包，内容来自 `dist` 构建产物 |
 | `bifro-test-suite-<version>-sbom.json` | CycloneDX 软件物料清单 |
 | `SHA256SUMS` | 发布产物校验和 |
+
+完整后端发布包包含 `conf/application.yml` 以及角色或模式覆盖配置：
+
+- `conf/application-control.yml`
+- `conf/application-worker.yml`
+- `conf/application-embedded.yml`
+
+在发布包根目录使用启动脚本，例如：
+
+```bash
+bin/bifro-test-suite.sh start
+bin/bifro-test-suite.sh start control
+bin/bifro-test-suite.sh start worker
+bin/bifro-test-suite.sh start embedded
+```
+
+### 部署边界
+
+当前版本不会把多控制面完整 HA 作为已交付能力。请按存储模式选择部署形态：
+
+| 存储模式 | control/all 节点 | worker 节点 | MongoDB 要求 | 说明 |
+| --- | --- | --- | --- | --- |
+| `embedded` | 只能有一个 | 一个或多个 | control 节点不需要外部 MongoDB | 单控制面模式，不是 HA；第二个 embedded control/all 节点必须启动失败。 |
+| `database` | 一个或多个 | 一个或多个 | control/all 节点需要外部 MongoDB | 多个 control 可以共享 MongoDB，但当前还不是完整 active-active HA；HA 设计完成前建议只暴露一个 active 写入口。 |
+
+任意模式下，worker-only 节点都不需要 MongoDB。embedded 控制面换机时，需要显式迁移或挂载同一个 embedded
+数据目录；自动接管默认关闭。
+
+详细边界见 [存储模式设计](docs/arch/DESIGN-storage-modes.md) 和
+[控制面最小安全设计](docs/arch/DESIGN-control-plane-minimal-safety.md)。
 
 ## 任务模板
 
@@ -240,6 +273,9 @@ pnpm test
 ```text
 conf/initial-admin-password
 ```
+
+源码启动时该路径相对仓库根目录；发布包启动时该路径相对解压后的发布包根目录，例如
+`<package>/conf/initial-admin-password`。
 
 请保护该文件，并在首次登录后轮换密码。
 

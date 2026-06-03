@@ -17,6 +17,7 @@
 
 package org.apache.bifromq.testsuite.app.local;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -34,6 +35,7 @@ import java.lang.reflect.Method;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import org.apache.bifromq.testsuite.TaskEvent;
 import org.apache.bifromq.testsuite.TaskStage;
 import org.apache.bifromq.testsuite.app.database.pojo.NodeTask;
@@ -49,6 +51,7 @@ import org.apache.bifromq.testsuite.worker.pojo.TaskStateChangeEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -88,6 +91,50 @@ class TaskStateEventHandlerTest {
             });
         lenient().when(taskStateHistoryRepository.save(any(TaskStateHistory.class)))
             .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+    }
+
+    @Test
+    void handleStateChange_givenShutdownReasonShouldPersistMetadata() throws Exception {
+        NodeTask nodeTask = nodeTask(TaskStage.SHUTTING);
+        TaskInfoMetadata metadata = TaskInfoMetadata.builder()
+            .taskId(TASK_ID)
+            .taskConfig(TaskConfig.builder().taskId(TASK_ID).taskWorkStage(TaskStage.SHUTTING).build())
+            .build();
+        when(nodeTaskRepository.findByTaskIdAndNodeId(TASK_ID, NODE_ID)).thenReturn(Mono.just(nodeTask));
+        when(nodeTaskRepository.save(any(NodeTask.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(taskStateHistoryRepository.findByTaskIdAndNodeIdOrderByTimestampDesc(TASK_ID, NODE_ID))
+            .thenReturn(Flux.just(history(Instant.parse("2026-06-02T08:43:47Z"))));
+        when(taskInfoMetadataRepository.findById(TASK_ID)).thenReturn(Mono.just(metadata));
+        when(taskMetricsSnapshotService.collectAndSaveNodeSnapshot(
+            eq(TASK_ID), any(), eq(TaskStage.STOPPED.name()), eq(NODE_ID), eq("node-name"),
+            any(LocalDateTime.class), any(LocalDateTime.class)
+        )).thenReturn(Mono.just(TaskMetricsSnapshot.builder().taskId(TASK_ID).build()));
+        when(nodeTaskRepository.findAllByTaskId(TASK_ID)).thenReturn(Flux.just(nodeTask));
+        when(taskInfoMetadataRepository.updateStageById(eq(TASK_ID), eq(TaskStage.STOPPED.name()), any(Instant.class)))
+            .thenReturn(Mono.empty());
+
+        invokeHandleStateChange(TaskStateChangeEvent.builder()
+            .taskId(TASK_ID)
+            .nodeId(NODE_ID)
+            .nodeName("node-name")
+            .fromStage(TaskStage.SHUTTING)
+            .toStage(TaskStage.STOPPED)
+            .triggerEvent(TaskEvent.STOP)
+            .timestamp(Instant.parse("2026-06-02T08:44:59Z"))
+            .eventSeq(10)
+            .reason("SERVICE_SHUTDOWN")
+            .message("Task cancelled because node is shutting down")
+            .metadata(Map.of("nodeShutdown", true, "initiator", "node:" + NODE_ID))
+            .build());
+
+        ArgumentCaptor<TaskStateHistory> captor = ArgumentCaptor.forClass(TaskStateHistory.class);
+        verify(taskStateHistoryRepository).save(captor.capture());
+        TaskStateHistory history = captor.getValue();
+        assertThat(history.getErrorMessage()).isEqualTo("Task cancelled because node is shutting down");
+        assertThat(history.getMetadata())
+            .containsEntry("reason", "SERVICE_SHUTDOWN")
+            .containsEntry("nodeShutdown", true)
+            .containsEntry("initiator", "node:" + NODE_ID);
     }
 
     @Test
@@ -168,6 +215,27 @@ class TaskStateEventHandlerTest {
 
         verify(taskMetricsSnapshotService, never()).collectAndSaveNodeSnapshot(
             anyString(), any(), anyString(), anyString(), anyString(), any(), any());
+    }
+
+    @Test
+    void handleStateChange_givenDuplicateHistory_shouldSkipAllSideEffects() throws Exception {
+        when(taskStateHistoryRepository.save(any(TaskStateHistory.class)))
+            .thenReturn(Mono.error(new RuntimeException("E11000 duplicate key")));
+
+        invokeHandleStateChange(TaskStateChangeEvent.builder()
+            .taskId(TASK_ID)
+            .nodeId(NODE_ID)
+            .fromStage(TaskStage.STARTING)
+            .toStage(TaskStage.ONGOING)
+            .triggerEvent(TaskEvent.ONGOING)
+            .timestamp(Instant.parse("2026-06-02T08:43:50Z"))
+            .eventSeq(2)
+            .build());
+
+        verify(nodeTaskRepository, never()).findByTaskIdAndNodeId(anyString(), anyString());
+        verify(taskMetricsSnapshotService, never()).collectAndSaveNodeSnapshot(
+            anyString(), any(), anyString(), anyString(), anyString(), any(), any());
+        verify(taskInfoMetadataRepository, never()).updateStageById(anyString(), anyString(), any(Instant.class));
     }
 
     private static NodeTask nodeTask(TaskStage stage) {

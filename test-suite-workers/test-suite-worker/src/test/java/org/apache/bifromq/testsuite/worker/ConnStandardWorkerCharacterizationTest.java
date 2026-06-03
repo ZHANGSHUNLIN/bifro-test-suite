@@ -26,7 +26,7 @@ import org.apache.bifromq.testsuite.Constants;
 import org.apache.bifromq.testsuite.TaskEvent;
 import org.apache.bifromq.testsuite.TaskStage;
 import org.apache.bifromq.testsuite.TaskTemplate;
-import org.apache.bifromq.testsuite.worker.ratelimit.IRateLimiter;
+import org.apache.bifromq.testsuite.worker.RateLimiterType;
 import org.apache.bifromq.testsuite.worker.type.ExecutionPlan;
 import org.apache.bifromq.testsuite.worker.type.WorkerPlanSpecMapper;
 import org.apache.bifromq.testsuite.worker.type.impl.ConnStandardTaskType;
@@ -77,7 +77,7 @@ class ConnStandardWorkerCharacterizationTest {
         when(taskConfig.getThingIdStartAt()).thenReturn(0);
         when(taskConfig.getFanOut()).thenReturn(1);
         when(taskConfig.getFanIn()).thenReturn(0);
-        when(taskConfig.getRateLimiterType()).thenReturn(IRateLimiter.Type.GUAVA);
+        when(taskConfig.getRateLimiterType()).thenReturn(RateLimiterType.GUAVA);
         when(taskConfig.getBrokers()).thenReturn(List.of());
         when(taskConfig.isEnableAutoMultiAddress()).thenReturn(false);
         when(taskConfig.getLocalAddresses()).thenReturn(List.of());

@@ -25,6 +25,7 @@ import org.apache.bifromq.testsuite.template.TemplateRenderContext;
 import org.apache.bifromq.testsuite.template.TemplateRenderers;
 import org.apache.bifromq.testsuite.template.TemplateVariable;
 import org.apache.bifromq.testsuite.template.TemplateVariableResolver;
+import org.apache.bifromq.testsuite.worker.PayloadTemplateValidator;
 
 public class TemplatePayloadStrategy implements PayloadStrategy {
 
@@ -59,11 +60,7 @@ public class TemplatePayloadStrategy implements PayloadStrategy {
     }
 
     public static void validateTemplate(String template) {
-        if (template == null || template.isEmpty()) {
-            throw new IllegalArgumentException("Payload template must not be null or empty");
-        }
-
-        PlaceholderTemplate.validate(template, PAYLOAD_VARIABLES);
+        PayloadTemplateValidator.validate(template);
     }
 
     @Override

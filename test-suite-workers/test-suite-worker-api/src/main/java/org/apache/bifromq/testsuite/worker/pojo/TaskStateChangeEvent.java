@@ -18,6 +18,7 @@
 package org.apache.bifromq.testsuite.worker.pojo;
 
 import java.time.Instant;
+import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -39,4 +40,7 @@ public class TaskStateChangeEvent {
     private String nodeId;
     private String nodeName;
     private long eventSeq;
+    private String reason;
+    private String message;
+    private Map<String, Object> metadata;
 }

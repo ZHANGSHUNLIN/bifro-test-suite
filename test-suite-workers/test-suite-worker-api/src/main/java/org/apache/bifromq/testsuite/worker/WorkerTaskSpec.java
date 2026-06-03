@@ -33,7 +33,6 @@ import org.apache.bifromq.testsuite.client.LocalPortRangeConfig;
 import org.apache.bifromq.testsuite.client.MqttClientImpl;
 import org.apache.bifromq.testsuite.constants.PayloadMode;
 import org.apache.bifromq.testsuite.qps.WaveQpsSpec;
-import org.apache.bifromq.testsuite.worker.ratelimit.IRateLimiter;
 
 @Data
 @Builder(toBuilder = true)
@@ -101,7 +100,7 @@ public class WorkerTaskSpec implements Serializable {
     @Builder.Default
     private int disconnectRate = 500;
     @Builder.Default
-    private IRateLimiter.Type rateLimiterType = IRateLimiter.Type.GUAVA;
+    private RateLimiterType rateLimiterType = RateLimiterType.GUAVA;
     private boolean enableAutoMultiAddress;
     @Builder.Default
     private LocalPortRangeConfig localPortRangeConfig = new LocalPortRangeConfig();

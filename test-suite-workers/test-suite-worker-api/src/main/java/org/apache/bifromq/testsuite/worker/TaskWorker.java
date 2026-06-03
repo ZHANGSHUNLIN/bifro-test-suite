@@ -21,6 +21,7 @@ import io.reactivex.rxjava3.subjects.Subject;
 import java.util.concurrent.CompletableFuture;
 import org.apache.bifromq.testsuite.TaskStage;
 import org.apache.bifromq.testsuite.worker.pojo.EventReport;
+import org.apache.bifromq.testsuite.worker.pojo.TaskStopContext;
 
 public interface TaskWorker {
 
@@ -28,8 +29,16 @@ public interface TaskWorker {
 
     CompletableFuture<Void> stopTask();
 
+    default CompletableFuture<Void> stopTask(TaskStopContext context) {
+        return stopTask();
+    }
+
     TaskStage getTaskState();
 
     Subject<EventReport> reportEventSubject();
+
+    default CompletableFuture<TaskStage> terminalFuture() {
+        return new CompletableFuture<>();
+    }
 
 }
