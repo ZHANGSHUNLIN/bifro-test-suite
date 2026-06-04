@@ -1038,7 +1038,7 @@
     "totalMsgSent": "发送消息总数",
     "totalMsgReceived": "接收消息总数",
     "totalBytesTransmitted": "传输字节总数",
-    "avgThroughputBytes": "平均吞吐量(字节/秒)",
+    "avgThroughputBytes": "平均吞吐量",
     "latencyP50": "延迟 P50",
     "latencyP95Label": "延迟 P95",
     "latencyP99Label": "延迟 P99",

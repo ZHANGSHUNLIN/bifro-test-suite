@@ -540,6 +540,8 @@
                         <exclude>bifro-test-fe/node_modules/**</exclude>
                         <exclude>bifro-test-fe/dist/**</exclude>
                         <exclude>bifro-test-fe/pnpm-lock.yaml</exclude>
+                        <exclude>**/conf/initial-admin-password</exclude>
+                        <exclude>**/conf/certificate-cipher-key</exclude>
                     </excludes>
                 </configuration>
             </plugin>

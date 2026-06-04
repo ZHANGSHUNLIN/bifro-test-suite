@@ -21,6 +21,7 @@ import {useTranslation} from 'react-i18next';
 import i18n from '../i18n';
 import {taskApi} from '../features/task';
 import type {NodeReport, TaskReportResponse} from '../features/task';
+import {formatByteRate, formatByteSize} from '../utils/byteFormat';
 
 interface TaskReportPanelProps {
     taskId: string;
@@ -202,8 +203,8 @@ const TaskReportPanel: React.FC<TaskReportPanelProps> = ({taskId, taskType}) => 
                     {key: 'received', label: t('report.totalMsgReceived'), value: formatNumber(report.totalMessagesReceived)},
                     {key: 'publishQps', label: t('report.publishQps'), value: formatRate(report.avgPublishQps)},
                     {key: 'receiveQps', label: t('report.receiveQps'), value: formatRate(report.avgReceiveQps)},
-                    {key: 'bytes', label: t('report.totalBytesTransmitted'), value: formatNumber(report.totalBytesTransmitted)},
-                    {key: 'avgBytes', label: t('report.avgThroughputBytes'), value: `${formatFixed(report.avgBytesPerSecond)} B/s`},
+                    {key: 'bytes', label: t('report.totalBytesTransmitted'), value: formatByteSize(report.totalBytesTransmitted)},
+                    {key: 'avgBytes', label: t('report.avgThroughputBytes'), value: formatByteRate(report.avgBytesPerSecond)},
                     {key: 'pubackLatency', label: t('report.pubackLatencyP95'), value: formatMs(report.pubackLatencyP95)},
                 ],
             } satisfies MetricGroup,

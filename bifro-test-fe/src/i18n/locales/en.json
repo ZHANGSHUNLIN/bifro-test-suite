@@ -1038,7 +1038,7 @@
     "totalMsgSent": "Total Messages Sent",
     "totalMsgReceived": "Total Messages Received",
     "totalBytesTransmitted": "Total Bytes Transmitted",
-    "avgThroughputBytes": "Avg Throughput (bytes/s)",
+    "avgThroughputBytes": "Avg Throughput",
     "latencyP50": "Latency P50",
     "latencyP95Label": "Latency P95",
     "latencyP99Label": "Latency P99",
