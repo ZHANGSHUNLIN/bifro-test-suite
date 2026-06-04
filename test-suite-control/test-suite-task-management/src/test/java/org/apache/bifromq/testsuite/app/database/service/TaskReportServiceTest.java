@@ -20,6 +20,7 @@ package org.apache.bifromq.testsuite.app.database.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import io.netty.handler.codec.mqtt.MqttQoS;
 import org.apache.bifromq.testsuite.app.bean.vo.TaskReportResponse;
 import org.apache.bifromq.testsuite.app.database.pojo.TaskInfoMetadata;
 import org.apache.bifromq.testsuite.app.database.pojo.TaskMetricsSnapshot;
@@ -457,6 +458,39 @@ class TaskReportServiceTest {
         assertThat(report.getNodeReports()).isNotNull();
         assertThat(report.getNodeReports().get(0).getAvgPublishQps()).isEqualTo(15.0);
         assertThat(report.getNodeReports().get(0).getLatencyP95()).isEqualTo(37.3);
+    }
+
+    @Test
+    void generateReport_pubackLatencyP95_fallbacksToPublishLatencyForAckedQos() {
+        TaskConfig config = new TaskConfig();
+        config.setTaskType(TaskConfig.TaskType.PUBSUB);
+        config.setQos(MqttQoS.AT_LEAST_ONCE);
+        config.setFanOut(1);
+
+        TimerMetricData publishTimer = TimerMetricData.builder()
+            .name("bifro_task_metric_publish_latency")
+            .tags(Map.of())
+            .count(577)
+            .mean(35.16)
+            .p95(4.85)
+            .max(2047.43)
+            .hasData(true)
+            .build();
+
+        TaskMetricsSnapshot snapshot = buildSnapshot(577, 577);
+        snapshot.setCounterMetrics(List.of(
+            counter("bifro_task_metric_publish_completion_count", 577),
+            counter("bifro_task_metric_message_received_count", 577),
+            counter("bifro_task_metric_qos1_message_count", 577, Map.of("qos", "1"))));
+        snapshot.setTimerMetrics(List.of(publishTimer));
+
+        when(taskMetricsSnapshotService.findByTaskId(TASK_ID)).thenReturn(Mono.just(snapshot));
+        when(taskInfoMetadataRepository.findById(TASK_ID))
+            .thenReturn(Mono.just(TaskInfoMetadata.builder().taskId(TASK_ID).taskConfig(config).build()));
+
+        TaskReportResponse report = taskReportService.generateReport(TASK_ID).block();
+        assertThat(report).isNotNull();
+        assertThat(report.getPubackLatencyP95()).isEqualTo(4.85);
     }
 
     @Test

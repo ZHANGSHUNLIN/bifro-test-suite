@@ -58,6 +58,9 @@ public abstract class BaseMQTTClientWrapper implements MQTTClientWrapper {
     protected final MqttClientConfig clientConfig;
     protected final AtomicInteger reconnectAttempts = new AtomicInteger(0);
     private final AtomicInteger localPortFallbackAttempts = new AtomicInteger(0);
+    private final AtomicBoolean finalConnectFailureRecorded = new AtomicBoolean(false);
+    private final AtomicBoolean finalFailureResourcesReleased = new AtomicBoolean(false);
+    private final AtomicBoolean recoveryScheduled = new AtomicBoolean(false);
     protected final Vertx vertx;
     protected final ClientTaskConfig taskConfig;
     protected final AtomicBoolean reconnecting = new AtomicBoolean(false);
@@ -153,7 +156,7 @@ public abstract class BaseMQTTClientWrapper implements MQTTClientWrapper {
 
     @Override
     public CompletableFuture<Void> connect(Consumer<ConnectionStatus> connectCallback) {
-        if (status == CONNECTED || status == CONNECTING || isConnected()) {
+        if (status == CONNECTED || status == CONNECTING || status == CONNECTED_FAILED || isConnected()) {
             CONN_LOGGER.warn("mqttClient is already connected, clientId={}", clientConfig.getClientId());
             return CompletableFuture.failedFuture(new RuntimeException("mqttClient is already connected"));
         }
@@ -168,6 +171,12 @@ public abstract class BaseMQTTClientWrapper implements MQTTClientWrapper {
     public abstract CompletableFuture<List<Integer>> subscribe(Set<TopicFilter> topicFilters);
 
     protected void recordConnectSuccess() {
+        if (status == CONNECTED_FAILED || status == CLOSED) {
+            CONN_LOGGER.warn("Ignore connect success after terminal state, taskId={}, clientId={}, status={}",
+                taskConfig.getTaskId(), clientConfig.getClientId(), status);
+            releaseClientResourcesAfterFinalFailureOnce();
+            return;
+        }
         incrementMetric(BifroTaskMetric.CONNECT_SUCCESS_COUNT);
 
         if (connectLatencySample != null) {
@@ -188,6 +197,11 @@ public abstract class BaseMQTTClientWrapper implements MQTTClientWrapper {
     }
 
     protected void recordConnectFailure(Throwable cause) {
+        if (status == CONNECTED_FAILED || status == CLOSED) {
+            CONN_LOGGER.debug("Ignore connect failure after terminal state, taskId={}, clientId={}, status={}",
+                taskConfig.getTaskId(), clientConfig.getClientId(), status);
+            return;
+        }
         incrementMetric(BifroTaskMetric.CONNECT_EXCEPTION_COUNT);
 
         if (connectLatencySample != null) {
@@ -201,22 +215,38 @@ public abstract class BaseMQTTClientWrapper implements MQTTClientWrapper {
         recoverAfterConnectFailure(cause);
     }
 
-    protected void recordFinalConnectFailure() {
+    protected boolean recordFinalConnectFailure() {
+        if (!finalConnectFailureRecorded.compareAndSet(false, true)) {
+            return false;
+        }
         incrementMetric(BifroTaskMetric.CONNECT_EXCEPTION_COUNT);
         if (connectLatencySample != null) {
             MetricsHelper.stopTimer(connectLatencySample, BifroTaskMetric.CONNECT_LATENCY,
                 "taskId", taskConfig.getTaskId(), "nodeId", taskConfig.getNodeId(), "result", "failure");
             connectLatencySample = null;
         }
+        status = CONNECTED_FAILED;
         setActiveConnectionGauge(false);
+        releaseClientResourcesAfterFinalFailureOnce();
+        return true;
     }
 
     protected CompletableFuture<Void> recoverAfterConnectFailure(Throwable cause) {
-        clearReconnecting();
+        if (status == CONNECTED_FAILED || status == CLOSED) {
+            CONN_LOGGER.debug("Skip reconnect after terminal state, taskId={}, clientId={}, status={}",
+                taskConfig.getTaskId(), clientConfig.getClientId(), status);
+            return CompletableFuture.failedFuture(new RuntimeException("MqttClient connection is terminal: " + status));
+        }
+        if (!recoveryScheduled.compareAndSet(false, true)) {
+            CONN_LOGGER.debug("Skip duplicate reconnect recovery, taskId={}, clientId={}, status={}",
+                taskConfig.getTaskId(), clientConfig.getClientId(), status);
+            return CompletableFuture.failedFuture(new RuntimeException("MqttClient reconnect recovery is scheduled"));
+        }
         if (cause != null) {
             String reasonType = classifyConnectFailure(rootCause(cause));
             rotateLocalPortOnBindFailure(reasonType);
         }
+        clearReconnecting();
         return tryRecoverConnect();
     }
 
@@ -306,6 +336,11 @@ public abstract class BaseMQTTClientWrapper implements MQTTClientWrapper {
     }
 
     protected boolean canConnect(TaskStage stage) {
+        if (status == CONNECTED_FAILED) {
+            CONN_LOGGER.warn("MqttClient connect not allowed after final failure, clientId={}",
+                clientConfig.getClientId());
+            return false;
+        }
         if (stage == TaskStage.SHUTDOWN || stage == TaskStage.STOPPED) {
             MetricsHelper.counter(BifroTaskMetric.ILLEGAL_TASK_STATE,
                 baseTags.and(Tags.of("stage", stage.name())));
@@ -378,14 +413,19 @@ public abstract class BaseMQTTClientWrapper implements MQTTClientWrapper {
 
     protected CompletableFuture<Void> tryRecoverConnect() {
         CompletableFuture<Void> connFuture = new CompletableFuture<>();
+        if (status == CONNECTED_FAILED || status == CLOSED) {
+            connFuture.completeExceptionally(new RuntimeException("MqttClient connection is terminal: " + status));
+            return connFuture;
+        }
         if (reconnectAttempts.getAndIncrement() < clientConfig.getReconnectMaxAttempts()) {
             MetricsHelper.counter(BifroTaskMetric.RECONNECT_COUNT, baseTags);
 
             reconnectTimer =
                 vertx.setTimer(ThreadLocalRandom.current().nextLong(clientConfig.getReconnectIntervalInMs(),
                         clientConfig.getReconnectIntervalInMs() * 2L),
-                    t -> internalConnect()
-                        .whenComplete((v, throwable) -> {
+                    t -> {
+                        clearRecoveryScheduled();
+                        internalConnect().whenComplete((v, throwable) -> {
                             if (throwable != null) {
                                 Throwable root = rootCause(throwable);
                                 String reasonType = classifyConnectFailure(root);
@@ -417,21 +457,31 @@ public abstract class BaseMQTTClientWrapper implements MQTTClientWrapper {
                             } else {
                                 connFuture.complete(null);
                             }
-                        }));
+                        });
+                    });
         } else {
-            MetricsHelper.counter(BifroTaskMetric.RECONNECT_LIMIT_EXCEEDED, baseTags);
-            recordFinalConnectFailure();
-            status = CONNECTED_FAILED;
-            withTaskMdc(taskConfig.getTaskId(), () -> CONN_LOGGER.error(
-                "MqttClient connect failed after {} retries, taskId={}, clientId={}, localAddr={}, localPort={}, "
-                    + "remote={}:{}, reasonType=retry_limit_exceeded",
-                clientConfig.getReconnectMaxAttempts(),
-                taskConfig.getTaskId(), clientConfig.getClientId(), clientConfig.getLocalAddress(),
-                clientConfig.getLocalPort(), clientConfig.getHost(), clientConfig.getPort()));
-            connectCallback.accept(CONNECTED_FAILED);
+            if (recordFinalConnectFailure()) {
+                MetricsHelper.counter(BifroTaskMetric.RECONNECT_LIMIT_EXCEEDED, baseTags);
+                withTaskMdc(taskConfig.getTaskId(), () -> CONN_LOGGER.error(
+                    "MqttClient connect failed after {} retries, taskId={}, clientId={}, localAddr={}, localPort={}, "
+                        + "remote={}:{}, reasonType=retry_limit_exceeded",
+                    clientConfig.getReconnectMaxAttempts(),
+                    taskConfig.getTaskId(), clientConfig.getClientId(), clientConfig.getLocalAddress(),
+                    clientConfig.getLocalPort(), clientConfig.getHost(), clientConfig.getPort()));
+                connectCallback.accept(CONNECTED_FAILED);
+            }
             connFuture.completeExceptionally(new RuntimeException("MqttClient connect failed after "));
         }
         return connFuture;
+    }
+
+    protected void releaseClientResourcesAfterFinalFailure() {
+    }
+
+    private void releaseClientResourcesAfterFinalFailureOnce() {
+        if (finalFailureResourcesReleased.compareAndSet(false, true)) {
+            releaseClientResourcesAfterFinalFailure();
+        }
     }
 
     protected boolean rotateLocalPortOnBindFailure(String reasonType) {
@@ -503,6 +553,10 @@ public abstract class BaseMQTTClientWrapper implements MQTTClientWrapper {
 
     protected void clearReconnecting() {
         reconnecting.set(false);
+    }
+
+    protected void clearRecoveryScheduled() {
+        recoveryScheduled.set(false);
     }
 
     public long getConnectedAt() {

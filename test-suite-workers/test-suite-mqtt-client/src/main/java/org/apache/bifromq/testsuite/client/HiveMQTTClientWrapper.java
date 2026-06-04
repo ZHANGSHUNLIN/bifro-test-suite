@@ -67,6 +67,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import javax.net.ssl.KeyManagerFactory;
@@ -321,6 +322,7 @@ public class HiveMQTTClientWrapper extends BaseMQTTClientWrapper {
             log.warn("[HiveMQ-DETAIL] already reconnecting, skip, clientId={}", clientConfig.getClientId());
             return CompletableFuture.completedFuture(null);
         }
+        AtomicBoolean connectAttemptHandled = new AtomicBoolean(false);
         try {
             log.info("[HiveMQ-DETAIL] Building SSL config for clientId={}", clientConfig.getClientId());
             MqttClientSslConfig sslConfig = buildSslConfig();
@@ -329,6 +331,11 @@ public class HiveMQTTClientWrapper extends BaseMQTTClientWrapper {
             MqttClientTransportConfig transport = buildTransport(sslConfig);
             log.info("[HiveMQ-DETAIL] Transport config built, clientId={}", clientConfig.getClientId());
             MqttClientConnectedListener onConnected = context -> {
+                if (!connectAttemptHandled.compareAndSet(false, true)) {
+                    log.debug("[HiveMQ-DETAIL] duplicate onConnected ignored, clientId={}",
+                        clientConfig.getClientId());
+                    return;
+                }
                 clearReconnecting();
                 log.info("[HiveMQ-DETAIL] onConnected callback fired, clientId={}, current status={}",
                     clientConfig.getClientId(), status);
@@ -344,14 +351,20 @@ public class HiveMQTTClientWrapper extends BaseMQTTClientWrapper {
                     clientConfig.getClientId(), status);
             };
             MqttClientDisconnectedListener onDisconnected = context -> {
-                clearReconnecting();
-                if (status == CLOSED) {
-                    log.info("[HiveMQ-DETAIL] onDisconnected but status=CLOSED, ignore, clientId={}",
-                        clientConfig.getClientId());
+                if (status == CLOSED || status == ConnectionStatus.CONNECTED_FAILED) {
+                    log.info("[HiveMQ-DETAIL] onDisconnected but status={}, ignore, clientId={}",
+                        status, clientConfig.getClientId());
                     return;
                 }
                 MqttClientDisconnectedContext ctx = context;
                 Throwable cause = ctx.getCause();
+                if (status == ConnectionStatus.CONNECTING
+                    && !connectAttemptHandled.compareAndSet(false, true)) {
+                    log.debug("[HiveMQ-DETAIL] duplicate connect disconnect ignored, clientId={}, cause={}",
+                        clientConfig.getClientId(), cause);
+                    return;
+                }
+                clearReconnecting();
                 String disconnectReason = classifyDisconnectReason(cause);
                 log.warn("[HiveMQ-DETAIL] onDisconnected, clientId={}, reason={}, cause={}",
                     clientConfig.getClientId(), disconnectReason, cause);
@@ -369,10 +382,10 @@ public class HiveMQTTClientWrapper extends BaseMQTTClientWrapper {
             };
             if (isMqtt5) {
                 log.info("[HiveMQ-DETAIL] Connecting MQTT5 client, clientId={}", clientConfig.getClientId());
-                connectMqtt5(transport, onConnected, onDisconnected, connectFuture);
+                connectMqtt5(transport, onConnected, onDisconnected, connectFuture, connectAttemptHandled);
             } else {
                 log.info("[HiveMQ-DETAIL] Connecting MQTT3 client, clientId={}", clientConfig.getClientId());
-                connectMqtt3(transport, onConnected, onDisconnected, connectFuture);
+                connectMqtt3(transport, onConnected, onDisconnected, connectFuture, connectAttemptHandled);
             }
             log.info("[HiveMQ-DETAIL] connect initiated, returning future, clientId={}", clientConfig.getClientId());
         } catch (Exception e) {
@@ -386,7 +399,8 @@ public class HiveMQTTClientWrapper extends BaseMQTTClientWrapper {
     private void connectMqtt5(MqttClientTransportConfig transport,
                               MqttClientConnectedListener onConnected,
                               MqttClientDisconnectedListener onDisconnected,
-                              CompletableFuture<Void> connectFuture) {
+                              CompletableFuture<Void> connectFuture,
+                              AtomicBoolean connectAttemptHandled) {
         boolean useEmptyId = resolveEmptyClientId();
         String clientId = useEmptyId ? "" : clientConfig.getClientId();
         log.info("[HiveMQ-DETAIL] connectMqtt5: building client, clientId={}, emptyId={}", clientId, useEmptyId);
@@ -405,6 +419,10 @@ public class HiveMQTTClientWrapper extends BaseMQTTClientWrapper {
             log.info("[HiveMQ-DETAIL] connectMqtt5: connect result received, clientId={}, success={}, error={}",
                 clientId, e == null, e != null ? e.getMessage() : null);
             if (e != null) {
+                if (!connectAttemptHandled.compareAndSet(false, true)) {
+                    log.debug("[HiveMQ-DETAIL] duplicate MQTT5 connect failure ignored, clientId={}", clientId);
+                    return;
+                }
                 log.error("[HiveMQ-DETAIL] connectMqtt5: connect failed, clientId={}", clientId, e);
                 recoverAfterConnectFailure(e).whenComplete((v, throwable) -> {
                     if (!connectFuture.isDone()) {
@@ -427,7 +445,8 @@ public class HiveMQTTClientWrapper extends BaseMQTTClientWrapper {
     private void connectMqtt3(MqttClientTransportConfig transport,
                               MqttClientConnectedListener onConnected,
                               MqttClientDisconnectedListener onDisconnected,
-                              CompletableFuture<Void> connectFuture) {
+                              CompletableFuture<Void> connectFuture,
+                              AtomicBoolean connectAttemptHandled) {
         boolean useEmptyId = resolveEmptyClientId();
         String clientId = useEmptyId ? "" : clientConfig.getClientId();
         log.info("[HiveMQ-DETAIL] connectMqtt3: building client, clientId={}, emptyId={}", clientId, useEmptyId);
@@ -449,6 +468,10 @@ public class HiveMQTTClientWrapper extends BaseMQTTClientWrapper {
             log.info("[HiveMQ-DETAIL] connectMqtt3: connect result received, clientId={}, success={}, error={}",
                 clientId, e == null, e != null ? e.getMessage() : null);
             if (e != null) {
+                if (!connectAttemptHandled.compareAndSet(false, true)) {
+                    log.debug("[HiveMQ-DETAIL] duplicate MQTT3 connect failure ignored, clientId={}", clientId);
+                    return;
+                }
                 log.error("[HiveMQ-DETAIL] connectMqtt3: connect failed, clientId={}", clientId, e);
                 recoverAfterConnectFailure(e).whenComplete((v, throwable) -> {
                     if (!connectFuture.isDone()) {
@@ -603,5 +626,22 @@ public class HiveMQTTClientWrapper extends BaseMQTTClientWrapper {
             return "protocol_error";
         }
         return "unknown";
+    }
+
+    @Override
+    protected void releaseClientResourcesAfterFinalFailure() {
+        if (isMqtt5 && mqtt5Client != null) {
+            mqtt5Client.disconnect().exceptionally(e -> {
+                log.debug("Failed to release MQTT5 client after final connect failure, clientId={}",
+                    clientConfig.getClientId(), e);
+                return null;
+            });
+        } else if (!isMqtt5 && mqtt3Client != null) {
+            mqtt3Client.disconnect().exceptionally(e -> {
+                log.debug("Failed to release MQTT3 client after final connect failure, clientId={}",
+                    clientConfig.getClientId(), e);
+                return null;
+            });
+        }
     }
 }

@@ -61,6 +61,7 @@ public class TaskReportService {
     private static final String TIMER_END_TO_END = "bifro_task_metric_end_to_end_latency";
     private static final String TIMER_MESSAGE_DELIVERY = "bifro_task_metric_message_delivery_latency";
     private static final String TIMER_CONNECT = "bifro_task_metric_connect_latency";
+    private static final String TIMER_PUBLISH = "bifro_task_metric_publish_latency";
     private static final String TIMER_PUBACK = "bifro_task_metric_puback_latency";
     @Resource
     private TaskMetricsSnapshotService taskMetricsSnapshotService;
@@ -180,9 +181,9 @@ public class TaskReportService {
             report.setConnectLatencyP95(resolveP95(connectTimer));
         }
 
-        TimerMetricData pubackTimer = timerMap.get(TIMER_PUBACK);
+        TimerMetricData pubackTimer = resolvePubackLatencyTimer(timerMap, taskConfig, report.getQosDistribution());
         if (pubackTimer != null && pubackTimer.isHasData()) {
-            report.setPubackLatencyP95(pubackTimer.getP95());
+            report.setPubackLatencyP95(resolveP95(pubackTimer));
         }
 
         if (snapshot.getNodeMetrics() != null) {
@@ -399,6 +400,27 @@ public class TaskReportService {
         TimerMetricData e2eTimer = timerMap.get(TIMER_END_TO_END);
         TimerMetricData deliveryTimer = timerMap.get(TIMER_MESSAGE_DELIVERY);
         return e2eTimer != null ? e2eTimer : deliveryTimer;
+    }
+
+    private TimerMetricData resolvePubackLatencyTimer(Map<String, TimerMetricData> timerMap, TaskConfig taskConfig,
+                                                      TaskReportResponse.QosDistribution qosDistribution) {
+        TimerMetricData pubackTimer = timerMap.get(TIMER_PUBACK);
+        if (pubackTimer != null) {
+            return pubackTimer;
+        }
+        if (!hasAckedPublish(taskConfig, qosDistribution)) {
+            return null;
+        }
+        return timerMap.get(TIMER_PUBLISH);
+    }
+
+    private boolean hasAckedPublish(TaskConfig taskConfig, TaskReportResponse.QosDistribution qosDistribution) {
+        if (qosDistribution != null
+            && ((qosDistribution.getQos1Count() != null && qosDistribution.getQos1Count() > 0)
+            || (qosDistribution.getQos2Count() != null && qosDistribution.getQos2Count() > 0))) {
+            return true;
+        }
+        return taskConfig != null && taskConfig.getQos() != null && taskConfig.getQos().value() > 0;
     }
 
 

@@ -33,7 +33,8 @@ import {
     getStatusColor,
     getStatusText,
     getTaskTypeColor,
-    getTaskTypeText
+    getTaskTypeText,
+    isTaskTerminal
 } from '../../../../utils/taskUtils';
 import TaskStateFlowSection from './TaskStateFlowSection';
 
@@ -119,7 +120,7 @@ const TaskSubTasksSection: React.FC<TaskSubTasksSectionProps> = ({
             taskWorkStage: '',
             counterMetrics: Array.from(counterMap.entries()).map(([name, count]) => ({name, count, tags: {}})),
         };
-    }, [rawRows]);
+    }, [rawRows, t]);
 
     const filteredRows = useMemo(() => {
         return rawRows.filter(row => {
@@ -136,6 +137,19 @@ const TaskSubTasksSection: React.FC<TaskSubTasksSectionProps> = ({
         setFilterNodeName('');
         setCurrentPage(1);
     }, []);
+
+    const hasSnapshotMetrics = useCallback((record: SubTaskRow) => (
+        (record.counterMetrics?.length ?? 0) > 0 ||
+        (record.timerMetrics?.some(timer => timer.hasData) ?? false)
+    ), []);
+
+    const handleMonitorClick = useCallback((record: SubTaskRow) => {
+        if (isTaskTerminal(record.taskWorkStage) && hasSnapshotMetrics(record)) {
+            setMetricsModalRecord(record);
+            return;
+        }
+        onShowMetrics(record);
+    }, [hasSnapshotMetrics, onShowMetrics]);
 
     const STATUS_OPTIONS = ['INIT', 'ASSIGNED', 'ONGOING', 'SHUTTING', 'SHUTDOWN', 'STOPPED', 'FAILED'];
 
@@ -191,8 +205,7 @@ const TaskSubTasksSection: React.FC<TaskSubTasksSectionProps> = ({
             render: (_: unknown, record: SubTaskRow) => {
                 if (record.key === '__summary__') return null;
                 const enabled = canShowMetrics(record.taskWorkStage);
-                const hasMetrics = (record.counterMetrics?.length ?? 0) > 0 ||
-                    (record.timerMetrics?.some(t => t.hasData) ?? false);
+                const hasMetrics = hasSnapshotMetrics(record);
                 return (
                     <Tooltip title={enabled ? '' : t('task.detail.subtask.noRunningTip')}>
                         <Space size="small">
@@ -218,7 +231,7 @@ const TaskSubTasksSection: React.FC<TaskSubTasksSectionProps> = ({
                                 type="link" size="small"
                                 icon={<LineChartOutlined/>}
                                 disabled={!enabled}
-                                onClick={() => onShowMetrics(record)}
+                                onClick={() => handleMonitorClick(record)}
                             >{t('task.detail.subtask.monitorBtn')}</Button>
                         </Space>
                     </Tooltip>

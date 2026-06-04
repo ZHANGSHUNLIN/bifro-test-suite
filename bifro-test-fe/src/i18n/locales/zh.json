@@ -1071,6 +1071,8 @@
     "unnamedTask": "未命名任务",
     "totalNodes": "节点数",
     "onlineNodes": "在线节点",
-    "nodeLatencyP95": "消息延迟 P95"
+    "nodeLatencyP95": "消息延迟 P95",
+    "pubackLatency": "Puback 延迟",
+    "pubackLatencyP95": "Puback 延迟 P95"
   }
 }

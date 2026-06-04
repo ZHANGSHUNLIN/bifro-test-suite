@@ -1071,6 +1071,8 @@
     "unnamedTask": "Unnamed Task",
     "totalNodes": "Nodes",
     "onlineNodes": "Online Nodes",
-    "nodeLatencyP95": "Message Latency P95"
+    "nodeLatencyP95": "Message Latency P95",
+    "pubackLatency": "Puback Latency",
+    "pubackLatencyP95": "Puback Latency P95"
   }
 }

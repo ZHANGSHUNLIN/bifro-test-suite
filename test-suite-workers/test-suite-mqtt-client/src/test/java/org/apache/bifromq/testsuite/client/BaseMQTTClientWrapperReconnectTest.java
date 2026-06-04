@@ -19,18 +19,24 @@ package org.apache.bifromq.testsuite.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import org.apache.bifromq.testsuite.TaskStage;
-import org.apache.bifromq.testsuite.configs.ClientTaskConfig;
-import org.apache.bifromq.testsuite.configs.MqttClientConfig;
-import org.apache.bifromq.testsuite.constants.ConnectionStatus;
-import org.apache.bifromq.testsuite.models.TopicFilter;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.vertx.core.Vertx;
+import java.net.BindException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.apache.bifromq.testsuite.TaskStage;
+import org.apache.bifromq.testsuite.configs.ClientTaskConfig;
+import org.apache.bifromq.testsuite.configs.MqttClientConfig;
+import org.apache.bifromq.testsuite.constants.ConnectionStatus;
+import org.apache.bifromq.testsuite.metric.BifroTaskMetric;
+import org.apache.bifromq.testsuite.metric.MetricsHelper;
+import org.apache.bifromq.testsuite.models.TopicFilter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,27 +46,30 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class BaseMQTTClientWrapperReconnectTest {
 
-    
     private static final int MAX_ATTEMPTS = 3;
 
     private Vertx vertx;
     private MqttClientConfig mqttClientConfig;
     private ClientTaskConfig clientTaskConfig;
     private AtomicReference<TaskStage> taskStage;
+    private SimpleMeterRegistry registry;
 
     @BeforeEach
     void setUp() {
+        registry = new SimpleMeterRegistry();
+        MetricsHelper.init(registry);
         vertx = Vertx.vertx();
         mqttClientConfig = MqttClientConfig.builder()
             .clientId("test-client-reconnect")
             .host("localhost")
             .port(1883)
             .reconnectMaxAttempts(MAX_ATTEMPTS)
-            .reconnectIntervalInMs(50)   
+            .reconnectIntervalInMs(50)
             .build();
 
         clientTaskConfig = new ClientTaskConfig();
         clientTaskConfig.setTaskId("reconnect-test-task");
+        clientTaskConfig.setNodeId("reconnect-test-node");
         taskStage = new AtomicReference<>(TaskStage.ONGOING);
     }
 
@@ -69,174 +78,72 @@ class BaseMQTTClientWrapperReconnectTest {
         vertx.close().toCompletionStage().toCompletableFuture().get(5, TimeUnit.SECONDS);
     }
 
-    
-    
-    
-
-    
     @Test
-    void testRecordConnectSuccess_shouldResetReconnectAttempts() {
-        
+    void recordConnectSuccessShouldResetReconnectAttempts() {
         CountableWrapper wrapper = createWrapper();
 
-        wrapper.reconnectAttempts.set(2);   
-
-        
+        wrapper.reconnectAttempts.set(2);
         wrapper.recordConnectSuccess();
 
-        
-        assertThat(wrapper.reconnectAttempts.get())
-            .as("reconnectAttempts must be 0 after successful connect (Bug 1 check)")
-            .isEqualTo(0);
+        assertThat(wrapper.reconnectAttempts.get()).isZero();
     }
 
-    
     @Test
-    void testReconnectAttempts_accumulateAcrossCyclesWhenNotReset_demonstratesBug1() {
+    void duplicateRecoverAfterConnectFailureShouldScheduleOnlyOneRetry() {
         CountableWrapper wrapper = createWrapper();
 
-        
-        
-        wrapper.reconnectAttempts.set(2);  
+        wrapper.recoverAfterConnectFailure(new RuntimeException("connection failed"));
+        wrapper.recoverAfterConnectFailure(new RuntimeException("connection failed"));
 
-        
-        wrapper.tryRecoverConnect();  
+        assertThat(wrapper.reconnectAttempts.get()).isEqualTo(1);
+    }
 
-        
-        
-        assertThat(wrapper.reconnectAttempts.get())
-            .as("Bug 1: counter accumulated across cycles — after one retry in cycle 2 it reads 3 not 1")
-            .isEqualTo(3);
+    @Test
+    void recoverAfterConnectFailureShouldAllowNextFailureAfterScheduledRetryStarts() {
+        CountableWrapper wrapper = createWrapper();
 
-        
-        
+        wrapper.recoverAfterConnectFailure(new RuntimeException("first failure"));
+        wrapper.clearRecoveryScheduled();
+        wrapper.recoverAfterConnectFailure(new RuntimeException("second failure"));
+
+        assertThat(wrapper.reconnectAttempts.get()).isEqualTo(2);
+    }
+
+    @Test
+    void finalFailureShouldBeRecordedOnceAndReleaseResourcesOnce() {
+        CountableWrapper wrapper = createWrapper();
         List<ConnectionStatus> events = new ArrayList<>();
         wrapper.connectCallback = events::add;
-        wrapper.tryRecoverConnect();  
-
-        assertThat(events)
-            .as("Bug 1: client gives up on 2nd retry of cycle 2 instead of waiting for cycle budget")
-            .contains(ConnectionStatus.CONNECTED_FAILED);
-    }
-
-    
-    @Test
-    void testReconnectAttempts_resetOnSuccess_allowsFullSecondCycle() {
-        CountableWrapper wrapper = createWrapper();
-        wrapper.connectCallback = status -> {
-        };
-
-        
-        wrapper.reconnectAttempts.set(2);
-        wrapper.recordConnectSuccess();  
-
-        
-        assertThat(wrapper.reconnectAttempts.get())
-            .as("After fix: counter must be 0 so cycle 2 starts fresh")
-            .isEqualTo(0);
-
-        
-        wrapper.tryRecoverConnect();  
-        wrapper.tryRecoverConnect();  
-
-        assertThat(wrapper.reconnectAttempts.get())
-            .as("After 2 retries in cycle 2 the counter is 2, budget not yet exhausted")
-            .isLessThan(MAX_ATTEMPTS);
-    }
-
-    
-    
-    
-
-    
-    @Test
-    void testTryRecoverConnect_singleCall_incrementsCounterByOne() {
-        CountableWrapper wrapper = createWrapper();
-        wrapper.connectCallback = status -> {
-        };
-        assertThat(wrapper.reconnectAttempts.get()).isZero();
+        wrapper.reconnectAttempts.set(MAX_ATTEMPTS);
 
         wrapper.tryRecoverConnect();
+        wrapper.tryRecoverConnect();
 
-        assertThat(wrapper.reconnectAttempts.get())
-            .as("Single tryRecoverConnect call must increment counter by exactly 1")
-            .isEqualTo(1);
+        assertThat(events).containsExactly(ConnectionStatus.CONNECTED_FAILED);
+        assertThat(wrapper.getStatus()).isEqualTo(ConnectionStatus.CONNECTED_FAILED);
+        assertThat(wrapper.releaseCount.get()).isEqualTo(1);
+        assertThat(metricCount(BifroTaskMetric.RECONNECT_LIMIT_EXCEEDED)).isEqualTo(1.0);
     }
 
-    
     @Test
-    void testTryRecoverConnect_calledTwicePerFailedAttempt_doublesCounterCost_demonstratesBug2() {
+    void terminalStateShouldRejectFurtherRecoveryWithoutChangingCounters() {
         CountableWrapper wrapper = createWrapper();
-        wrapper.connectCallback = status -> {
-        };
+        wrapper.reconnectAttempts.set(MAX_ATTEMPTS);
 
-        
-        wrapper.tryRecoverConnect();   
-        wrapper.tryRecoverConnect();   
+        wrapper.tryRecoverConnect();
+        int attemptsAfterFinalFailure = wrapper.reconnectAttempts.get();
+        wrapper.recoverAfterConnectFailure(new RuntimeException("late failure"));
+        wrapper.recordConnectFailure(new RuntimeException("late failure"));
+        wrapper.recordConnectSuccess();
 
-        assertThat(wrapper.reconnectAttempts.get())
-            .as("Bug 2: two calls for one failure advance counter by 2 instead of 1")
-            .isEqualTo(2);
-    }
-
-    
-    @Test
-    void testTryRecoverConnect_doubleCallPerAttempt_exhaustsBudgetAfterOneAndHalfAttempts_demonstratesBug2() {
-        CountableWrapper wrapper = createWrapper();
-        List<ConnectionStatus> events = new ArrayList<>();
-        wrapper.connectCallback = events::add;
-
-        
-        wrapper.tryRecoverConnect();   
-        wrapper.tryRecoverConnect();   
-
-        assertThat(events).as("Budget not yet exhausted after attempt 1")
-            .doesNotContain(ConnectionStatus.CONNECTED_FAILED);
-
-        
-        wrapper.tryRecoverConnect();   
-        assertThat(events).as("Not failed yet — counter=3 scheduled via getAndIncrement(2)=2")
-            .doesNotContain(ConnectionStatus.CONNECTED_FAILED);
-
-        
-        wrapper.tryRecoverConnect();   
-
-        assertThat(events)
-            .as("Bug 2: CONNECTED_FAILED fires after 2 real attempts (4 total calls) instead of after 4 real attempts")
-            .contains(ConnectionStatus.CONNECTED_FAILED);
-    }
-
-    
-    @Test
-    void testTryRecoverConnect_oneCallPerAttempt_allowsFullBudget() {
-        CountableWrapper wrapper = createWrapper();
-        List<ConnectionStatus> events = new ArrayList<>();
-        wrapper.connectCallback = events::add;
-
-        
-        wrapper.tryRecoverConnect();  
-        assertThat(events).as("Not failed yet after attempt 1").doesNotContain(ConnectionStatus.CONNECTED_FAILED);
-
-        wrapper.tryRecoverConnect();  
-        assertThat(events).as("Not failed yet after attempt 2").doesNotContain(ConnectionStatus.CONNECTED_FAILED);
-
-        wrapper.tryRecoverConnect();  
-
-        
-        
-        
-        assertThat(events).as("Not failed yet after 3rd attempt (budget allows 3 retries, limit fires on 4th call)")
-            .doesNotContain(ConnectionStatus.CONNECTED_FAILED);
-
-        wrapper.tryRecoverConnect();  
-
-        assertThat(events)
-            .as("CONNECTED_FAILED fires after budget exhausted on 4th call with MAX_ATTEMPTS=3")
-            .contains(ConnectionStatus.CONNECTED_FAILED);
+        assertThat(wrapper.reconnectAttempts.get()).isEqualTo(attemptsAfterFinalFailure);
+        assertThat(wrapper.getStatus()).isEqualTo(ConnectionStatus.CONNECTED_FAILED);
+        assertThat(wrapper.releaseCount.get()).isEqualTo(1);
+        assertThat(metricCount(BifroTaskMetric.CONNECT_SUCCESS_COUNT)).isZero();
     }
 
     @Test
-    void recoverAfterConnectFailure_withFixedSourcePortBindConflict_rotatesLocalPortBeforeRetry() {
+    void recoverAfterConnectFailureWithFixedSourcePortBindConflictRotatesLocalPortBeforeRetry() {
         mqttClientConfig.setLocalAddress("127.0.0.1");
         mqttClientConfig.setLocalPort(10000);
         mqttClientConfig.setLocalPortRangeConfig(LocalPortRangeConfig.builder()
@@ -246,50 +153,26 @@ class BaseMQTTClientWrapperReconnectTest {
             .build());
         CountableWrapper wrapper = createWrapper();
 
-        wrapper.recoverAfterConnectFailure(new java.net.BindException("Address already in use"));
+        wrapper.recoverAfterConnectFailure(new BindException("Address already in use"));
 
         assertThat(mqttClientConfig.getLocalPort()).isNotEqualTo(10000);
         assertThat(mqttClientConfig.getLocalPort()).isBetween(10001, 10004);
     }
 
-    
-    
-    
-
-    
-    @Test
-    void testBug1AndBug2Combined_exhaustsBudgetPrematurely() {
-        CountableWrapper wrapper = createWrapper();
-        List<ConnectionStatus> events = new ArrayList<>();
-        wrapper.connectCallback = events::add;
-
-        
-        wrapper.tryRecoverConnect();   
-        wrapper.tryRecoverConnect();   
-
-        
-        
-
-        
-        wrapper.tryRecoverConnect();   
-        
-        wrapper.tryRecoverConnect();   
-
-        assertThat(events)
-            .as("Combined Bug1+Bug2: CONNECTED_FAILED after effectively 2 double-call attempts instead of 4 single-call ones")
-            .contains(ConnectionStatus.CONNECTED_FAILED);
-    }
-
-    
-    
-    
-
     private CountableWrapper createWrapper() {
         return new CountableWrapper(vertx, mqttClientConfig, clientTaskConfig, taskStage);
     }
 
-    
+    private double metricCount(BifroTaskMetric metric) {
+        Counter counter = registry.find(metric.getName())
+            .tag("taskId", clientTaskConfig.getTaskId())
+            .tag("nodeId", clientTaskConfig.getNodeId())
+            .counter();
+        return counter == null ? 0.0 : counter.count();
+    }
+
     static class CountableWrapper extends BaseMQTTClientWrapper {
+        final AtomicInteger releaseCount = new AtomicInteger();
 
         CountableWrapper(Vertx vertx, MqttClientConfig clientConfig,
                          ClientTaskConfig taskConfig, AtomicReference<TaskStage> taskStage) {
@@ -307,6 +190,11 @@ class BaseMQTTClientWrapperReconnectTest {
         @Override
         public void recordConnectSuccess() {
             super.recordConnectSuccess();
+        }
+
+        @Override
+        protected void recordConnectFailure(Throwable cause) {
+            super.recordConnectFailure(cause);
         }
 
         @Override
@@ -331,7 +219,6 @@ class BaseMQTTClientWrapperReconnectTest {
 
         @Override
         CompletableFuture<Void> internalConnect() {
-            
             return CompletableFuture.completedFuture(null);
         }
 
@@ -354,6 +241,11 @@ class BaseMQTTClientWrapperReconnectTest {
         @Override
         public CompletableFuture<Void> close() {
             return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        protected void releaseClientResourcesAfterFinalFailure() {
+            releaseCount.incrementAndGet();
         }
     }
 }

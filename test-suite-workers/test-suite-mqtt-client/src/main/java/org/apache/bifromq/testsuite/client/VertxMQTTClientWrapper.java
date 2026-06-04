@@ -518,4 +518,18 @@ public class VertxMQTTClientWrapper extends BaseMQTTClientWrapper {
         });
     }
 
+    @Override
+    protected void releaseClientResourcesAfterFinalFailure() {
+        MqttClient client = mqttClient;
+        if (client == null) {
+            return;
+        }
+        client.closeHandler(ignored -> {
+        });
+        cancelPendingOperations(new CancellationException("pending operations cancelled after final connect failure"));
+        client.disconnect().onFailure(e -> log.debug(
+            "Failed to release Vert.x MQTT client after final connect failure, clientId={}",
+            clientConfig.getClientId(), e));
+    }
+
 }
