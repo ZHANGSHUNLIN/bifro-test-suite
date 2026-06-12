@@ -49,6 +49,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK
         uses: actions/setup-java@v4
@@ -139,6 +141,59 @@ jobs:
           cp target/bom.json release-assets/bifro-test-suite-${RELEASE_VERSION}-sbom.json
           (cd release-assets && sha256sum * > SHA256SUMS)
 
+      - name: Generate release notes
+        run: |
+          set -euo pipefail
+          git fetch --force --tags origin
+
+          previous_tag="$(git tag --sort=-version:refname | grep -v "^${RELEASE_TAG}$" | head -n 1 || true)"
+          if [ -n "${previous_tag}" ]; then
+            changelog_range="${previous_tag}..HEAD"
+            range_label="${previous_tag}...${RELEASE_TAG}"
+          else
+            changelog_range="HEAD"
+            range_label="initial release"
+          fi
+
+          {
+            echo "## Changelog"
+            echo
+            echo "Range: ${range_label}"
+            echo
+            echo "## Changes"
+            echo
+          } > release-notes.md
+
+          commit_count=0
+          while IFS= read -r commit; do
+            commit_count=$((commit_count + 1))
+            subject="$(git log -1 --format=%s "${commit}")"
+            body="$(git log -1 --format=%b "${commit}" | sed '/^[[:space:]]*$/d')"
+
+            {
+              printf -- "- %s (%s)\n" "${subject}" "${commit:0:7}"
+              if [ -n "${body}" ]; then
+                printf '%s\n' "${body}" | sed 's/^/  /'
+              fi
+              echo
+            } >> release-notes.md
+          done < <(git log --reverse --no-merges --format=%H "${changelog_range}")
+
+          if [ "${commit_count}" -eq 0 ]; then
+            echo "- No commits found in this release range." >> release-notes.md
+          fi
+
+          {
+            echo
+            echo "## Assets"
+            echo
+            echo "- Full package: bifro-test-bed-${RELEASE_VERSION}-all.tar.gz"
+            echo "- Backend-only package: bifro-test-suite-${RELEASE_VERSION}-backend.tar.gz"
+            echo "- Frontend-only package: bifro-test-suite-${RELEASE_VERSION}-frontend.zip"
+            echo "- SBOM: bifro-test-suite-${RELEASE_VERSION}-sbom.json"
+            echo "- Checksums: SHA256SUMS"
+          } >> release-notes.md
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -152,6 +207,6 @@ jobs:
             release-assets/* \
             --target "${GITHUB_SHA}" \
             --title "bifro-test-suite ${RELEASE_VERSION}" \
-            --generate-notes \
+            --notes-file release-notes.md \
             --fail-on-no-commits \
             ${prerelease_flag}

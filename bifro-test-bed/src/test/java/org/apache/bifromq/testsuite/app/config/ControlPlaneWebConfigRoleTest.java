@@ -33,7 +33,6 @@ class ControlPlaneWebConfigRoleTest {
     void webControlPlaneBeans_givenWorkerRole_shouldNotRegister() {
         try (AnnotationConfigApplicationContext context = contextWithRole("worker")) {
             assertThat(context.getBeansOfType(OpenApiConfig.class)).isEmpty();
-            assertThat(context.getBeansOfType(CorsConfig.class)).isEmpty();
             assertThat(context.getBeansOfType(LoggingWebFilter.class)).isEmpty();
             assertThat(context.getBeansOfType(HealthApi.class)).isEmpty();
             assertThat(context.getBeansOfType(BifroExceptionHandler.class)).isEmpty();
@@ -45,7 +44,6 @@ class ControlPlaneWebConfigRoleTest {
     void webControlPlaneBeans_givenControlRole_shouldRegisterConfigurationClasses() {
         try (AnnotationConfigApplicationContext context = contextWithRole("control")) {
             assertThat(context.getBeansOfType(OpenApiConfig.class)).hasSize(1);
-            assertThat(context.getBeansOfType(CorsConfig.class)).hasSize(1);
             assertThat(context.getBeansOfType(LoggingWebFilter.class)).hasSize(1);
             assertThat(context.getBeansOfType(HealthApi.class)).hasSize(1);
             assertThat(context.getBeansOfType(BifroExceptionHandler.class)).hasSize(1);
@@ -58,7 +56,6 @@ class ControlPlaneWebConfigRoleTest {
         context.getEnvironment().getPropertySources()
             .addFirst(new MapPropertySource("testRole", Map.of("bifro.node-role", role)));
         context.register(OpenApiConfig.class);
-        context.register(CorsConfig.class);
         context.register(LoggingWebFilter.class);
         context.register(HealthApi.class);
         context.register(BifroExceptionHandler.class);
