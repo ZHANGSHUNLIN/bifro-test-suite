@@ -20,6 +20,8 @@ import {render, screen, waitFor} from '@testing-library/react'
 import TaskDetailModal from '../TaskDetailModal'
 import groupApi from '../../../features/group'
 
+const mockListProfiles = vi.hoisted(() => vi.fn().mockResolvedValue([]))
+
 const mockTaskConfig = {
     taskType: 'PUBSUB',
     template: 'PUBSUB_STANDARD',
@@ -105,6 +107,10 @@ vi.mock('../../../features/group', () => ({
     },
 }))
 
+vi.mock('../../../features/profile', () => ({
+    listProfiles: mockListProfiles,
+}))
+
 const mockGroupApi = vi.mocked(groupApi)
 
 describe('TaskDetailModal | component tests', () => {
@@ -125,6 +131,7 @@ describe('TaskDetailModal | component tests', () => {
         })
         mockLoadTaskConfig.mockResolvedValue(mockTaskConfig)
         mockGroupApi.getAllGroupsForSelect.mockResolvedValue([])
+        mockListProfiles.mockResolvedValue([])
         mockLoadTaskStatistics.mockResolvedValue({
             taskId: 'task1234',
             metricsFromSnapshot: false,
@@ -379,6 +386,44 @@ describe('TaskDetailModal | component tests', () => {
             expect(screen.getByText('Prod Morning Wave')).toBeInTheDocument()
         })
         expect(screen.queryByText('profile-1')).not.toBeInTheDocument()
+    })
+
+    it('render_dynamicTrafficProfiles_showsProfileNames', async () => {
+        mockListProfiles.mockResolvedValue([
+            {id: 'connect-profile-id', name: 'Ramp Connect Wave', totalDurationMs: 60000, maxQps: 100},
+            {id: 'disconnect-profile-id', name: 'Drain Disconnect Wave', totalDurationMs: 60000, maxQps: 100},
+            {id: 'subscribe-profile-id', name: 'Subscribe Rollout Wave', totalDurationMs: 60000, maxQps: 100},
+        ])
+        mockLoadTaskConfig.mockResolvedValue({
+            ...mockTaskConfig,
+            connectProfileId: 'connect-profile-id',
+            disconnectProfileId: 'disconnect-profile-id',
+            subscribeQpsMode: 'DYNAMIC',
+            subscribeProfileId: 'subscribe-profile-id',
+        })
+
+        render(
+            <TaskDetailModal
+                visible={true}
+                taskId="task1234"
+                onClose={vi.fn()}
+            />
+        )
+
+        await waitFor(() => {
+            expect(screen.getByRole('tab', {name: 'Stress Params'})).toBeInTheDocument()
+        })
+
+        screen.getByRole('tab', {name: 'Stress Params'}).click()
+
+        await waitFor(() => {
+            expect(screen.getByText('Ramp Connect Wave')).toBeInTheDocument()
+            expect(screen.getByText('Drain Disconnect Wave')).toBeInTheDocument()
+            expect(screen.getByText('Subscribe Rollout Wave')).toBeInTheDocument()
+        })
+        expect(screen.queryByText('connect-profile-id')).not.toBeInTheDocument()
+        expect(screen.queryByText('disconnect-profile-id')).not.toBeInTheDocument()
+        expect(screen.queryByText('subscribe-profile-id')).not.toBeInTheDocument()
     })
 
     it('render_reopenSameTask_usesCacheWithoutClearingConfig', async () => {

@@ -28,6 +28,8 @@ import TaskSubTasksSection from './components/TaskDetailModal/TaskSubTasksSectio
 import InstanceDetailModal from './components/TaskDetailModal/InstanceDetailModal';
 import NodeMetricsModal from './components/TaskDetailModal/NodeMetricsModal';
 import groupApi from '../../features/group';
+import {listProfiles} from '../../features/profile';
+import type {WaveformProfile} from '../../features/profile';
 import type {SubTaskDetail, TaskConfig, TaskDetailResponse} from '../../features/task';
 import {getStatusColor, getStatusText, isTaskTerminal} from '../../utils/taskUtils';
 
@@ -78,6 +80,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
     const {loadTaskBasicInfo, loadTaskConfig, loadTaskSubTasks} = useTaskData();
     const [groupOptions, setGroupOptions] = useState<{ label: string; value: string }[]>([]);
+    const [trafficProfiles, setTrafficProfiles] = useState<WaveformProfile[]>([]);
 
     // Read data from cache
     const loadFromCache = useCallback((cacheKey: string): CacheData | null => {
@@ -253,6 +256,16 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
         }
     }, [visible]);
 
+    // Load traffic profiles for name display in task detail.
+    useEffect(() => {
+        if (visible) {
+            listProfiles().then(setTrafficProfiles).catch(error => {
+                setTrafficProfiles([]);
+                console.error('Failed to load traffic profiles:', error);
+            });
+        }
+    }, [visible]);
+
     // Tab switch handler
     const handleTabChange = useCallback((key: string) => {
         setActiveTabKey(key);
@@ -348,7 +361,11 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
         {
             key: 'stress',
             label: <span>{t('task.editor.tabs.stressParams')}</span>,
-            children: <StressParamsPanel taskDetail={taskDetail} taskConfig={taskConfig}/>
+            children: <StressParamsPanel
+                taskDetail={taskDetail}
+                taskConfig={taskConfig}
+                trafficProfiles={trafficProfiles}
+            />
         },
         {
             key: 'advanced',
@@ -369,6 +386,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
         },
     ], [
         taskDetail, taskConfig, groupOptions,
+        trafficProfiles,
         subTaskDetails, subTasksLoading,
         handleShowMetrics, handleShowInstances, handleRefreshSubTasks,
     ]);

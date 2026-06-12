@@ -20,6 +20,7 @@ import {Alert, Badge, Descriptions, Divider, Tag} from 'antd';
 import {useTranslation} from 'react-i18next';
 import type {TaskConfig, TaskDetailResponse} from '../../../../features/task';
 import {TaskTemplateValues} from '../../../../features/task';
+import type {WaveformProfile} from '../../../../features/profile';
 import {formatDateTime, getStatusColor, getStatusText} from '../../../../utils/taskUtils';
 
 interface GroupOption {
@@ -35,6 +36,12 @@ interface TaskBasicInfoSectionProps {
 
 interface TaskConfigPanelProps extends TaskBasicInfoSectionProps {
     taskConfig: TaskConfig | null;
+}
+
+interface StressParamsPanelProps {
+    taskDetail: TaskDetailResponse | null;
+    taskConfig: TaskConfig | null;
+    trafficProfiles?: WaveformProfile[];
 }
 
 const hasPub = (template?: string) => [
@@ -244,10 +251,11 @@ export const TaskConfigPanel: React.FC<TaskConfigPanelProps> = ({taskDetail, tas
 };
 
 // ─── Tab 2: Stress params (corresponds to second Tab in create modal) ──────────────────────────────
-export const StressParamsPanel: React.FC<{ taskDetail: TaskDetailResponse | null; taskConfig: TaskConfig | null }> = ({
-                                                                                                                        taskDetail,
-                                                                                                                        taskConfig,
-                                                                                                                    }) => {
+export const StressParamsPanel: React.FC<StressParamsPanelProps> = ({
+                                                                        taskDetail,
+                                                                        taskConfig,
+                                                                        trafficProfiles = [],
+                                                                    }) => {
     const {t} = useTranslation();
     if (!taskDetail || !taskConfig) return null;
     const mainTask = taskConfig;
@@ -261,8 +269,12 @@ export const StressParamsPanel: React.FC<{ taskDetail: TaskDetailResponse | null
         ? 'DYNAMIC' : 'FIXED';
     const publishProfileLabel = taskDetail.publishProfile?.name
         || mainTask.profileConfig?.profileName
+        || trafficProfiles.find(profile => profile.id === mainTask.profileConfig?.profileId)?.name
         || mainTask.profileConfig?.profileId
         || '-';
+    const profileLabel = (profileId?: string) => profileId
+        ? trafficProfiles.find(profile => profile.id === profileId)?.name || profileId
+        : '-';
     const subscribeQpsMode = mainTask.subscribeQpsMode || (mainTask.subscribeProfileId ? 'DYNAMIC' : 'FIXED');
     const fanMode = (mainTask.fanOut || 1) > 1 ? 'fanOut' : (mainTask.fanIn || 1) > 1 ? 'fanIn' : 'default';
     const payloadModeLabel = mainTask.payloadMode === 'TEMPLATE' ? t('task.form.payloadModeTemplate') :
@@ -286,10 +298,10 @@ export const StressParamsPanel: React.FC<{ taskDetail: TaskDetailResponse | null
                     <Descriptions.Item label={t('task.form.connectRatePerSec')}>{mainTask.connectRate || 100}</Descriptions.Item>
                     <Descriptions.Item label={t('task.form.disconnectRatePerSec')}>{mainTask.disconnectRate || 2000}</Descriptions.Item>
                     {connectQpsMode === 'DYNAMIC' && (
-                        <Descriptions.Item label={t('task.form.connectProfile')}>{mainTask.connectProfileId || '-'}</Descriptions.Item>
+                        <Descriptions.Item label={t('task.form.connectProfile')}>{profileLabel(mainTask.connectProfileId)}</Descriptions.Item>
                     )}
                     {disconnectQpsMode === 'DYNAMIC' && (
-                        <Descriptions.Item label={t('task.form.disconnectProfile')}>{mainTask.disconnectProfileId || '-'}</Descriptions.Item>
+                        <Descriptions.Item label={t('task.form.disconnectProfile')}>{profileLabel(mainTask.disconnectProfileId)}</Descriptions.Item>
                     )}
                     <Descriptions.Item
                         label={t('task.form.clientCount')}>{mainTask.totalClientCount?.toLocaleString() || '0'}</Descriptions.Item>
@@ -353,7 +365,7 @@ export const StressParamsPanel: React.FC<{ taskDetail: TaskDetailResponse | null
                         <Descriptions.Item label={t('task.form.subscribeQpsMode')}>{qpsModeLabel(subscribeQpsMode)}</Descriptions.Item>
                         <Descriptions.Item label={t('task.form.subscribeRatePerSec')}>{mainTask.subscribeRate ?? 0}</Descriptions.Item>
                         {subscribeQpsMode === 'DYNAMIC' && (
-                            <Descriptions.Item label={t('task.form.subscribeProfile')}>{mainTask.subscribeProfileId || '-'}</Descriptions.Item>
+                            <Descriptions.Item label={t('task.form.subscribeProfile')}>{profileLabel(mainTask.subscribeProfileId)}</Descriptions.Item>
                         )}
                         <Descriptions.Item label={t('task.form.fanMode')}>
                             {fanMode === 'fanOut' ? t('task.form.fanModeOut') : fanMode === 'fanIn' ? t('task.form.fanModeIn') : t('task.form.fanModeDefault')}
